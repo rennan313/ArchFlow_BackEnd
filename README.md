@@ -205,3 +205,13 @@ See [`docs/FRONTEND_INTEGRATION.md`](docs/FRONTEND_INTEGRATION.md) for the compl
 - Axios and SWR setup with automatic token refresh
 - Auth flow step-by-step
 - Error handling patterns
+
+
+```
+curl https://api.anthropic.com/v1/messages \
+  --header "x-api-key: YOUR_ANTHROPIC_API_KEY" \
+  --header "anthropic-version: 2023-06-01" \
+  --header "content-type: application/json" \
+  --data '{"model": "claude-sonnet-4-6", "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello, world"}]}'
+  ```

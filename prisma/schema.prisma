@@ -79,6 +79,17 @@ model ResetPasswordToken {
   @@map("reset_password_tokens")
 }
 
+model City {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  ibgeCode Int    @unique
+  name     String
+  state    String
+
+  @@index([name])
+  @@index([state])
+  @@map("cities")
+}
+
 model Instance {
   id          String         @id @default(auto()) @map("_id") @db.ObjectId
   name        String
