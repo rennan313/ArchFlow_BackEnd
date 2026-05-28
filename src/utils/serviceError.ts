@@ -11,8 +11,9 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   TOKEN_EXPIRED: () => R.badRequest("Reset token has expired"),
   USER_NOT_FOUND: () => R.notFound("User not found"),
   NOT_FOUND:         () => R.notFound(),
-  STATE_NOT_FOUND:   () => R.notFound('State not found'),
-  CITY_NOT_FOUND:    () => R.notFound('City not found'),
+  STATE_NOT_FOUND:    () => R.notFound('State not found'),
+  CITY_NOT_FOUND:     () => R.notFound('City not found'),
+  MEDIA_LIMIT_REACHED: () => R.badRequest('Maximum media per proposal reached (50)'),
 };
 
 export function handleServiceError(error: unknown): NextResponse {
