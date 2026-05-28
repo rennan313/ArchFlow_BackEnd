@@ -83,14 +83,26 @@ model ResetPasswordToken {
   @@map("reset_password_tokens")
 }
 
+model State {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  name   String
+  uf     String @unique
+  cities City[]
+
+  @@map("states")
+}
+
 model City {
   id       String @id @default(auto()) @map("_id") @db.ObjectId
   ibgeCode Int    @unique
   name     String
-  state    String
+  stateUf  String
+  stateId  String @db.ObjectId
+  state    State  @relation(fields: [stateId], references: [id])
 
   @@index([name])
-  @@index([state])
+  @@index([stateUf])
+  @@index([stateUf, name])
   @@map("cities")
 }
 

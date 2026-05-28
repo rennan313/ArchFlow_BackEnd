@@ -17,8 +17,8 @@ export async function GET(req: NextRequest) {
     const data = cities.map((c) => ({
       ibgeCode: c.ibgeCode,
       name:     c.name,
-      state:    c.state,
-      label:    `${c.name} - ${c.state}`,
+      state:    c.stateUf,
+      label:    `${c.name} - ${c.stateUf}`,
     }))
 
     return ok(data)
