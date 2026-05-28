@@ -48,9 +48,10 @@ export const PATCH = withAuth(async (req: NextRequest, _ctx: Ctx, user: JwtPaylo
     const updated = await prisma.user.update({
       where: { id: user.sub },
       data: {
-        ...(input.workspaceType !== undefined && { workspaceType: input.workspaceType }),
-        ...(input.teamSize      !== undefined && { teamSize:      input.teamSize }),
-        ...(input.primaryGoal   !== undefined && { primaryGoal:   input.primaryGoal }),
+        ...(input.workspaceType       !== undefined && { workspaceType:       input.workspaceType }),
+        ...(input.teamSize            !== undefined && { teamSize:             input.teamSize }),
+        ...(input.primaryGoal         !== undefined && { primaryGoal:          input.primaryGoal }),
+        ...(input.onboardingCompleted !== undefined && { onboardingCompleted:  input.onboardingCompleted }),
       },
       select: {
         workspaceType:       true,
