@@ -2,6 +2,10 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+function normalize(str: string) {
+  return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+
 const STATES = [
   { uf: 'AC', name: 'Acre' },
   { uf: 'AL', name: 'Alagoas' },
@@ -41,6 +45,7 @@ interface IbgeMunicipio {
 async function main() {
   // ── 1. States ──────────────────────────────────────────────────────────────
   console.log('Seeding states...')
+  await prisma.city.deleteMany()   // must delete cities first (relation)
   await prisma.state.deleteMany()
   await prisma.state.createMany({ data: STATES })
 
@@ -64,13 +69,15 @@ async function main() {
     .map((m) => {
       const uf      = m.microrregiao?.mesorregiao?.UF?.sigla ?? null
       const stateId = uf ? (stateMap.get(uf) ?? null) : null
-      return stateId && uf ? { ibgeCode: m.id, name: m.nome, stateUf: uf, stateId } : null
+      return stateId && uf
+        ? { ibgeCode: m.id, name: m.nome, nameNormalized: normalize(m.nome), stateUf: uf, stateId }
+        : null
     })
     .filter((c): c is NonNullable<typeof c> => c !== null)
 
   console.log(`  ${cities.length} cities ready for import.`)
 
-  console.log('Clearing existing cities...')
+  console.log('Clearing existing cities (if any remain)...')
   await prisma.city.deleteMany()
 
   console.log('Inserting cities in batches...')

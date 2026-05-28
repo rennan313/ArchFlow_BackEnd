@@ -93,16 +93,17 @@ model State {
 }
 
 model City {
-  id       String @id @default(auto()) @map("_id") @db.ObjectId
-  ibgeCode Int    @unique
-  name     String
-  stateUf  String
-  stateId  String @db.ObjectId
-  state    State  @relation(fields: [stateId], references: [id])
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  ibgeCode       Int    @unique
+  name           String
+  nameNormalized String
+  stateUf        String
+  stateId        String @db.ObjectId
+  state          State  @relation(fields: [stateId], references: [id])
 
-  @@index([name])
+  @@index([nameNormalized])
   @@index([stateUf])
-  @@index([stateUf, name])
+  @@index([stateUf, nameNormalized])
   @@map("cities")
 }
 

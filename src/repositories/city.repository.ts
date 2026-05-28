@@ -1,10 +1,15 @@
 import { prisma } from '@/lib/prisma'
 
+function normalize(str: string) {
+  return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+
 export const cityRepository = {
   search(q: string, limit: number) {
+    const norm = normalize(q)
     return prisma.city.findMany({
       where: q.length >= 2
-        ? { name: { contains: q, mode: 'insensitive' } }
+        ? { nameNormalized: { contains: norm } }
         : {},
       orderBy: [{ stateUf: 'asc' }, { name: 'asc' }],
       take: limit,
@@ -14,9 +19,10 @@ export const cityRepository = {
 
   searchByState(stateUf: string, q: string, page: number, limit: number) {
     const skip  = (page - 1) * limit
+    const norm  = normalize(q)
     const where = {
       stateUf: stateUf.toUpperCase(),
-      ...(q.length >= 2 && { name: { contains: q, mode: 'insensitive' as const } }),
+      ...(q.length >= 2 && { nameNormalized: { contains: norm } }),
     }
 
     return Promise.all([
