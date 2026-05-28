@@ -87,7 +87,7 @@ model User {
   password  String?
   image     String?
   provider  String    @default("credentials")
-  googleId  String?   @unique
+  googleId  String?
   role      Role      @default(USER)
   lastLogin DateTime?
 
