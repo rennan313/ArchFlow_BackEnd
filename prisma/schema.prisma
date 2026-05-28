@@ -56,6 +56,10 @@ model Proposal {
   city          String
   style         String
   scope         String
+  priorities    String?
+  budget        String?
+  timeline      String?
+  meetingNotes  String?
   generatedText String?
   status        ProposalStatus @default(DRAFT)
   createdAt     DateTime       @default(now())
