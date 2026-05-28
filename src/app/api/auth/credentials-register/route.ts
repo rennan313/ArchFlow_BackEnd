@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { hashPassword } from "@/lib/hash"
-import { signAccessToken } from "@/lib/jwt"
+import { buildPayload, signAccessToken } from "@/lib/jwt"
 import { credentialsRegisterSchema } from "@/validations/auth"
 import { created, conflict } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
@@ -36,8 +36,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    const payload     = { sub: user.id, email: user.email, role: user.role, onboardingCompleted: user.onboardingCompleted }
-    const accessToken = signAccessToken(payload)
+    const accessToken = signAccessToken(buildPayload(user))
 
     return created({
       user: {
