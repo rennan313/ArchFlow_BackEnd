@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+}
+
+enum InstanceStatus {
+  RUNNING
+  STOPPED
+  PENDING
+  ERROR
+}
+
+enum Environment {
+  PRODUCTION
+  STAGING
+  DEVELOPMENT
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  proposals          Proposal[]
+  resetPasswordTokens ResetPasswordToken[]
+
+  @@map("users")
+}
+
+model Proposal {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String         @db.ObjectId
+  clientName    String
+  projectType   String
+  squareMeters  Float
+  city          String
+  style         String
+  scope         String
+  generatedText String?
+  status        ProposalStatus @default(DRAFT)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("proposals")
+}
+
+model ResetPasswordToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reset_password_tokens")
+}
+
+model Instance {
+  id          String         @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  status      InstanceStatus @default(PENDING)
+  ip          String
+  environment Environment    @default(PRODUCTION)
+  memoryUsage Float          @default(0)
+  cpuUsage    Float          @default(0)
+  uptime      Int            @default(0)
+  createdAt   DateTime       @default(now())
+
+  @@map("instances")
+}
