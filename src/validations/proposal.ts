@@ -28,6 +28,7 @@ export const createProposalSchema = z.object({
   generatedProposalJson: z.string().optional(),
   proposalTone:          z.string().optional(),
   proposalVersion:       z.number().int().positive().optional(),
+  architectureStyle:     z.string().max(100).optional(),
 });
 
 export const updateProposalSchema = createProposalSchema.partial();

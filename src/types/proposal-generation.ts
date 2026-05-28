@@ -1,14 +1,12 @@
 // ─── Input ────────────────────────────────────────────────────────────────────
 
 export interface ProposalGenerationInput {
-  // Client & project
-  clientName:       string
-  city?:            string
-  state?:           string
-  projectType:      string
-  squareMeters?:    number
-  style?:           string
-  // Briefing
+  clientName:        string
+  city?:             string
+  state?:            string
+  projectType:       string
+  squareMeters?:     number
+  style?:            string
   projectObjective?: string
   spaceUsage?:       string
   currentProblems?:  string
@@ -16,24 +14,26 @@ export interface ProposalGenerationInput {
   budget?:           string
   timeline?:         string
   meetingNotes?:     string
-  // Pricing context
-  pricingMethod?:   "HOURLY" | "SQUARE_METER"
-  estimatedValue?:  number
-  complexity?:      "LOW" | "MEDIUM" | "HIGH" | "PREMIUM"
+  pricingMethod?:    "HOURLY" | "SQUARE_METER"
+  estimatedValue?:   number
+  complexity?:       "LOW" | "MEDIUM" | "HIGH" | "PREMIUM"
 }
 
 export type ProposalTone = "residential" | "commercial" | "luxury" | "interiors" | "landscape"
 
-// ─── Output sections ──────────────────────────────────────────────────────────
+// ─── Section types ────────────────────────────────────────────────────────────
 
 export interface ProposalCover {
-  proposalTitle:    string
-  proposalSubtitle: string
-  clientName:       string
-  projectType:      string
-  location:         string
-  date:             string
-  validUntil:       string
+  title:       string
+  subtitle:    string
+  projectType: string
+  city:        string
+  style:       string
+}
+
+export interface ProposalSection {
+  title:   string
+  content: string
 }
 
 export interface ProposalObjective {
@@ -44,6 +44,11 @@ export interface ProposalObjective {
 export interface ProposalScopeItem {
   item:        string
   description: string
+}
+
+export interface ProposalScope {
+  included: ProposalScopeItem[]
+  excluded: string[]
 }
 
 export interface ProposalStage {
@@ -62,11 +67,9 @@ export interface ProposalTimelineItem {
 }
 
 export interface ProposalInvestment {
-  method:           string
-  estimatedValue:   string
-  paymentStructure: string[]
-  validity:         string
-  notes:            string
+  pricingMethod:     string
+  estimatedValue:    string
+  paymentConditions: string[]
 }
 
 export interface ProposalDifferential {
@@ -80,22 +83,21 @@ export interface ProposalRisk {
   severity:   "low" | "medium" | "high"
 }
 
-// ─── Full premium proposal ────────────────────────────────────────────────────
+// ─── Full proposal ────────────────────────────────────────────────────────────
 
 export interface PremiumProposal {
   cover:                  ProposalCover
-  summary:                string
-  clientUnderstanding:    string
-  architecturalDirection: string
+  summary:                ProposalSection
+  clientUnderstanding:    ProposalSection
+  architecturalDirection: ProposalSection
   objectives:             ProposalObjective[]
-  scope:                  ProposalScopeItem[]
-  excludedItems:          string[]
+  scope:                  ProposalScope
   stages:                 ProposalStage[]
   timeline:               ProposalTimelineItem[]
   investment:             ProposalInvestment
   differentials:          ProposalDifferential[]
   risks:                  ProposalRisk[]
-  finalConsiderations:    string
+  finalConsiderations:    ProposalSection
 }
 
 export interface GenerationResult {

@@ -41,6 +41,7 @@ export const POST = withAuth(async (req: NextRequest, _ctx: { params: Promise<Re
     await proposalService.update(saved!.id, user.sub, {
       generatedProposalJson: JSON.stringify(result.proposal),
       proposalTone:          result.tone,
+      architectureStyle:     input.style ?? "Contemporâneo",
     } as Parameters<typeof proposalService.update>[2])
 
     return ok(

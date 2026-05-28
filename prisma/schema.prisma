@@ -82,6 +82,7 @@ model Proposal {
   generatedProposalJson String?
   proposalVersion       Int            @default(1)
   proposalTone          String?
+  architectureStyle     String?
   status                ProposalStatus @default(DRAFT)
 
   // Pricing
