@@ -78,8 +78,11 @@ model Proposal {
   budget        String?
   timeline      String?
   meetingNotes  String?
-  generatedText String?
-  status        ProposalStatus @default(DRAFT)
+  generatedText        String?
+  generatedProposalJson String?
+  proposalVersion       Int            @default(1)
+  proposalTone          String?
+  status                ProposalStatus @default(DRAFT)
 
   // Pricing
   pricingMethod       PricingMethod?

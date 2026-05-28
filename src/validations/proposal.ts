@@ -22,9 +22,12 @@ export const createProposalSchema = z.object({
   estimatedHours:      z.number().positive().optional(),
   pricePerSquareMeter: z.number().positive().optional(),
   complexity:          ComplexityEnum.optional(),
-  estimatedTotal:      z.number().nonnegative().optional(),
-  regionalAverageMin:  z.number().nonnegative().optional(),
-  regionalAverageMax:  z.number().nonnegative().optional(),
+  estimatedTotal:        z.number().nonnegative().optional(),
+  regionalAverageMin:    z.number().nonnegative().optional(),
+  regionalAverageMax:    z.number().nonnegative().optional(),
+  generatedProposalJson: z.string().optional(),
+  proposalTone:          z.string().optional(),
+  proposalVersion:       z.number().int().positive().optional(),
 });
 
 export const updateProposalSchema = createProposalSchema.partial();
