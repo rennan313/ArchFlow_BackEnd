@@ -4,7 +4,7 @@ import { buildSystemPrompt, buildUserPrompt } from "./prompt-builder.service"
 import { parseAIResponse } from "./proposal-formatter.service"
 import type { ProposalGenerationInput, GenerationResult } from "@/types/proposal-generation"
 
-const MODEL        = "claude-sonnet-4-6"
+const MODEL        = "claude-haiku-4-5-20251001"
 const MAX_TOKENS   = 8000
 
 let _client: Anthropic | null = null
