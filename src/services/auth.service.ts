@@ -5,14 +5,20 @@ export const authService = {
     const user = await userRepository.findById(userId)
     if (!user) throw new Error("USER_NOT_FOUND")
     return {
-      id:        user.id,
-      name:      user.name,
-      email:     user.email,
-      image:     user.image,
-      role:      user.role,
-      lastLogin: user.lastLogin,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      id:                  user.id,
+      name:                user.name,
+      email:               user.email,
+      image:               user.image,
+      role:                user.role,
+      provider:            user.provider,
+      onboardingCompleted: user.onboardingCompleted,
+      onboardingStep:      user.onboardingStep,
+      workspaceType:       user.workspaceType,
+      teamSize:            user.teamSize,
+      primaryGoal:         user.primaryGoal,
+      lastLogin:           user.lastLogin,
+      createdAt:           user.createdAt,
+      updatedAt:           user.updatedAt,
     }
   },
 }

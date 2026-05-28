@@ -23,36 +23,39 @@ export async function POST(req: NextRequest) {
     if (!user) {
       user = await prisma.user.create({
         data: {
-          email:    input.email,
-          name:     input.name,
-          image:    input.image ?? null,
-          googleId: input.googleId,
-          provider: "google",
+          email:     input.email,
+          name:      input.name,
+          image:     input.image ?? null,
+          googleId:  input.googleId,
+          provider:  "google",
           lastLogin: new Date(),
         },
       })
     } else {
+      // Account linking: credentials user signing in with Google for the first time
       user = await prisma.user.update({
         where: { id: user.id },
         data:  {
           name:      input.name,
-          image:     input.image ?? user.image,
+          image:     input.image ?? user.image ?? null,
           googleId:  user.googleId ?? input.googleId,
           lastLogin: new Date(),
         },
       })
     }
 
-    const payload     = { sub: user.id, email: user.email, role: user.role }
+    const payload     = { sub: user.id, email: user.email, role: user.role, onboardingCompleted: user.onboardingCompleted }
     const accessToken = signAccessToken(payload)
 
     return ok({
       user: {
-        id:    user.id,
-        name:  user.name,
-        email: user.email,
-        image: user.image,
-        role:  user.role,
+        id:                  user.id,
+        name:                user.name,
+        email:               user.email,
+        image:               user.image,
+        role:                user.role,
+        onboardingCompleted: user.onboardingCompleted,
+        onboardingStep:      user.onboardingStep,
       },
       accessToken,
     })
