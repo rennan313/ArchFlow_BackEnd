@@ -7,6 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
 enum Role {
   USER
   ADMIN
@@ -17,6 +19,18 @@ enum ProposalStatus {
   SENT
   APPROVED
   REJECTED
+}
+
+enum PricingMethod {
+  HOURLY
+  SQUARE_METER
+}
+
+enum Complexity {
+  LOW
+  MEDIUM
+  HIGH
+  PREMIUM
 }
 
 enum InstanceStatus {
@@ -32,6 +46,8 @@ enum Environment {
   DEVELOPMENT
 }
 
+// ─── Models ───────────────────────────────────────────────────────────────────
+
 model User {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   name      String
@@ -41,7 +57,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  proposals          Proposal[]
+  proposals           Proposal[]
   resetPasswordTokens ResetPasswordToken[]
 
   @@map("users")
@@ -50,6 +66,8 @@ model User {
 model Proposal {
   id            String         @id @default(auto()) @map("_id") @db.ObjectId
   userId        String         @db.ObjectId
+
+  // Client & project
   clientName    String
   projectType   String
   squareMeters  Float
@@ -62,11 +80,24 @@ model Proposal {
   meetingNotes  String?
   generatedText String?
   status        ProposalStatus @default(DRAFT)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+
+  // Pricing
+  pricingMethod       PricingMethod?
+  hourlyRate          Float?
+  estimatedHours      Float?
+  pricePerSquareMeter Float?
+  complexity          Complexity?
+  estimatedTotal      Float?
+  regionalAverageMin  Float?
+  regionalAverageMax  Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, status])
+  @@index([userId, createdAt])
   @@map("proposals")
 }
 
@@ -105,6 +136,25 @@ model City {
   @@index([stateUf])
   @@index([stateUf, nameNormalized])
   @@map("cities")
+}
+
+model RegionalPricing {
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  stateUf       String
+  city          String?
+  projectType   String
+  pricingMethod PricingMethod
+  minValue      Float
+  maxValue      Float
+  averageValue  Float
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([stateUf])
+  @@index([stateUf, projectType])
+  @@index([stateUf, pricingMethod])
+  @@index([stateUf, city, projectType, pricingMethod])
+  @@map("regional_pricing")
 }
 
 model Instance {
