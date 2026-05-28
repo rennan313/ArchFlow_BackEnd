@@ -59,16 +59,18 @@ enum Environment {
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
   name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  email     String    @unique
+  image     String?
+  provider  String    @default("google")
+  googleId  String?   @unique
+  role      Role      @default(USER)
+  lastLogin DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  proposals           Proposal[]
-  resetPasswordTokens ResetPasswordToken[]
+  proposals Proposal[]
 
   @@map("users")
 }
@@ -128,20 +130,6 @@ model Proposal {
   @@map("proposals")
 }
 
-model ProposalStatusHistory {
-  id         String         @id @default(auto()) @map("_id") @db.ObjectId
-  proposalId String         @db.ObjectId
-  oldStatus  ProposalStatus
-  newStatus  ProposalStatus
-  changedAt  DateTime       @default(now())
-
-  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-
-  @@index([proposalId])
-  @@index([proposalId, changedAt])
-  @@map("proposal_status_history")
-}
-
 model ProposalMedia {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
   proposalId  String    @db.ObjectId
@@ -161,17 +149,18 @@ model ProposalMedia {
   @@map("proposal_media")
 }
 
-model ResetPasswordToken {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
-  token     String   @unique
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
+model ProposalStatusHistory {
+  id         String         @id @default(auto()) @map("_id") @db.ObjectId
+  proposalId String         @db.ObjectId
+  oldStatus  ProposalStatus
+  newStatus  ProposalStatus
+  changedAt  DateTime       @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
-  @@map("reset_password_tokens")
+  @@index([proposalId])
+  @@index([proposalId, changedAt])
+  @@map("proposal_status_history")
 }
 
 model State {
