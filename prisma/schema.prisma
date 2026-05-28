@@ -16,7 +16,9 @@ enum Role {
 
 enum ProposalStatus {
   DRAFT
+  REVIEW
   SENT
+  NEGOTIATION
   APPROVED
   REJECTED
 }
@@ -101,7 +103,8 @@ model Proposal {
   architectureStyle     String?
 
   // Status
-  status ProposalStatus @default(DRAFT)
+  status          ProposalStatus @default(DRAFT)
+  statusUpdatedAt DateTime?
 
   // Pricing
   pricingMethod       PricingMethod?
@@ -116,12 +119,27 @@ model Proposal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  media ProposalMedia[]
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media         ProposalMedia[]
+  statusHistory ProposalStatusHistory[]
 
   @@index([userId, status])
   @@index([userId, createdAt])
   @@map("proposals")
+}
+
+model ProposalStatusHistory {
+  id         String         @id @default(auto()) @map("_id") @db.ObjectId
+  proposalId String         @db.ObjectId
+  oldStatus  ProposalStatus
+  newStatus  ProposalStatus
+  changedAt  DateTime       @default(now())
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@index([proposalId, changedAt])
+  @@map("proposal_status_history")
 }
 
 model ProposalMedia {

@@ -19,7 +19,7 @@ export const createProposalSchema = z.object({
   timeline:         z.string().max(500).optional(),
   meetingNotes:     z.string().max(5000).optional(),
   generatedText: z.string().max(20000).optional(),
-  status:       z.enum(["DRAFT", "SENT", "APPROVED", "REJECTED"]).optional(),
+  status:       z.enum(["DRAFT", "REVIEW", "SENT", "NEGOTIATION", "APPROVED", "REJECTED"]).optional(),
   // Pricing
   pricingMethod:       PricingMethodEnum.optional(),
   hourlyRate:          z.number().positive().optional(),
@@ -41,7 +41,7 @@ export const proposalQuerySchema = z.object({
   page:      z.coerce.number().int().min(1).optional().default(1),
   limit:     z.coerce.number().int().min(1).max(100).optional().default(10),
   search:    z.string().optional(),
-  status:    z.enum(["DRAFT", "SENT", "APPROVED", "REJECTED"]).optional(),
+  status:    z.enum(["DRAFT", "REVIEW", "SENT", "NEGOTIATION", "APPROVED", "REJECTED"]).optional(),
   sortBy:    z.enum(["createdAt", "updatedAt", "clientName", "squareMeters", "estimatedTotal"]).optional().default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
 });

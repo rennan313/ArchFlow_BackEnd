@@ -20,6 +20,13 @@ export function handleServiceError(error: unknown): NextResponse {
   if (error instanceof ZodError) return R.fromZodError(error);
 
   if (error instanceof Error) {
+    // Dynamic INVALID_TRANSITION error: "INVALID_TRANSITION:FROM:TO:ALLOWED"
+    if (error.message.startsWith("INVALID_TRANSITION:")) {
+      const [, from, to, allowed] = error.message.split(":")
+      const allowedList = allowed ? ` Allowed: ${allowed.split(",").join(", ")}` : ""
+      return R.badRequest(`Cannot transition from ${from} to ${to}.${allowedList}`)
+    }
+
     const handler = SERVICE_ERRORS[error.message];
     if (handler) return handler();
   }
