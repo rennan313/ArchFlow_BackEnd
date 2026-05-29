@@ -1,5 +1,6 @@
 import type { ProposalGenerationInput, ProposalTone } from "@/types/proposal-generation"
 import { TONE_PERSONAS, TONE_OPENING_STYLE } from "./tone.service"
+import type { BrandingContext } from "./generation.service"
 
 const COMPLEXITY_LABELS: Record<string, string> = {
   LOW:     "baixa complexidade",
@@ -22,9 +23,11 @@ function line(label: string, value: string | number | undefined): string {
   return `• ${label}: ${value}`
 }
 
-export function buildSystemPrompt(tone: ProposalTone): string {
-  return `${TONE_PERSONAS[tone].trim()}
+export function buildSystemPrompt(tone: ProposalTone, branding?: BrandingContext): string {
+  const brandingSection = branding ? buildBrandingContext(branding) : ""
 
+  return `${TONE_PERSONAS[tone].trim()}
+${brandingSection}
 REGRAS ABSOLUTAS:
 - Escreva em português do Brasil, com linguagem culta e fluente
 - NUNCA use markdown (sem **, sem #, sem -)
@@ -34,6 +37,19 @@ REGRAS ABSOLUTAS:
 - Cada seção deve ser independente, específica e personalizada
 - Retorne EXCLUSIVAMENTE JSON válido, sem nenhum texto fora do JSON
 - Não inclua comentários dentro do JSON`
+}
+
+function buildBrandingContext(b: BrandingContext): string {
+  const lines: string[] = ["\n━━━ IDENTIDADE DO ESCRITÓRIO ━━━"]
+  if (b.officeName    || b.tradeName)   lines.push(`Escritório: ${b.tradeName ?? b.officeName}`)
+  if (b.architectName)                  lines.push(`Responsável técnico: ${b.architectName}`)
+  if (b.cauNumber)                      lines.push(`CAU: ${b.cauNumber}`)
+  if (b.email)                          lines.push(`E-mail profissional: ${b.email}`)
+  if (b.phone)                          lines.push(`Telefone: ${b.phone}`)
+  if (b.proposalSignature)              lines.push(`\nAssinatura da proposta:\n${b.proposalSignature}`)
+  if (b.proposalFooter)                 lines.push(`\nRodapé da proposta:\n${b.proposalFooter}`)
+  lines.push("")
+  return lines.join("\n")
 }
 
 export function buildUserPrompt(input: ProposalGenerationInput, tone: ProposalTone): string {

@@ -115,8 +115,50 @@ model User {
   clients       Client[]
   opportunities Opportunity[]
   followUps     FollowUp[]
+  branding      OfficeBranding?
 
   @@map("users")
+}
+
+model OfficeBranding {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+
+  // Office identity
+  officeName    String?
+  tradeName     String?
+  architectName String?
+  cauNumber     String?
+
+  // Contact
+  email     String?
+  phone     String?
+  whatsapp  String?
+  website   String?
+  instagram String?
+
+  // Brand colors (hex)
+  primaryColor   String?
+  secondaryColor String?
+
+  // Assets — URLs (public or signed) + storage paths for refresh
+  logoUrl              String?
+  logoStoragePath      String?
+  logoWhiteUrl         String?
+  logoWhiteStoragePath String?
+  faviconUrl           String?
+  faviconStoragePath   String?
+
+  // Proposal customization
+  proposalSignature String?
+  proposalFooter    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("office_branding")
 }
 
 model Client {

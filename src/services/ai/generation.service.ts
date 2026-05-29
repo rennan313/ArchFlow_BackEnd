@@ -4,8 +4,8 @@ import { buildSystemPrompt, buildUserPrompt } from "./prompt-builder.service"
 import { parseAIResponse } from "./proposal-formatter.service"
 import type { ProposalGenerationInput, GenerationResult } from "@/types/proposal-generation"
 
-const MODEL        = "claude-haiku-4-5-20251001"
-const MAX_TOKENS   = 8000
+const MODEL      = "claude-haiku-4-5-20251001"
+const MAX_TOKENS = 8000
 
 let _client: Anthropic | null = null
 
@@ -18,10 +18,26 @@ function getClient(): Anthropic {
   return _client
 }
 
+export interface BrandingContext {
+  officeName?:        string | null
+  tradeName?:         string | null
+  architectName?:     string | null
+  cauNumber?:         string | null
+  email?:             string | null
+  phone?:             string | null
+  logoUrl?:           string | null
+  proposalSignature?: string | null
+  proposalFooter?:    string | null
+  primaryColor?:      string | null
+}
+
 export const generationService = {
-  async generate(input: ProposalGenerationInput): Promise<GenerationResult> {
+  async generate(
+    input:    ProposalGenerationInput,
+    branding?: BrandingContext,
+  ): Promise<GenerationResult> {
     const tone         = resolveTone(input)
-    const systemPrompt = buildSystemPrompt(tone)
+    const systemPrompt = buildSystemPrompt(tone, branding)
     const userPrompt   = buildUserPrompt(input, tone)
 
     const client  = getClient()
