@@ -14,6 +14,15 @@ enum Role {
   ADMIN
 }
 
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  ARCHITECT
+  DESIGNER
+  ASSISTANT
+  VIEWER
+}
+
 enum ProposalStatus {
   DRAFT
   REVIEW
@@ -90,6 +99,43 @@ enum Environment {
 
 // ─── Core Domain Models ───────────────────────────────────────────────────────
 
+model Workspace {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  slug      String  @unique
+  plan      String  @default("free")
+  active    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  invites       WorkspaceInvite[]
+  clients       Client[]
+  opportunities Opportunity[]
+  proposals     Proposal[]
+  branding      OfficeBranding?
+
+  @@map("workspaces")
+}
+
+model WorkspaceInvite {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String        @db.ObjectId
+  email       String
+  role        WorkspaceRole @default(ARCHITECT)
+  token       String        @unique
+  expiresAt   DateTime
+  accepted    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
+  @@map("workspace_invites")
+}
+
 model User {
   id        String    @id @default(auto()) @map("_id") @db.ObjectId
   name      String
@@ -98,8 +144,10 @@ model User {
   image     String?
   provider  String    @default("credentials")
   googleId  String?
-  role      Role      @default(USER)
-  lastLogin DateTime?
+  role          Role          @default(USER)
+  workspaceId   String?       @db.ObjectId
+  workspaceRole WorkspaceRole @default(OWNER)
+  lastLogin     DateTime?
 
   // Onboarding
   workspaceType       WorkspaceType?
@@ -116,13 +164,16 @@ model User {
   opportunities Opportunity[]
   followUps     FollowUp[]
   branding      OfficeBranding?
+  workspace     Workspace?      @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId])
   @@map("users")
 }
 
 model OfficeBranding {
-  id     String @id @default(auto()) @map("_id") @db.ObjectId
-  userId String @unique @db.ObjectId
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @unique @db.ObjectId
+  workspaceId String? @unique @db.ObjectId
 
   // Office identity
   officeName    String?
@@ -156,14 +207,16 @@ model OfficeBranding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
 
   @@map("office_branding")
 }
 
 model Client {
-  id     String @id @default(auto()) @map("_id") @db.ObjectId
-  userId String @db.ObjectId
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  workspaceId String? @db.ObjectId
 
   name  String
   email String?
@@ -176,17 +229,20 @@ model Client {
   updatedAt DateTime @updatedAt
 
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace?    @relation(fields: [workspaceId], references: [id])
   opportunities Opportunity[]
   proposals     Proposal[]
 
   @@index([userId])
+  @@index([workspaceId])
   @@index([userId, name])
   @@map("clients")
 }
 
 model Opportunity {
-  id     String @id @default(auto()) @map("_id") @db.ObjectId
-  userId String @db.ObjectId
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @db.ObjectId
+  workspaceId String? @db.ObjectId
 
   clientId String @db.ObjectId
 
@@ -205,12 +261,14 @@ model Opportunity {
   updatedAt DateTime @updatedAt
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
   client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   briefing  Briefing?
   proposals Proposal[]
   followUps FollowUp[]
 
   @@index([userId, stage])
+  @@index([workspaceId, stage])
   @@index([userId, clientId])
   @@index([userId, createdAt])
   @@map("opportunities")
@@ -261,8 +319,9 @@ model FollowUp {
 // ─── Proposal Domain ──────────────────────────────────────────────────────────
 
 model Proposal {
-  id     String @id @default(auto()) @map("_id") @db.ObjectId
-  userId String @db.ObjectId
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @db.ObjectId
+  workspaceId String? @db.ObjectId
 
   // Link to new domain (optional for backward compat)
   opportunityId String? @db.ObjectId
@@ -311,6 +370,7 @@ model Proposal {
   updatedAt DateTime @updatedAt
 
   user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace?              @relation(fields: [workspaceId], references: [id])
   opportunity   Opportunity?            @relation(fields: [opportunityId], references: [id])
   client        Client?                 @relation(fields: [clientId], references: [id])
   media         ProposalMedia[]
@@ -318,6 +378,7 @@ model Proposal {
   versions      ProposalVersion[]
 
   @@index([userId, status])
+  @@index([workspaceId, status])
   @@index([userId, createdAt])
   @@index([opportunityId])
   @@map("proposals")

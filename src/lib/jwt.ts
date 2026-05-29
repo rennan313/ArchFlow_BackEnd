@@ -9,6 +9,8 @@ export interface JwtPayload {
   sub:                  string
   email:                string
   role:                 string
+  workspaceId?:         string | null
+  workspaceRole?:       string
   workspaceType?:       string | null
   onboardingCompleted?: boolean
 }
@@ -30,16 +32,20 @@ export function verifyRefreshToken(token: string): JwtPayload {
 }
 
 export function buildPayload(user: {
-  id:                  string
-  email:               string
-  role:                string
-  workspaceType?:      string | null
+  id:                   string
+  email:                string
+  role:                 string
+  workspaceId?:         string | null
+  workspaceRole?:       string
+  workspaceType?:       string | null
   onboardingCompleted?: boolean
 }): JwtPayload {
   return {
     sub:                 user.id,
     email:               user.email,
     role:                user.role,
+    workspaceId:         user.workspaceId ?? null,
+    workspaceRole:       user.workspaceRole ?? "OWNER",
     workspaceType:       user.workspaceType ?? null,
     onboardingCompleted: user.onboardingCompleted ?? false,
   }
