@@ -2,7 +2,8 @@ import { type NextRequest } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { buildPayload, signAccessToken } from "@/lib/jwt"
-import { ok, internalError } from "@/lib/response"
+import { workspaceService } from "@/services/workspace.service"
+import { ok } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
 
 const schema = z.object({
@@ -17,7 +18,6 @@ export async function POST(req: NextRequest) {
     const body  = await req.json()
     const input = schema.parse(body)
 
-    // Find existing user or create new one
     let user = await prisma.user.findUnique({ where: { email: input.email } })
 
     if (!user) {
@@ -31,8 +31,10 @@ export async function POST(req: NextRequest) {
           lastLogin: new Date(),
         },
       })
+      // Auto-create workspace for new Google users
+      await workspaceService.createForUser(user.id, user.name)
+      user = await prisma.user.findUnique({ where: { id: user.id } }) ?? user
     } else {
-      // Account linking: credentials user signing in with Google for the first time
       user = await prisma.user.update({
         where: { id: user.id },
         data:  {
@@ -42,6 +44,11 @@ export async function POST(req: NextRequest) {
           lastLogin: new Date(),
         },
       })
+      // Create workspace if somehow missing
+      if (!user.workspaceId) {
+        await workspaceService.createForUser(user.id, user.name)
+        user = await prisma.user.findUnique({ where: { id: user.id } }) ?? user
+      }
     }
 
     const accessToken = signAccessToken(buildPayload(user))
@@ -53,6 +60,8 @@ export async function POST(req: NextRequest) {
         email:               user.email,
         image:               user.image,
         role:                user.role,
+        workspaceId:         user.workspaceId,
+        workspaceRole:       user.workspaceRole,
         onboardingCompleted: user.onboardingCompleted,
         onboardingStep:      user.onboardingStep,
       },

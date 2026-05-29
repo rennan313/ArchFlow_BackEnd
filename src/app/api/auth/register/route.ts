@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { hashPassword } from "@/lib/hash"
 import { buildPayload, signAccessToken } from "@/lib/jwt"
 import { credentialsRegisterSchema } from "@/validations/auth"
+import { workspaceService } from "@/services/workspace.service"
 import { created, conflict } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
 
@@ -35,21 +36,24 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    const accessToken = signAccessToken(buildPayload(user))
+    // Auto-create workspace — user becomes OWNER
+    await workspaceService.createForUser(user.id, user.name)
+    const refreshed = await prisma.user.findUnique({ where: { id: user.id } })
+
+    const accessToken = signAccessToken(buildPayload(refreshed!))
 
     return created(
       {
         user: {
-          id:                  user.id,
-          name:                user.name,
-          email:               user.email,
-          image:               user.image,
-          role:                user.role,
-          workspaceType:       user.workspaceType,
-          teamSize:            user.teamSize,
-          primaryGoal:         user.primaryGoal,
-          onboardingCompleted: user.onboardingCompleted,
-          onboardingStep:      user.onboardingStep,
+          id:                  refreshed!.id,
+          name:                refreshed!.name,
+          email:               refreshed!.email,
+          image:               refreshed!.image,
+          role:                refreshed!.role,
+          workspaceId:         refreshed!.workspaceId,
+          workspaceRole:       refreshed!.workspaceRole,
+          onboardingCompleted: refreshed!.onboardingCompleted,
+          onboardingStep:      refreshed!.onboardingStep,
         },
         accessToken,
       },

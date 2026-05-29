@@ -19,6 +19,9 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   CITY_NOT_FOUND:        () => R.notFound("City not found"),
   // Media
   MEDIA_LIMIT_REACHED:   () => R.badRequest("Maximum media per proposal reached (50)"),
+  // Workspace
+  CANNOT_CHANGE_OWNER_ROLE: () => R.badRequest("Cannot change the owner's role"),
+  CANNOT_REMOVE_OWNER:      () => R.badRequest("Cannot remove the workspace owner"),
   // Domain
   CLIENT_NOT_FOUND:      () => R.notFound("Client not found"),
   OPPORTUNITY_NOT_FOUND: () => R.notFound("Opportunity not found"),
