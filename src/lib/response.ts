@@ -50,6 +50,10 @@ export function internalError(message = "Internal server error"): NextResponse {
   return NextResponse.json({ success: false, message }, { status: 500 });
 }
 
+export function tooManyRequests(message = "Too many requests"): NextResponse {
+  return NextResponse.json({ success: false, message }, { status: 429 });
+}
+
 export function fromZodError(error: ZodError): NextResponse {
   const errors: Record<string, string[]> = {};
   for (const issue of error.issues) {

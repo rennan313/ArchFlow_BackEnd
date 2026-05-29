@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server"
-import { withAuth } from "@/middlewares/auth"
+import { requireProposalLimit } from "@/middlewares/limits"
+import { aiRateLimit } from "@/middlewares/rateLimiter"
 import { generationService } from "@/services/ai/generation.service"
 import { proposalService } from "@/services/proposal.service"
 import { brandingService } from "@/services/branding.service"
@@ -10,18 +11,21 @@ import type { JwtPayload } from "@/lib/jwt"
 
 export const maxDuration = 60
 
-export const POST = withAuth(async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload) => {
+export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload) => {
+  const limited = aiRateLimit(req)
+  if (limited) return limited
+
   try {
     const body  = await req.json()
     const input = generatePremiumProposalSchema.parse(body)
 
-    // 1. Fetch office branding to enrich the proposal
+    // 1. Fetch office branding context
     const branding = await brandingService.getBrandingContext(user.sub)
 
     // 2. Generate premium structured proposal via AI
     const result = await generationService.generate(input, branding ?? undefined)
 
-    // 3. Persist proposal
+    // 3. Persist proposal — include workspaceId for multi-tenant queries
     const saved = await proposalService.create(user.sub, {
       clientName:    input.clientName,
       projectType:   input.projectType,
@@ -44,6 +48,7 @@ export const POST = withAuth(async (req: NextRequest, _ctx: { params: Promise<Re
       generatedProposalJson: JSON.stringify(result.proposal),
       proposalTone:          result.tone,
       architectureStyle:     input.style ?? "Contemporâneo",
+      ...(user.workspaceId   && { workspaceId: user.workspaceId }),
     } as Parameters<typeof proposalService.update>[2])
 
     return ok(

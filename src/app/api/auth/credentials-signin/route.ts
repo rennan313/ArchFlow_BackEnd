@@ -5,8 +5,12 @@ import { buildPayload, signAccessToken } from "@/lib/jwt"
 import { credentialsSigninSchema } from "@/validations/auth"
 import { ok, unauthorized } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
+import { authRateLimit } from "@/middlewares/rateLimiter"
 
 export async function POST(req: NextRequest) {
+  const limited = authRateLimit(req)
+  if (limited) return limited
+
   try {
     const body  = await req.json()
     const input = credentialsSigninSchema.parse(body)

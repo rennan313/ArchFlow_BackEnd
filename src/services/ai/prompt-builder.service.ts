@@ -23,6 +23,18 @@ function line(label: string, value: string | number | undefined): string {
   return `• ${label}: ${value}`
 }
 
+// Sanitize user input before injecting into AI prompt
+// Prevents prompt injection attacks via meetingNotes / briefing fields
+function sanitize(text: string | undefined | null, maxLen = 3000): string {
+  if (!text) return ""
+  return text
+    .slice(0, maxLen)
+    .replace(/```/g, "'''")           // prevent markdown code-fence breakout
+    .replace(/\bignore\b.{0,80}\binstructions?\b/gi, "[filtrado]")
+    .replace(/\bsystem\b.{0,20}\bprompt\b/gi, "[filtrado]")
+    .trim()
+}
+
 export function buildSystemPrompt(tone: ProposalTone, branding?: BrandingContext): string {
   const brandingSection = branding ? buildBrandingContext(branding) : ""
 
@@ -65,13 +77,14 @@ export function buildUserPrompt(input: ProposalGenerationInput, tone: ProposalTo
     return parts.join("\n")
   })()
 
+  // Sanitize all free-text inputs to prevent prompt injection
   const briefing = [
-    line("Objetivo principal",      input.projectObjective),
-    line("Uso do espaço",           input.spaceUsage),
-    line("Problemas atuais",        input.currentProblems),
-    line("Prioridades do cliente",  input.priorities),
-    line("Prazo desejado",          input.timeline),
-    line("Referência de orçamento", input.budget),
+    line("Objetivo principal",      sanitize(input.projectObjective, 500)),
+    line("Uso do espaço",           sanitize(input.spaceUsage, 500)),
+    line("Problemas atuais",        sanitize(input.currentProblems, 500)),
+    line("Prioridades do cliente",  sanitize(input.priorities, 500)),
+    line("Prazo desejado",          sanitize(input.timeline, 200)),
+    line("Referência de orçamento", sanitize(input.budget, 200)),
   ].filter(Boolean).join("\n")
 
   const estimatedValueStr = input.estimatedValue
@@ -160,7 +173,7 @@ ${input.style ? line("Estilo arquitetônico", input.style) : ""}
 
 ${briefing ? `━━━ BRIEFING DO CLIENTE ━━━\n${briefing}` : ""}
 
-${input.meetingNotes ? `━━━ NOTAS DA REUNIÃO ━━━\n${input.meetingNotes}` : ""}
+${input.meetingNotes ? `━━━ NOTAS DA REUNIÃO ━━━\n${sanitize(input.meetingNotes, 3000)}` : ""}
 
 ${pricingContext ? `━━━ PRECIFICAÇÃO ━━━\n${pricingContext}` : ""}
 
