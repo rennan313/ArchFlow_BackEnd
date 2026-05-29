@@ -23,6 +23,16 @@ enum ProposalStatus {
   REJECTED
 }
 
+enum OpportunityStage {
+  LEAD
+  BRIEFING
+  PROPOSAL_DRAFT
+  PROPOSAL_SENT
+  NEGOTIATION
+  APPROVED
+  LOST
+}
+
 enum PricingMethod {
   HOURLY
   SQUARE_METER
@@ -78,7 +88,7 @@ enum Environment {
   DEVELOPMENT
 }
 
-// ─── Models ───────────────────────────────────────────────────────────────────
+// ─── Core Domain Models ───────────────────────────────────────────────────────
 
 model User {
   id        String    @id @default(auto()) @map("_id") @db.ObjectId
@@ -92,25 +102,131 @@ model User {
   lastLogin DateTime?
 
   // Onboarding
-  workspaceType        WorkspaceType?
-  teamSize             TeamSize?
-  primaryGoal          PrimaryGoal?
-  onboardingCompleted  Boolean   @default(false)
-  onboardingStep       Int       @default(1)
+  workspaceType       WorkspaceType?
+  teamSize            TeamSize?
+  primaryGoal         PrimaryGoal?
+  onboardingCompleted Boolean        @default(false)
+  onboardingStep      Int            @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  proposals Proposal[]
+  proposals     Proposal[]
+  clients       Client[]
+  opportunities Opportunity[]
+  followUps     FollowUp[]
 
   @@map("users")
 }
+
+model Client {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  name  String
+  email String?
+  phone String?
+  city  String?
+  state String?
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+  proposals     Proposal[]
+
+  @@index([userId])
+  @@index([userId, name])
+  @@map("clients")
+}
+
+model Opportunity {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  clientId String @db.ObjectId
+
+  title            String
+  projectType      String
+  city             String?
+  state            String?
+  squareMeters     Float?
+  estimatedBudget  Float?
+  estimatedRevenue Float?
+  probability      Float            @default(10)
+  stage            OpportunityStage @default(LEAD)
+  source           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  briefing  Briefing?
+  proposals Proposal[]
+  followUps FollowUp[]
+
+  @@index([userId, stage])
+  @@index([userId, clientId])
+  @@index([userId, createdAt])
+  @@map("opportunities")
+}
+
+model Briefing {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  opportunityId String @unique @db.ObjectId
+
+  projectObjective String?
+  spaceUsage       String?
+  desiredStyle     String?
+  currentProblems  String?
+  priorities       String?
+  budget           String?
+  timeline         String?
+  meetingNotes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@map("briefings")
+}
+
+model FollowUp {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  opportunityId String @db.ObjectId
+  userId        String @db.ObjectId
+
+  nextContactDate DateTime
+  notes           String?
+  completed       Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+  @@index([userId, completed])
+  @@index([userId, nextContactDate])
+  @@map("follow_ups")
+}
+
+// ─── Proposal Domain ──────────────────────────────────────────────────────────
 
 model Proposal {
   id     String @id @default(auto()) @map("_id") @db.ObjectId
   userId String @db.ObjectId
 
-  // Client & project
+  // Link to new domain (optional for backward compat)
+  opportunityId String? @db.ObjectId
+  clientId      String? @db.ObjectId
+
+  // Client & project (kept for standalone proposals)
   clientName   String
   projectType  String
   squareMeters Float
@@ -131,7 +247,7 @@ model Proposal {
   // Generated content
   generatedText         String?
   generatedProposalJson String?
-  proposalVersion       Int            @default(1)
+  proposalVersion       Int     @default(1)
   proposalTone          String?
   architectureStyle     String?
 
@@ -153,12 +269,32 @@ model Proposal {
   updatedAt DateTime @updatedAt
 
   user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity?            @relation(fields: [opportunityId], references: [id])
+  client        Client?                 @relation(fields: [clientId], references: [id])
   media         ProposalMedia[]
   statusHistory ProposalStatusHistory[]
+  versions      ProposalVersion[]
 
   @@index([userId, status])
   @@index([userId, createdAt])
+  @@index([opportunityId])
   @@map("proposals")
+}
+
+model ProposalVersion {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  proposalId String @db.ObjectId
+
+  version          Int
+  generatedContent String
+
+  createdAt DateTime @default(now())
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@index([proposalId, version])
+  @@map("proposal_versions")
 }
 
 model ProposalMedia {
@@ -193,6 +329,8 @@ model ProposalStatusHistory {
   @@index([proposalId, changedAt])
   @@map("proposal_status_history")
 }
+
+// ─── Location & Pricing ───────────────────────────────────────────────────────
 
 model State {
   id     String @id @default(auto()) @map("_id") @db.ObjectId
@@ -236,6 +374,8 @@ model RegionalPricing {
   @@index([stateUf, city, projectType, pricingMethod])
   @@map("regional_pricing")
 }
+
+// ─── System ───────────────────────────────────────────────────────────────────
 
 model Instance {
   id          String         @id @default(auto()) @map("_id") @db.ObjectId
