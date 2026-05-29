@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.0",
+    "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.106.2",
     "bcryptjs": "^2.4.3",
@@ -23,7 +24,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "swagger-ui-react": "^5.32.6",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
