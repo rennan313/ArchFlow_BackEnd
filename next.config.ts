@@ -10,7 +10,7 @@ const CORS_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@prisma/client", "bcryptjs"],
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "@react-pdf/renderer"],
 
   async headers() {
     return [
