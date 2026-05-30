@@ -144,10 +144,13 @@ model WorkspaceInvite {
 }
 
 model User {
-  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  id         String  @id @default(auto()) @map("_id") @db.ObjectId
+  supabaseId String?  // Supabase auth.users UUID — null for pre-migration users
+                      // IMPORTANT: uniqueness enforced by a MongoDB sparse index (see docs/indexes.md)
+                      // Prisma's @unique creates a non-sparse index that rejects multiple nulls.
   name      String
   email     String    @unique
-  password  String?
+  password  String?   // Transitional: kept during Phase 1 for NextAuth credentials; removed in Phase 2
   image     String?
   provider  String    @default("credentials")
   googleId  String?
@@ -483,6 +486,33 @@ model RegionalPricing {
   @@index([stateUf, pricingMethod])
   @@index([stateUf, city, projectType, pricingMethod])
   @@map("regional_pricing")
+}
+
+// ─── Auth Tokens ─────────────────────────────────────────────────────────────
+
+model ResetPasswordToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("reset_password_tokens")
+}
+
+// ─── User Preferences ────────────────────────────────────────────────────────
+
+model UserPreferences {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String   @unique @db.ObjectId
+  preferredLanguage String   @default("pt")
+  preferredTheme    String   @default("modern-premium")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("user_preferences")
 }
 
 // ─── System ───────────────────────────────────────────────────────────────────

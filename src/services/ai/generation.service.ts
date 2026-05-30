@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
+import { env } from "@/lib/env"
+import { emitEvent } from "@/lib/events"
 import { resolveTone } from "./tone.service"
 import { buildSystemPrompt, buildUserPrompt } from "./prompt-builder.service"
 import { parseAIResponse } from "./proposal-formatter.service"
@@ -10,11 +12,7 @@ const MAX_TOKENS = 8000
 let _client: Anthropic | null = null
 
 function getClient(): Anthropic {
-  if (!_client) {
-    const key = process.env.ANTHROPIC_API_KEY
-    if (!key) throw new Error("ANTHROPIC_API_KEY is not set")
-    _client = new Anthropic({ apiKey: key })
-  }
+  if (!_client) _client = new Anthropic({ apiKey: env.anthropicApiKey })
   return _client
 }
 
@@ -40,8 +38,7 @@ export const generationService = {
     const systemPrompt = buildSystemPrompt(tone, branding)
     const userPrompt   = buildUserPrompt(input, tone)
 
-    const client  = getClient()
-    const message = await client.messages.create({
+    const message = await getClient().messages.create({
       model:      MODEL,
       max_tokens: MAX_TOKENS,
       system:     systemPrompt,
@@ -53,11 +50,14 @@ export const generationService = {
 
     const proposal = parseAIResponse(content.text)
 
+    const tokensUsed = message.usage.input_tokens + message.usage.output_tokens
+    emitEvent("proposal.ai_generated", { tokensUsed, model: MODEL, tone })
+
     return {
       proposal,
       tone,
-      model:      MODEL,
-      tokensUsed: message.usage.input_tokens + message.usage.output_tokens,
+      model:   MODEL,
+      tokensUsed,
     }
   },
 }

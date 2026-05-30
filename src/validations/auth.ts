@@ -40,6 +40,18 @@ export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 })
 
+export const resetPasswordSchema = z.object({
+  token:    z.string().min(1, "Token is required"),
+  password: passwordSchema,
+})
+
+export const loginSchema = z.object({
+  email:    z.string().email(),
+  password: z.string().min(1),
+})
+
 export type CredentialsRegisterInput = z.infer<typeof credentialsRegisterSchema>
 export type CredentialsSigninInput   = z.infer<typeof credentialsSigninSchema>
 export type OnboardingInput          = z.infer<typeof onboardingSchema>
+export type ResetPasswordInput       = z.infer<typeof resetPasswordSchema>
+export type LoginInput               = z.infer<typeof loginSchema>

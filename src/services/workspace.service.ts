@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { randomBytes } from "crypto"
+import { AppError, ErrorCode } from "@/lib/errors"
 import type { WorkspaceRole } from "@prisma/client"
 
 function slugify(name: string): string {
@@ -70,9 +71,9 @@ export const workspaceService = {
   async acceptInvite(token: string, userId: string) {
     const invite = await prisma.workspaceInvite.findUnique({ where: { token } })
 
-    if (!invite)           throw new Error("INVITE_NOT_FOUND")
-    if (invite.accepted)   throw new Error("INVITE_ALREADY_USED")
-    if (invite.expiresAt < new Date()) throw new Error("INVITE_EXPIRED")
+    if (!invite)           throw new AppError(ErrorCode.NOT_FOUND, "Invite not found")
+    if (invite.accepted)   throw new AppError(ErrorCode.NOT_FOUND, "Invite already used")
+    if (invite.expiresAt < new Date()) throw new AppError(ErrorCode.NOT_FOUND, "Invite expired")
 
     // Update user to join workspace
     await prisma.user.update({
@@ -90,16 +91,16 @@ export const workspaceService = {
 
   async updateUserRole(workspaceId: string, targetUserId: string, role: WorkspaceRole) {
     const target = await prisma.user.findFirst({ where: { id: targetUserId, workspaceId } })
-    if (!target)              throw new Error("USER_NOT_FOUND")
-    if (target.workspaceRole === "OWNER") throw new Error("CANNOT_CHANGE_OWNER_ROLE")
+    if (!target)              throw new AppError(ErrorCode.USER_NOT_FOUND)
+    if (target.workspaceRole === "OWNER") throw new AppError(ErrorCode.CANNOT_CHANGE_OWNER_ROLE)
 
     return prisma.user.update({ where: { id: targetUserId }, data: { workspaceRole: role } })
   },
 
   async removeUser(workspaceId: string, targetUserId: string) {
     const target = await prisma.user.findFirst({ where: { id: targetUserId, workspaceId } })
-    if (!target)              throw new Error("USER_NOT_FOUND")
-    if (target.workspaceRole === "OWNER") throw new Error("CANNOT_REMOVE_OWNER")
+    if (!target)              throw new AppError(ErrorCode.USER_NOT_FOUND)
+    if (target.workspaceRole === "OWNER") throw new AppError(ErrorCode.CANNOT_REMOVE_OWNER)
 
     await prisma.user.update({
       where: { id: targetUserId },

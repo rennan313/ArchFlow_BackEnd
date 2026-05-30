@@ -1,37 +1,46 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import * as R from "@/lib/response";
+import { AppError, ErrorCode } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 
 const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   // Auth
-  EMAIL_TAKEN:           () => R.conflict("Email address is already registered"),
-  INVALID_CREDENTIALS:   () => R.unauthorized("Invalid email or password"),
-  INVALID_REFRESH_TOKEN: () => R.unauthorized("Invalid or expired refresh token"),
-  INVALID_TOKEN:         () => R.badRequest("Invalid reset token"),
-  TOKEN_ALREADY_USED:    () => R.badRequest("Reset token has already been used"),
-  TOKEN_EXPIRED:         () => R.badRequest("Reset token has expired"),
+  [ErrorCode.EMAIL_TAKEN]:              () => R.conflict("This email is already registered. If you created this account before the migration, please sign in using your existing credentials."),
+  [ErrorCode.INVALID_CREDENTIALS]:      () => R.unauthorized("Invalid email or password"),
+  [ErrorCode.INVALID_REFRESH_TOKEN]:    () => R.unauthorized("Invalid or expired refresh token"),
+  [ErrorCode.INVALID_OR_EXPIRED_TOKEN]: () => R.badRequest("Reset token is invalid or has expired"),
   // Users
-  USER_NOT_FOUND:        () => R.notFound("User not found"),
+  [ErrorCode.USER_NOT_FOUND]:           () => R.notFound("User not found"),
   // Generic
-  NOT_FOUND:             () => R.notFound(),
+  [ErrorCode.NOT_FOUND]:                () => R.notFound(),
   // Location
-  STATE_NOT_FOUND:       () => R.notFound("State not found"),
-  CITY_NOT_FOUND:        () => R.notFound("City not found"),
+  [ErrorCode.STATE_NOT_FOUND]:          () => R.notFound("State not found"),
+  [ErrorCode.CITY_NOT_FOUND]:           () => R.notFound("City not found"),
   // Media
-  MEDIA_LIMIT_REACHED:   () => R.badRequest("Maximum media per proposal reached (50)"),
+  [ErrorCode.MEDIA_LIMIT_REACHED]:      () => R.badRequest("Maximum media per proposal reached (50)"),
   // Workspace
-  CANNOT_CHANGE_OWNER_ROLE: () => R.badRequest("Cannot change the owner's role"),
-  CANNOT_REMOVE_OWNER:      () => R.badRequest("Cannot remove the workspace owner"),
+  [ErrorCode.CANNOT_CHANGE_OWNER_ROLE]: () => R.badRequest("Cannot change the owner's role"),
+  [ErrorCode.CANNOT_REMOVE_OWNER]:      () => R.badRequest("Cannot remove the workspace owner"),
   // Domain
-  CLIENT_NOT_FOUND:      () => R.notFound("Client not found"),
-  OPPORTUNITY_NOT_FOUND: () => R.notFound("Opportunity not found"),
-  BRIEFING_NOT_FOUND:    () => R.notFound("Briefing not found"),
-  FOLLOWUP_NOT_FOUND:    () => R.notFound("Follow-up not found"),
-  VERSION_NOT_FOUND:     () => R.notFound("Proposal version not found"),
+  [ErrorCode.CLIENT_NOT_FOUND]:         () => R.notFound("Client not found"),
+  [ErrorCode.OPPORTUNITY_NOT_FOUND]:    () => R.notFound("Opportunity not found"),
+  [ErrorCode.BRIEFING_NOT_FOUND]:       () => R.notFound("Briefing not found"),
+  [ErrorCode.FOLLOWUP_NOT_FOUND]:       () => R.notFound("Follow-up not found"),
+  [ErrorCode.VERSION_NOT_FOUND]:        () => R.notFound("Proposal version not found"),
+  // Legacy string aliases kept for backward compat during migration
+  INVALID_TOKEN:     () => R.badRequest("Invalid reset token"),
+  TOKEN_ALREADY_USED: () => R.badRequest("Reset token has already been used"),
+  TOKEN_EXPIRED:     () => R.badRequest("Reset token has expired"),
 };
 
 export function handleServiceError(error: unknown): NextResponse {
   if (error instanceof ZodError) return R.fromZodError(error);
+
+  if (error instanceof AppError) {
+    const handler = SERVICE_ERRORS[error.code];
+    if (handler) return handler();
+  }
 
   if (error instanceof Error) {
     if (error.message.startsWith("INVALID_TRANSITION:")) {
@@ -43,6 +52,6 @@ export function handleServiceError(error: unknown): NextResponse {
     if (handler) return handler();
   }
 
-  console.error("[Unhandled error]", error);
+  logger.error({ err: error }, "[Unhandled error]");
   return R.internalError();
 }

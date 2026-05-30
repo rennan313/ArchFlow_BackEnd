@@ -109,8 +109,8 @@ const e = {
 
 const paths: Record<string, unknown> = {
   "/api/auth/me":                   { get:  { tags:["Auth"], security:auth, summary:"Current user",                  responses:{...ok("User"),...e.r401} } },
+  "/api/auth/login":                { post: { tags:["Auth"], summary:"Sign in (email/password)",          requestBody:jsonBody(z.object({email:z.string().email(),password:z.string()})),  responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}}),...e.r400,...e.r401} } },
   "/api/auth/register":             { post: { tags:["Auth"], summary:"Register (email/password)",          requestBody:jsonBody(z.object({name:z.string(),email:z.string().email(),password:z.string().min(8)})),  responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}}),...e.r400,...e.r409} } },
-  "/api/auth/credentials-signin":   { post: { tags:["Auth"], summary:"Sign in (email/password)",          requestBody:jsonBody(z.object({email:z.string().email(),password:z.string()})),  responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}}),...e.r400,...e.r401} } },
   "/api/auth/google-signin":        { post: { tags:["Auth"], summary:"Create/update user via Google",      requestBody:jsonBody(z.object({email:z.string().email(),name:z.string(),googleId:z.string(),image:z.string().nullable().optional()})), responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}})} } },
 
   "/api/users/onboarding":          { get:  { tags:["Onboarding"], security:auth, summary:"Get onboarding status",   responses:{...ok("User"),...e.r401} },

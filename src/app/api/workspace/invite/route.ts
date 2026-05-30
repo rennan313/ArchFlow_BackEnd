@@ -6,6 +6,7 @@ import { created, forbidden, badRequest } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
 import { withRole } from "@/middlewares/rbac"
 import type { JwtPayload } from "@/lib/jwt"
+import { env } from "@/lib/env"
 
 export const POST = withRole("ADMIN", async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload) => {
   try {
@@ -29,9 +30,9 @@ export const POST = withRole("ADMIN", async (req: NextRequest, _ctx: { params: P
         id:        invite.id,
         email:     invite.email,
         role:      invite.role,
-        token:     process.env.NODE_ENV === "development" ? invite.token : undefined,
+        token:     env.isDev ? invite.token : undefined,
         expiresAt: invite.expiresAt,
-        inviteUrl: `${process.env.FRONTEND_URL ?? "http://localhost:3001"}/accept-invite?token=${invite.token}`,
+        inviteUrl: `${env.frontendUrl}/accept-invite?token=${invite.token}`,
       },
       "Invite sent successfully",
     )
