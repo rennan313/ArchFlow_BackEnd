@@ -10,7 +10,10 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "migrate:supabase-id": "tsx scripts/migrate-supabase-id.ts",
+    "migrate:validate": "tsx scripts/validate-migration.ts",
+    "migrate:rollback": "tsx scripts/rollback-supabase-id.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.0",
