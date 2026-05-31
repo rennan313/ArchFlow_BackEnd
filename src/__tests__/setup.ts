@@ -13,7 +13,7 @@ process.env.SMTP_HOST                  = "localhost"
 process.env.SMTP_USER                  = "test@test.com"
 process.env.SMTP_PASS                  = "test-pass"
 process.env.FRONTEND_URL               = "http://localhost:3001"
-process.env.NODE_ENV                   = "test"
+// NODE_ENV is read-only in TS5 — vitest sets it to "test" automatically
 
 // Mock Prisma globally — tests use mocks, not a real DB
 vi.mock("@/lib/prisma", () => ({

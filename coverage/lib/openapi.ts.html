@@ -1,0 +1,712 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for lib/openapi.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../prettify.css" />
+    <link rel="stylesheet" href="../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> openapi.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/15</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/0</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/6</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/15</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { zodToJsonSchema } from "zod-to-json-schema"
+import { z } from "zod"
+&nbsp;
+// ─── Import all Zod validation schemas ───────────────────────────────────────
+import { createClientSchema, updateClientSchema } from "@/validations/client"
+import { createOpportunitySchema, updateOpportunitySchema } from "@/validations/opportunity"
+import { upsertBriefingSchema } from "@/validations/briefing"
+import { createFollowUpSchema, updateFollowUpSchema } from "@/validations/followup"
+import { updateBrandingSchema } from "@/validations/branding"
+import { WorkspaceTypeEnum, TeamSizeEnum, PrimaryGoalEnum } from "@/validations/onboarding"
+import { updateWorkspaceSettingsSchema } from "@/validations/settings"
+import { calculatePricingSchema } from "@/validations/pricing"
+&nbsp;
+// ─── Helper: Zod → OpenAPI Schema Object ─────────────────────────────────────
+&nbsp;
+function <span class="fstat-no" title="function not covered" >zs(s</span>chema: z.ZodTypeAny): Record&lt;string, unknown&gt; {
+<span class="cstat-no" title="statement not covered" >  return zodToJsonSchema(schema, { target: "openApi3" }) as Record&lt;string, unknown&gt;</span>
+}
+&nbsp;
+// ─── Reusable components ─────────────────────────────────────────────────────
+&nbsp;
+const IdStr   = <span class="cstat-no" title="statement not covered" >{ type: "string", example: "6650a1b2c3d4e5f678901234" }</span>
+const DateStr = <span class="cstat-no" title="statement not covered" >{ type: "string", format: "date-time" }</span>
+const NullStr = <span class="cstat-no" title="statement not covered" >{ type: "string", nullable: true }</span>
+&nbsp;
+const schemas = <span class="cstat-no" title="statement not covered" >{</span>
+  Error: { type:"object", properties:{ success:{type:"boolean",example:false}, message:{type:"string"} } },
+  Pagination: { type:"object", properties:{ total:{type:"integer"}, page:{type:"integer"}, limit:{type:"integer"}, totalPages:{type:"integer"} } },
+&nbsp;
+  User: { type:"object", properties:{
+    id:IdStr, name:{type:"string"}, email:{type:"string"}, image:NullStr, role:{type:"string"},
+    onboardingCompleted:{type:"boolean"}, onboardingStep:{type:"integer"},
+    workspaceType:NullStr, teamSize:NullStr, primaryGoal:NullStr, createdAt:DateStr,
+  }},
+&nbsp;
+  Client: { type:"object", properties:{
+    id:IdStr, userId:IdStr, name:{type:"string"},
+    email:NullStr, phone:NullStr, city:NullStr, state:NullStr, notes:NullStr,
+    createdAt:DateStr, updatedAt:DateStr,
+  }},
+&nbsp;
+  Opportunity: { type:"object", properties:{
+    id:IdStr, userId:IdStr, clientId:IdStr, title:{type:"string"}, projectType:{type:"string"},
+    city:NullStr, state:NullStr, squareMeters:{type:"number",nullable:true},
+    estimatedRevenue:{type:"number",nullable:true}, probability:{type:"number"},
+    weightedRevenue:{type:"number",nullable:true},
+    stage:{type:"string",enum:["LEAD","BRIEFING","PROPOSAL_DRAFT","PROPOSAL_SENT","NEGOTIATION","APPROVED","LOST"]},
+    createdAt:DateStr, updatedAt:DateStr,
+  }},
+&nbsp;
+  Briefing: { type:"object", properties:{
+    id:IdStr, opportunityId:IdStr,
+    projectObjective:NullStr, spaceUsage:NullStr, desiredStyle:NullStr,
+    currentProblems:NullStr, priorities:NullStr, budget:NullStr, timeline:NullStr, meetingNotes:NullStr,
+    createdAt:DateStr, updatedAt:DateStr,
+  }},
+&nbsp;
+  FollowUp: { type:"object", properties:{
+    id:IdStr, opportunityId:IdStr, userId:IdStr,
+    nextContactDate:DateStr, notes:NullStr, completed:{type:"boolean"},
+    createdAt:DateStr, updatedAt:DateStr,
+  }},
+&nbsp;
+  OfficeBranding: { type:"object", properties:{
+    id:IdStr, userId:IdStr, officeName:NullStr, tradeName:NullStr,
+    architectName:NullStr, cauNumber:NullStr, email:NullStr, phone:NullStr,
+    primaryColor:NullStr, secondaryColor:NullStr,
+    logoUrl:NullStr, logoWhiteUrl:NullStr, faviconUrl:NullStr,
+    proposalSignature:NullStr, proposalFooter:NullStr, updatedAt:DateStr,
+  }},
+&nbsp;
+  Dashboard: { type:"object", properties:{
+    activeOpportunities:{type:"integer"}, pipelineValue:{type:"number"},
+    expectedRevenue:{type:"number"}, approvalRate:{type:"number"},
+    averageApprovedRevenue:{type:"number"}, overdueFollowUps:{type:"integer"},
+    byStage:{ type:"object", additionalProperties:{ type:"object", properties:{ count:{type:"integer"}, revenue:{type:"number"} } } },
+  }},
+}
+&nbsp;
+// ─── Path helpers ─────────────────────────────────────────────────────────────
+&nbsp;
+const auth   = <span class="cstat-no" title="statement not covered" >[{ BearerAuth: [] }]</span>
+const IdPath = <span class="cstat-no" title="statement not covered" >[{ name:"id", in:"path", required:true, schema:{type:"string"} }]</span>
+&nbsp;
+function <span class="fstat-no" title="function not covered" >jsonBody(s</span>chema: z.ZodTypeAny) {
+<span class="cstat-no" title="statement not covered" >  return { required:true, content:{ "application/json":{ schema: zs(schema) } } }</span>
+}
+function <span class="fstat-no" title="function not covered" >formBody() {</span>
+<span class="cstat-no" title="statement not covered" >  return { required:true, content:{ "multipart/form-data":{ schema:{ type:"object", properties:{ file:{ type:"string", format:"binary" } }, required:["file"] } } } }</span>
+}
+function <span class="fstat-no" title="function not covered" >ok(r</span>ef: string) {
+<span class="cstat-no" title="statement not covered" >  return { "200":{ description:"Success", content:{ "application/json":{ schema:{ type:"object", properties:{ success:{type:"boolean"}, data:{ "$ref":`#/components/schemas/${ref}` } } } } } } }</span>
+}
+function <span class="fstat-no" title="function not covered" >okList(r</span>ef: string) {
+<span class="cstat-no" title="statement not covered" >  return { "200":{ description:"Paginated list", content:{ "application/json":{ schema:{ type:"object", properties:{ success:{type:"boolean"}, data:{ type:"array", items:{ "$ref":`#/components/schemas/${ref}` } }, pagination:{ "$ref":"#/components/schemas/Pagination" } } } } } } }</span>
+}
+function <span class="fstat-no" title="function not covered" >okInline(s</span>chema: Record&lt;string, unknown&gt;) {
+<span class="cstat-no" title="statement not covered" >  return { "200":{ description:"Success", content:{ "application/json":{ schema:{ type:"object", properties:{ success:{type:"boolean"}, data:schema } } } } } }</span>
+}
+const e = <span class="cstat-no" title="statement not covered" >{</span>
+  r400: { "400":{ description:"Validation error", content:{ "application/json":{ schema:{ "$ref":"#/components/schemas/Error" } } } } },
+  r401: { "401":{ description:"Unauthorized",     content:{ "application/json":{ schema:{ "$ref":"#/components/schemas/Error" } } } } },
+  r404: { "404":{ description:"Not found",         content:{ "application/json":{ schema:{ "$ref":"#/components/schemas/Error" } } } } },
+  r409: { "409":{ description:"Conflict",           content:{ "application/json":{ schema:{ "$ref":"#/components/schemas/Error" } } } } },
+  r204: { "204":{ description:"No content" } },
+}
+&nbsp;
+// ─── Paths ────────────────────────────────────────────────────────────────────
+&nbsp;
+const paths: Record&lt;string, unknown&gt; = <span class="cstat-no" title="statement not covered" >{</span>
+  "/api/auth/me":                   { get:  { tags:["Auth"], security:auth, summary:"Current user",                  responses:{...ok("User"),...e.r401} } },
+  "/api/auth/login":                { post: { tags:["Auth"], summary:"Sign in (email/password)",          requestBody:jsonBody(z.object({email:z.string().email(),password:z.string()})),  responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}}),...e.r400,...e.r401} } },
+  "/api/auth/register":             { post: { tags:["Auth"], summary:"Register (email/password)",          requestBody:jsonBody(z.object({name:z.string(),email:z.string().email(),password:z.string().min(8)})),  responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}}),...e.r400,...e.r409} } },
+  "/api/auth/google-signin":        { post: { tags:["Auth"], summary:"Create/update user via Google",      requestBody:jsonBody(z.object({email:z.string().email(),name:z.string(),googleId:z.string(),image:z.string().nullable().optional()})), responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}})} } },
+&nbsp;
+  "/api/users/onboarding":          { get:  { tags:["Onboarding"], security:auth, summary:"Get onboarding status",   responses:{...ok("User"),...e.r401} },
+                                      patch: { tags:["Onboarding"], security:auth, summary:"Update onboarding",      requestBody:jsonBody(updateWorkspaceSettingsSchema), responses:{...ok("User"),...e.r400,...e.r401} } },
+&nbsp;
+  "/api/settings/workspace":        { get:  { tags:["Settings"], security:auth, summary:"Get workspace preferences", responses:{...ok("User"),...e.r401} },
+                                      patch: { tags:["Settings"], security:auth, summary:"Update workspace prefs",   requestBody:jsonBody(updateWorkspaceSettingsSchema), responses:{...ok("User"),...e.r400,...e.r401} } },
+&nbsp;
+  "/api/settings/branding":            { get:  { tags:["Branding"], security:auth, summary:"Get office branding",    responses:{...ok("OfficeBranding"),...e.r401} },
+                                         patch: { tags:["Branding"], security:auth, summary:"Update branding fields", requestBody:jsonBody(updateBrandingSchema), responses:{...ok("OfficeBranding"),...e.r400,...e.r401} } },
+  "/api/settings/branding/logo":       { post: { tags:["Branding"], security:auth, summary:"Upload logo (PNG/SVG/WEBP ≤5MB)",        requestBody:formBody(), responses:{...okInline({type:"object",properties:{url:{type:"string"},storagePath:{type:"string"}}}),...e.r400,...e.r401} } },
+  "/api/settings/branding/logo-white": { post: { tags:["Branding"], security:auth, summary:"Upload white logo (PNG/SVG/WEBP ≤5MB)",  requestBody:formBody(), responses:{...okInline({type:"object",properties:{url:{type:"string"},storagePath:{type:"string"}}}),...e.r400,...e.r401} } },
+  "/api/settings/branding/favicon":    { post: { tags:["Branding"], security:auth, summary:"Upload favicon (PNG/SVG/WEBP ≤5MB)",     requestBody:formBody(), responses:{...okInline({type:"object",properties:{url:{type:"string"},storagePath:{type:"string"}}}),...e.r400,...e.r401} } },
+&nbsp;
+  "/api/clients":        { get:  { tags:["Clients"], security:auth, summary:"List clients",   responses:{...okList("Client"),...e.r401} },
+                           post: { tags:["Clients"], security:auth, summary:"Create client",  requestBody:jsonBody(createClientSchema), responses:{...ok("Client"),...e.r400,...e.r401} } },
+  "/api/clients/{id}":   { parameters:IdPath,
+                           get:    { tags:["Clients"], security:auth, summary:"Get client",    responses:{...ok("Client"),...e.r401,...e.r404} },
+                           put:    { tags:["Clients"], security:auth, summary:"Update client", requestBody:jsonBody(updateClientSchema), responses:{...ok("Client"),...e.r400,...e.r401,...e.r404} },
+                           delete: { tags:["Clients"], security:auth, summary:"Delete client", responses:{...e.r204,...e.r401,...e.r404} } },
+&nbsp;
+  "/api/opportunities":       { get:  { tags:["Opportunities"], security:auth, summary:"List opportunities — filter by stage/client", parameters:[{name:"stage",in:"query",schema:{type:"string"}},{name:"clientId",in:"query",schema:{type:"string"}}], responses:{...okList("Opportunity"),...e.r401} },
+                                 post: { tags:["Opportunities"], security:auth, summary:"Create opportunity (probability auto-set)", requestBody:jsonBody(createOpportunitySchema), responses:{...ok("Opportunity"),...e.r400,...e.r401} } },
+  "/api/opportunities/{id}":  { parameters:IdPath,
+                                 get:    { tags:["Opportunities"], security:auth, summary:"Get opportunity with client + briefing", responses:{...ok("Opportunity"),...e.r401,...e.r404} },
+                                 put:    { tags:["Opportunities"], security:auth, summary:"Update opportunity (stage → probability)", requestBody:jsonBody(updateOpportunitySchema), responses:{...ok("Opportunity"),...e.r400,...e.r401,...e.r404} },
+                                 delete: { tags:["Opportunities"], security:auth, summary:"Delete opportunity", responses:{...e.r204,...e.r401,...e.r404} } },
+&nbsp;
+  "/api/opportunities/{id}/briefing":       { parameters:IdPath,
+                                              get: { tags:["Briefings"], security:auth, summary:"Get briefing",             responses:{...ok("Briefing"),...e.r401,...e.r404} },
+                                              put: { tags:["Briefings"], security:auth, summary:"Upsert briefing",           requestBody:jsonBody(upsertBriefingSchema), responses:{...ok("Briefing"),...e.r400,...e.r401,...e.r404} } },
+&nbsp;
+  "/api/opportunities/{id}/followups":      { parameters:IdPath,
+                                              get:  { tags:["FollowUps"], security:auth, summary:"List follow-ups",          responses:{...okList("FollowUp"),...e.r401,...e.r404} },
+                                              post: { tags:["FollowUps"], security:auth, summary:"Schedule follow-up",       requestBody:jsonBody(createFollowUpSchema), responses:{...ok("FollowUp"),...e.r400,...e.r401,...e.r404} } },
+  "/api/opportunities/{id}/followups/{fid}":{ parameters:[...IdPath,{name:"fid",in:"path",required:true,schema:{type:"string"}}],
+                                              patch:  { tags:["FollowUps"], security:auth, summary:"Update/complete follow-up", requestBody:jsonBody(updateFollowUpSchema), responses:{...ok("FollowUp"),...e.r400,...e.r401,...e.r404} },
+                                              delete: { tags:["FollowUps"], security:auth, summary:"Delete follow-up",          responses:{...e.r204,...e.r401,...e.r404} } },
+&nbsp;
+  "/api/proposals":           { get:  { tags:["Proposals"], security:auth, summary:"List proposals",              responses:{...okList("User"),...e.r401} },  // generic schema
+                                 post: { tags:["Proposals"], security:auth, summary:"Create proposal",             responses:{...ok("User"),...e.r400,...e.r401} } },
+  "/api/proposals/{id}":      { parameters:IdPath,
+                                 get:    { tags:["Proposals"], security:auth, summary:"Get proposal",              responses:{...ok("User"),...e.r401,...e.r404} },
+                                 put:    { tags:["Proposals"], security:auth, summary:"Update proposal",           responses:{...ok("User"),...e.r401,...e.r404} },
+                                 delete: { tags:["Proposals"], security:auth, summary:"Delete proposal",           responses:{...e.r204,...e.r401,...e.r404} } },
+  "/api/proposals/{id}/status":  { parameters:IdPath, patch: { tags:["Proposals"], security:auth, summary:"Update status (DRAFT→REVIEW→SENT→NEGOTIATION→APPROVED/REJECTED)", requestBody:jsonBody(z.object({status:z.string(),force:z.boolean().optional()})), responses:{...ok("User"),...e.r400,...e.r401,...e.r404} } },
+  "/api/proposals/{id}/versions":{ parameters:IdPath, get:   { tags:["Proposals"], security:auth, summary:"List AI-generated versions",  responses:{...okList("User"),...e.r401,...e.r404} } },
+&nbsp;
+  "/api/ai/generate-proposal": { post: { tags:["AI"], security:auth, summary:"Generate premium proposal — injects branding, adapts tone", requestBody:jsonBody(z.object({clientName:z.string(),projectType:z.string(),city:z.string().optional(),complexity:z.string().optional(),meetingNotes:z.string().optional()})), responses:{...okInline({type:"object",properties:{proposalId:{type:"string"},tone:{type:"string"},model:{type:"string"},tokensUsed:{type:"integer"}}}),...e.r400,...e.r401} } },
+&nbsp;
+  "/api/pricing/regional":  { get:  { tags:["Pricing"], summary:"Regional pricing reference (state + projectType)", parameters:[{name:"state",in:"query",required:true,schema:{type:"string",minLength:2,maxLength:2}},{name:"projectType",in:"query",schema:{type:"string"}},{name:"pricingMethod",in:"query",schema:{type:"string",enum:["HOURLY","SQUARE_METER"]}}], responses:{...okInline({type:"object",properties:{min:{type:"number"},max:{type:"number"},average:{type:"number"},suggested:{type:"number"}}})} } },
+  "/api/pricing/calculate": { post: { tags:["Pricing"], security:auth, summary:"Calculate price with complexity multiplier", requestBody:jsonBody(calculatePricingSchema), responses:{...okInline({type:"object",properties:{subtotal:{type:"number"},complexityMultiplier:{type:"number"},total:{type:"number"}}}),...e.r400,...e.r401} } },
+&nbsp;
+  "/api/locations/states": { get: { tags:["Locations"], summary:"All 27 Brazilian states", responses:{...okList("User")} } },
+  "/api/locations/cities": { get: { tags:["Locations"], summary:"Cities for a state with search + pagination", parameters:[{name:"state",in:"query",required:true,schema:{type:"string",minLength:2,maxLength:2}},{name:"search",in:"query",schema:{type:"string"}},{name:"page",in:"query",schema:{type:"integer"}},{name:"limit",in:"query",schema:{type:"integer"}}], responses:{...okList("User")} } },
+  "/api/cities":           { get: { tags:["Locations"], summary:"City autocomplete (min 2 chars, cross-state)", parameters:[{name:"q",in:"query",required:true,schema:{type:"string",minLength:2}},{name:"limit",in:"query",schema:{type:"integer",default:10}}], responses:{...okList("User")} } },
+&nbsp;
+  "/api/dashboard": { get: { tags:["Dashboard"], security:auth, summary:"Revenue + pipeline aggregations", responses:{...ok("Dashboard"),...e.r401} } },
+}
+&nbsp;
+// ─── Final spec ───────────────────────────────────────────────────────────────
+&nbsp;
+export const openApiSpec = <span class="cstat-no" title="statement not covered" >{</span>
+  openapi: "3.0.3",
+  info: {
+    title:       "ArchFlow API",
+    version:     "2.0.0",
+    description: "Revenue Operating System for Architecture Firms — schemas auto-generated from Zod via zod-to-json-schema",
+  },
+  servers: [
+    { url: "http://localhost:3000",       description: "Development" },
+    { url: "https://api.archflow.com.br", description: "Production"  },
+  ],
+  tags: [
+    { name:"Auth",          description:"Authentication — email/password + Google OAuth" },
+    { name:"Onboarding",    description:"First-access workspace setup flow" },
+    { name:"Settings",      description:"Workspace preferences" },
+    { name:"Branding",      description:"Office identity — logo, colors, proposal footer" },
+    { name:"Clients",       description:"Client CRM" },
+    { name:"Opportunities", description:"Deal pipeline — LEAD→APPROVED/LOST" },
+    { name:"Briefings",     description:"Project briefing per opportunity" },
+    { name:"FollowUps",     description:"Follow-up scheduling" },
+    { name:"Proposals",     description:"Proposal CRUD + status workflow" },
+    { name:"AI",            description:"AI proposal generation" },
+    { name:"Pricing",       description:"Hourly / m² pricing with regional reference" },
+    { name:"Locations",     description:"Brazilian states + cities (IBGE)" },
+    { name:"Dashboard",     description:"Pipeline + revenue aggregations" },
+  ],
+  components: {
+    securitySchemes: {
+      BearerAuth: { type:"http", scheme:"bearer", bearerFormat:"JWT" },
+    },
+    schemas,
+  },
+  paths,
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-05-31T17:35:51.227Z
+            </div>
+        <script src="../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../sorter.js"></script>
+        <script src="../block-navigation.js"></script>
+    </body>
+</html>
+    

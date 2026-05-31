@@ -16,9 +16,10 @@ const mockWorkspace = {
   id:        "ws-1",
   name:      "Test Office",
   slug:      "test-office",
-  plan:      "STARTER",
+  plan:      "STARTER" as const,
   active:    true,
   createdAt: new Date(),
+  updatedAt: new Date(),
 }
 
 const mockUser = {

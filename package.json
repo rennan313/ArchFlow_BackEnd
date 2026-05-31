@@ -6,7 +6,7 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src --ext .ts,.tsx",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
@@ -14,9 +14,9 @@
     "migrate:supabase-id": "tsx scripts/migrate-supabase-id.ts",
     "migrate:validate": "tsx scripts/validate-migration.ts",
     "migrate:rollback": "tsx scripts/rollback-supabase-id.ts",
-    "test":             "vitest run",
-    "test:watch":       "vitest",
-    "test:coverage":    "vitest run --coverage"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.0",
@@ -45,6 +45,8 @@
     "@types/react-dom": "^19",
     "@types/swagger-ui-react": "^5.18.0",
     "@vitest/coverage-v8": "^4.1.7",
+    "eslint": "^10.4.1",
+    "eslint-config-next": "^16.2.6",
     "prisma": "^5.22.0",
     "tsx": "^4.22.3",
     "typescript": "^5",
