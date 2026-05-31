@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma"
 import { followUpRepository } from "@/repositories/followup.repository"
 
-const ACTIVE_STAGES = ["LEAD", "BRIEFING", "PROPOSAL_DRAFT", "PROPOSAL_SENT", "NEGOTIATION"]
+import type { OpportunityStage } from "@prisma/client"
+
+const ACTIVE_STAGES: OpportunityStage[] = ["LEAD", "BRIEFING", "PROPOSAL_DRAFT", "PROPOSAL_SENT", "NEGOTIATION"]
 
 export const dashboardService = {
   async getAggregations(userId: string) {
@@ -16,7 +18,7 @@ export const dashboardService = {
       // Pipeline by stage (active only)
       prisma.opportunity.groupBy({
         by:    ["stage"],
-        where: { userId, stage: { in: ACTIVE_STAGES as Parameters<typeof prisma.opportunity.groupBy>[0]["where"] extends { stage?: infer S } ? S extends { in?: (infer T)[] } ? T[] : string[] : string[] } },
+        where: { userId, stage: { in: ACTIVE_STAGES } },
         _count: { _all: true },
         _sum:   { estimatedRevenue: true },
       }),

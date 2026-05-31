@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server"
-import { withAuth, type WithAuthHandler } from "./auth"
+import { withAuth, type WithAuthHandler, type RouteHandler } from "./auth"
 import { forbidden } from "@/lib/response"
 import type { JwtPayload } from "@/lib/jwt"
 
@@ -35,35 +35,33 @@ export function hasPermission(role: string, permission: string): boolean {
 
 // ─── Middleware factories ─────────────────────────────────────────────────────
 
-type Ctx = { params: Promise<Record<string, string>> }
-
 export function requireRole(...roles: string[]) {
-  return (handler: WithAuthHandler): WithAuthHandler => {
-    return withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+  return (handler: WithAuthHandler): RouteHandler => {
+    return withAuth(async (req: NextRequest, ctx, user: JwtPayload) => {
       const userRole = user.workspaceRole ?? "VIEWER"
       const allowed  = roles.some((r) => ROLE_RANK[userRole] >= ROLE_RANK[r])
       if (!allowed) return forbidden(`Role ${userRole} cannot perform this action. Requires: ${roles.join(" | ")}`)
       return handler(req, ctx, user)
-    }) as WithAuthHandler
+    })
   }
 }
 
 export function requirePermission(permission: string) {
-  return (handler: WithAuthHandler): WithAuthHandler => {
-    return withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+  return (handler: WithAuthHandler): RouteHandler => {
+    return withAuth(async (req: NextRequest, ctx, user: JwtPayload) => {
       const userRole = user.workspaceRole ?? "VIEWER"
       if (!hasPermission(userRole, permission)) {
         return forbidden(`Permission denied: ${permission}`)
       }
       return handler(req, ctx, user)
-    }) as WithAuthHandler
+    })
   }
 }
 
 // ─── Composed: withAuth + role check ─────────────────────────────────────────
 
-export function withRole(minRole: string, handler: WithAuthHandler) {
-  return withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export function withRole(minRole: string, handler: WithAuthHandler): RouteHandler {
+  return withAuth(async (req: NextRequest, ctx, user: JwtPayload) => {
     const userRole = user.workspaceRole ?? "VIEWER"
     if (ROLE_RANK[userRole] < ROLE_RANK[minRole]) {
       return forbidden(`Requires ${minRole} or above`)

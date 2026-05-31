@@ -74,7 +74,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload
 
     const filename = `proposta-${proposal.clientName.toLowerCase().replace(/\s+/g, "-")}.pdf`
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type":        "application/pdf",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
