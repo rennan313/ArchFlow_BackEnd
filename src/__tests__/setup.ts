@@ -6,7 +6,6 @@ process.env.JWT_SECRET                 = "test-jwt-secret-must-be-long-enough-32
 process.env.JWT_REFRESH_SECRET         = "test-refresh-secret-must-be-long-32c"
 process.env.JWT_EXPIRES_IN             = "7d"
 process.env.JWT_REFRESH_EXPIRES_IN     = "30d"
-process.env.SUPABASE_JWT_SECRET        = "test-supabase-secret"
 process.env.SUPABASE_URL               = "https://test.supabase.co"
 process.env.SUPABASE_SERVICE_ROLE_KEY  = "test-service-role-key"
 process.env.ANTHROPIC_API_KEY          = "sk-ant-test-key"

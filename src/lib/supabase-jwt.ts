@@ -1,27 +1,20 @@
-import jwt from "jsonwebtoken"
+import { createClient } from "@supabase/supabase-js"
 import { env } from "@/lib/env"
 import { logger } from "@/lib/logger"
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 export interface SupabaseJwtPayload {
-  sub:            string
-  email:          string
-  role:           string
-  aud:            string
-  iat:            number
-  exp:            number
-  session_id?:    string
-  user_metadata?: Record<string, unknown>
-  app_metadata?:  Record<string, unknown>
+  /** Supabase auth.users UUID */
+  sub:   string
+  email: string
 }
 
 export class SupabaseJwtError extends Error {
   constructor(
     public readonly code:
       | "MISSING_HEADER"
-      | "MISSING_SECRET"
-      | "EXPIRED"
-      | "INVALID_SIGNATURE"
-      | "INVALID_ROLE"
+      | "INVALID_TOKEN"
       | "MISSING_EMAIL",
     message: string,
   ) {
@@ -30,11 +23,38 @@ export class SupabaseJwtError extends Error {
   }
 }
 
-export function verifySupabaseJwt(
+// ── Admin client (singleton) ──────────────────────────────────────────────────
+
+let _admin: ReturnType<typeof createClient> | null = null
+
+function getAdmin() {
+  if (!_admin) {
+    _admin = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  }
+  return _admin
+}
+
+// ── Verifier ──────────────────────────────────────────────────────────────────
+
+/**
+ * Validates a Supabase access_token by calling supabase.auth.getUser().
+ *
+ * This is Supabase's recommended server-side token validation approach for
+ * modern projects. It does not require SUPABASE_JWT_SECRET and works
+ * regardless of whether the project uses HS256 or RS256 signing.
+ *
+ * @throws {SupabaseJwtError} on any validation failure
+ */
+export async function verifySupabaseJwt(
   authorizationHeader: string | null,
-): SupabaseJwtPayload {
+): Promise<SupabaseJwtPayload> {
   if (!authorizationHeader?.startsWith("Bearer ")) {
-    throw new SupabaseJwtError("MISSING_HEADER", "Authorization header with 'Bearer <token>' is required")
+    throw new SupabaseJwtError(
+      "MISSING_HEADER",
+      "Authorization header with 'Bearer <token>' is required",
+    )
   }
 
   const token = authorizationHeader.slice(7).trim()
@@ -42,27 +62,16 @@ export function verifySupabaseJwt(
     throw new SupabaseJwtError("MISSING_HEADER", "Bearer token is empty")
   }
 
-  // env.ts validates SUPABASE_JWT_SECRET at startup — always present here
-  let payload: SupabaseJwtPayload
-  try {
-    payload = jwt.verify(token, env.supabaseJwtSecret) as SupabaseJwtPayload
-  } catch (err) {
-    if (err instanceof jwt.TokenExpiredError) {
-      throw new SupabaseJwtError("EXPIRED", "Supabase session has expired — please sign in again")
-    }
-    throw new SupabaseJwtError("INVALID_SIGNATURE", "Invalid Supabase token")
+  const { data: { user }, error } = await getAdmin().auth.getUser(token)
+
+  if (error || !user) {
+    logger.warn({ err: error?.message }, "[supabase-jwt] Token validation failed")
+    throw new SupabaseJwtError("INVALID_TOKEN", "Invalid or expired Supabase token")
   }
 
-  if (payload.role !== "authenticated") {
-    throw new SupabaseJwtError(
-      "INVALID_ROLE",
-      `Token role '${payload.role}' is not allowed — must be 'authenticated'`,
-    )
+  if (!user.email) {
+    throw new SupabaseJwtError("MISSING_EMAIL", "User has no email — cannot provision")
   }
 
-  if (!payload.email) {
-    throw new SupabaseJwtError("MISSING_EMAIL", "Token is missing the email claim")
-  }
-
-  return payload
+  return { sub: user.id, email: user.email }
 }

@@ -25,7 +25,8 @@ export const env = {
   resetPasswordExpiresMin:   Number(optional("RESET_PASSWORD_EXPIRES_IN_MINUTES", "30")),
 
   // ── Supabase ───────────────────────────────────────────────────────────────
-  supabaseJwtSecret:         required("SUPABASE_JWT_SECRET"),
+  // Note: SUPABASE_JWT_SECRET is no longer required. Token validation uses
+  // supabase.auth.getUser() (Supabase's recommended approach for modern projects).
   supabaseUrl:               required("SUPABASE_URL"),
   supabaseServiceRoleKey:    required("SUPABASE_SERVICE_ROLE_KEY"),
   supabaseStorageBucket:     optional("SUPABASE_STORAGE_BUCKET",     "proposal-media"),
