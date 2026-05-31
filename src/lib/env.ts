@@ -34,13 +34,16 @@ export const env = {
   // ── AI ─────────────────────────────────────────────────────────────────────
   anthropicApiKey:           required("ANTHROPIC_API_KEY"),
 
-  // ── SMTP ───────────────────────────────────────────────────────────────────
-  smtpHost:                  required("SMTP_HOST"),
-  smtpPort:                  Number(optional("SMTP_PORT",            "587")),
-  smtpSecure:                optional("SMTP_SECURE",                 "false") === "true",
-  smtpUser:                  required("SMTP_USER"),
-  smtpPass:                  required("SMTP_PASS"),
-  smtpFrom:                  optional("SMTP_FROM",                   "ArchFlow <noreply@archflow.com.br>"),
+  // ── SMTP (optional — validated lazily in mailer.ts when email is sent) ────
+  // Absence only disables password-reset emails; it never blocks startup.
+  // In production, set all four vars to enable email delivery.
+  smtpHost:     optional("SMTP_HOST",   ""),
+  smtpPort:     Number(optional("SMTP_PORT",   "587")),
+  smtpSecure:   optional("SMTP_SECURE", "false") === "true",
+  smtpUser:     optional("SMTP_USER",   ""),
+  smtpPass:     optional("SMTP_PASS",   ""),
+  smtpFrom:     optional("SMTP_FROM",   "ArchFlow <noreply@archflow.com.br>"),
+  emailEnabled: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
 
   // ── URLs ───────────────────────────────────────────────────────────────────
   frontendUrl:               optional("FRONTEND_URL",               "http://localhost:3001"),

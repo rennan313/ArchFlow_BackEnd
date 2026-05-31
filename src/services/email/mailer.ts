@@ -1,9 +1,23 @@
 import nodemailer, { type Transporter } from "nodemailer"
 import { env } from "@/lib/env"
+import { logger } from "@/lib/logger"
 
 let _transporter: Transporter | null = null
 
+/**
+ * Returns a configured Nodemailer transporter.
+ * Throws EMAIL_NOT_CONFIGURED if SMTP credentials are absent,
+ * allowing callers to degrade gracefully instead of crashing the server.
+ */
 export function getTransporter(): Transporter {
+  if (!env.emailEnabled) {
+    logger.warn(
+      "Email delivery is disabled — SMTP_HOST, SMTP_USER, and SMTP_PASS are not configured. " +
+      "Set these environment variables to enable password-reset emails.",
+    )
+    throw new Error("EMAIL_NOT_CONFIGURED")
+  }
+
   if (_transporter) return _transporter
 
   _transporter = nodemailer.createTransport({
