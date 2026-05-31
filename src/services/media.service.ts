@@ -1,5 +1,6 @@
 import { mediaRepository } from "@/repositories/media.repository"
 import { storageService, type UploadCategory } from "@/services/storage/supabase.service"
+import { logger } from "@/lib/logger"
 import {
   UPLOAD_MEDIA_TYPES,
   getYouTubeThumbnail,
@@ -98,8 +99,7 @@ export const mediaService = {
     // Delete from Supabase if it's a stored file
     if (media.storagePath) {
       await storageService.deleteFile(media.storagePath).catch(() => {
-        // Log but don't fail if storage delete fails
-        console.warn(`[media] Failed to delete storage path: ${media.storagePath}`)
+        logger.warn({ storagePath: media.storagePath }, "[media] Failed to delete storage file — manual cleanup may be needed")
       })
     }
 

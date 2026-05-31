@@ -8,6 +8,7 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   // Auth
   [ErrorCode.EMAIL_TAKEN]:              () => R.conflict("This email is already registered. If you created this account before the migration, please sign in using your existing credentials."),
   [ErrorCode.INVALID_CREDENTIALS]:      () => R.unauthorized("Invalid email or password"),
+  [ErrorCode.USE_GOOGLE]:               () => R.unauthorized("This account uses Google Sign-In. Please continue with Google."),
   [ErrorCode.INVALID_REFRESH_TOKEN]:    () => R.unauthorized("Invalid or expired refresh token"),
   [ErrorCode.INVALID_OR_EXPIRED_TOKEN]: () => R.badRequest("Reset token is invalid or has expired"),
   // Users

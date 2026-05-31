@@ -6,6 +6,7 @@ import React from "react"
 import { ProposalDocument, type ProposalPdfData } from "@/services/pdf/ProposalDocument"
 import { brandingService } from "@/services/branding.service"
 import { handleServiceError } from "@/utils/serviceError"
+import { logger } from "@/lib/logger"
 import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -82,7 +83,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload
       },
     })
   } catch (error) {
-    console.error("[pdf]", error)
+    logger.error({ err: error }, "[pdf] generation failed")
     return handleServiceError(error)
   }
 })

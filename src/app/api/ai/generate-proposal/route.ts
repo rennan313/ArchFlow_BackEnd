@@ -7,6 +7,7 @@ import { brandingService } from "@/services/branding.service"
 import { generatePremiumProposalSchema } from "@/validations/ai-proposal"
 import { ok, internalError } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
+import { logger } from "@/lib/logger"
 import type { JwtPayload } from "@/lib/jwt"
 
 export const maxDuration = 60
@@ -63,7 +64,7 @@ export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params
       "Premium proposal generated successfully",
     )
   } catch (error) {
-    console.error("[generate-proposal]", error)
+    logger.error({ err: error }, "[generate-proposal] generation failed")
     if (error instanceof Error && error.message.includes("ANTHROPIC_API_KEY")) {
       return internalError("AI service is not configured")
     }
