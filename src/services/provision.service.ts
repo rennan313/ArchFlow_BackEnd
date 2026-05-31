@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client"
 import { randomBytes } from "crypto"
 import { prisma } from "@/lib/prisma"
+import { AppError, ErrorCode } from "@/lib/errors"
 import { hashPassword } from "@/lib/hash"
 import { buildPayload, signAccessToken } from "@/lib/jwt"
 import { workspaceService } from "@/services/workspace.service"
@@ -176,7 +177,7 @@ export const provisionService = {
         `[provision] Pre-migration user attempted new Supabase registration: ` +
         `email=${existing.email} existingId=${existing.id}`,
       )
-      throw new Error("EMAIL_TAKEN")
+      throw new AppError(ErrorCode.EMAIL_TAKEN)
     }
 
     // Case C: email exists WITH a different supabaseId → genuine conflict

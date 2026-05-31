@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { AppError, ErrorCode } from "@/lib/errors"
 
-vi.mock("@/lib/prisma")
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    workspace:       { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    workspaceInvite: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
+    user:            { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+  },
+}))
 
 import { workspaceService } from "@/services/workspace.service"
 import { prisma } from "@/lib/prisma"

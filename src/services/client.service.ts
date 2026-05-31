@@ -1,5 +1,6 @@
 import { clientRepository } from "@/repositories/client.repository"
 import { buildMeta } from "@/lib/pagination"
+import { AppError, ErrorCode } from "@/lib/errors"
 import type { CreateClientInput, UpdateClientInput, ClientQueryInput } from "@/validations/client"
 
 export const clientService = {
@@ -10,7 +11,7 @@ export const clientService = {
 
   async getById(id: string, userId: string) {
     const client = await clientRepository.findById(id, userId)
-    if (!client) throw new Error("CLIENT_NOT_FOUND")
+    if (!client) throw new AppError(ErrorCode.CLIENT_NOT_FOUND)
     return client
   },
 

@@ -1,6 +1,7 @@
-import { proposalRepository } from "@/repositories/proposal.repository";
-import type { CreateProposalInput, UpdateProposalInput, ProposalQueryInput } from "@/validations/proposal";
-import { buildMeta } from "@/lib/pagination";
+import { proposalRepository } from "@/repositories/proposal.repository"
+import { buildMeta } from "@/lib/pagination"
+import { AppError, ErrorCode } from "@/lib/errors"
+import type { CreateProposalInput, UpdateProposalInput, ProposalQueryInput } from "@/validations/proposal"
 
 export const proposalService = {
   async list(userId: string, query: ProposalQueryInput) {
@@ -11,7 +12,7 @@ export const proposalService = {
 
   async getById(id: string, userId: string) {
     const proposal = await proposalRepository.findById(id, userId);
-    if (!proposal) throw new Error("NOT_FOUND");
+    if (!proposal) throw new AppError(ErrorCode.NOT_FOUND)
     return proposal;
   },
 
@@ -24,7 +25,7 @@ export const proposalService = {
 
   async update(id: string, userId: string, input: UpdateProposalInput) {
     const existing = await proposalRepository.findById(id, userId);
-    if (!existing) throw new Error("NOT_FOUND");
+    if (!existing) throw new AppError(ErrorCode.NOT_FOUND)
 
     await proposalRepository.update(id, userId, input);
     return proposalRepository.findById(id, userId);
@@ -32,7 +33,7 @@ export const proposalService = {
 
   async delete(id: string, userId: string) {
     const existing = await proposalRepository.findById(id, userId);
-    if (!existing) throw new Error("NOT_FOUND");
+    if (!existing) throw new AppError(ErrorCode.NOT_FOUND)
     await proposalRepository.delete(id, userId);
   },
 };

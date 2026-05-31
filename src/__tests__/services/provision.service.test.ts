@@ -1,7 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { Prisma } from "@prisma/client"
 
-vi.mock("@/lib/prisma")
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: {
+      findFirst:         vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      create:            vi.fn(),
+    },
+  },
+}))
 vi.mock("@/lib/hash")
 vi.mock("@/services/workspace.service")
 

@@ -25,15 +25,3 @@ export function createMockUser(overrides: Partial<User> = {}): User {
     ...overrides,
   }
 }
-
-export function mockUserRepository(user: Partial<User> | null = createMockUser()) {
-  const { userRepository } = vi.mocked(
-    await import("@/repositories/user.repository"),
-  )
-  const resolved = user ? createMockUser(user as Partial<User>) : null
-  userRepository.findById     = vi.fn().mockResolvedValue(resolved)
-  userRepository.findByEmail  = vi.fn().mockResolvedValue(resolved)
-  userRepository.create       = vi.fn().mockResolvedValue(resolved)
-  userRepository.update       = vi.fn().mockResolvedValue(resolved)
-  return userRepository
-}

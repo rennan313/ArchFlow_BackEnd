@@ -1,13 +1,14 @@
 import { proposalRepository } from "@/repositories/proposal.repository"
 import { statusRepository } from "@/repositories/status.repository"
 import { isValidTransition, getAllowedTransitions, STATUS_LABELS } from "@/validations/status"
+import { AppError, ErrorCode } from "@/lib/errors"
 import type { UpdateStatusInput } from "@/validations/status"
 import type { ProposalStatus } from "@prisma/client"
 
 export const statusService = {
   async update(proposalId: string, userId: string, input: UpdateStatusInput) {
     const proposal = await proposalRepository.findById(proposalId, userId)
-    if (!proposal) throw new Error("NOT_FOUND")
+    if (!proposal) throw new AppError(ErrorCode.NOT_FOUND)
 
     const currentStatus = proposal.status as ProposalStatus
     const newStatus     = input.status as ProposalStatus
@@ -38,7 +39,7 @@ export const statusService = {
 
   async getHistory(proposalId: string, userId: string) {
     const proposal = await proposalRepository.findById(proposalId, userId)
-    if (!proposal) throw new Error("NOT_FOUND")
+    if (!proposal) throw new AppError(ErrorCode.NOT_FOUND)
 
     const history = await statusRepository.getHistory(proposalId)
 

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { AppError, ErrorCode } from "@/lib/errors"
 import type { UpdateOnboardingInput } from "@/validations/onboarding"
 
 export interface OnboardingStatus {
@@ -22,7 +23,7 @@ export const onboardingService = {
       },
     })
 
-    if (!user) throw new Error("USER_NOT_FOUND")
+    if (!user) throw new AppError(ErrorCode.USER_NOT_FOUND)
 
     return {
       onboardingCompleted: user.onboardingCompleted,

@@ -1,6 +1,7 @@
 import { mediaRepository } from "@/repositories/media.repository"
 import { storageService, type UploadCategory } from "@/services/storage/supabase.service"
 import { logger } from "@/lib/logger"
+import { AppError, ErrorCode } from "@/lib/errors"
 import {
   UPLOAD_MEDIA_TYPES,
   getYouTubeThumbnail,
@@ -37,7 +38,7 @@ export const mediaService = {
   async upload(proposalId: string, file: File) {
     const count = await mediaRepository.countByProposal(proposalId)
     if (count >= MAX_MEDIA_PER_PROPOSAL) {
-      throw new Error("MEDIA_LIMIT_REACHED")
+      throw new AppError(ErrorCode.MEDIA_LIMIT_REACHED)
     }
 
     const category = UPLOAD_MEDIA_TYPES[file.type]
@@ -87,14 +88,14 @@ export const mediaService = {
 
   async update(mediaId: string, proposalId: string, input: UpdateMediaInput) {
     const media = await mediaRepository.findById(mediaId, proposalId)
-    if (!media) throw new Error("NOT_FOUND")
+    if (!media) throw new AppError(ErrorCode.NOT_FOUND)
     await mediaRepository.update(mediaId, proposalId, input)
     return mediaRepository.findById(mediaId, proposalId)
   },
 
   async delete(mediaId: string, proposalId: string) {
     const media = await mediaRepository.findById(mediaId, proposalId)
-    if (!media) throw new Error("NOT_FOUND")
+    if (!media) throw new AppError(ErrorCode.NOT_FOUND)
 
     // Delete from Supabase if it's a stored file
     if (media.storagePath) {

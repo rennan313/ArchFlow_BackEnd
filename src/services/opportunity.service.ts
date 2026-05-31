@@ -1,6 +1,7 @@
 import { opportunityRepository } from "@/repositories/opportunity.repository"
 import { clientRepository } from "@/repositories/client.repository"
 import { buildMeta } from "@/lib/pagination"
+import { AppError, ErrorCode } from "@/lib/errors"
 import { STAGE_PROBABILITY } from "@/validations/opportunity"
 import type { CreateOpportunityInput, UpdateOpportunityInput, OpportunityQueryInput } from "@/validations/opportunity"
 
@@ -12,14 +13,14 @@ export const opportunityService = {
 
   async getById(id: string, userId: string) {
     const opp = await opportunityRepository.findById(id, userId)
-    if (!opp) throw new Error("OPPORTUNITY_NOT_FOUND")
+    if (!opp) throw new AppError(ErrorCode.OPPORTUNITY_NOT_FOUND)
     return withWeightedRevenue(opp)
   },
 
   async create(userId: string, input: CreateOpportunityInput) {
     // Validate client belongs to user
     const client = await clientRepository.findById(input.clientId, userId)
-    if (!client) throw new Error("CLIENT_NOT_FOUND")
+    if (!client) throw new AppError(ErrorCode.CLIENT_NOT_FOUND)
 
     const probability = STAGE_PROBABILITY[input.stage ?? "LEAD"]
 
