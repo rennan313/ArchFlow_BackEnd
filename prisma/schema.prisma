@@ -39,6 +39,25 @@ enum ProposalStatus {
   REJECTED
 }
 
+enum ClientStatus {
+  LEAD
+  NEGOTIATION
+  ACTIVE
+  INACTIVE
+}
+
+enum MeetingStatus {
+  NOT_SCHEDULED
+  SCHEDULED
+  COMPLETED
+}
+
+enum MeetingType {
+  IN_PERSON
+  PHONE_CALL
+  GOOGLE_MEET
+}
+
 enum OpportunityStage {
   LEAD
   BRIEFING
@@ -228,12 +247,26 @@ model Client {
   userId      String @db.ObjectId
   workspaceId String? @db.ObjectId
 
-  name  String
-  email String?
-  phone String?
-  city  String?
-  state String?
-  notes String?
+  // Basic information
+  name    String
+  email   String?
+  phone   String?
+  company String?
+  address String?
+  city    String?
+  state   String?
+  notes   String?
+
+  // Pipeline status
+  status ClientStatus @default(LEAD)
+
+  // First contact — meeting information
+  // meetingSummary is designed to feed AI generation later:
+  // executive summary, requirements program, scope suggestion, briefing checklist
+  meetingStatus  MeetingStatus @default(NOT_SCHEDULED)
+  meetingType    MeetingType?
+  meetingDate    DateTime?
+  meetingSummary String?        // long text — AI input source
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -246,6 +279,7 @@ model Client {
   @@index([userId])
   @@index([workspaceId])
   @@index([userId, name])
+  @@index([userId, status])
   @@map("clients")
 }
 

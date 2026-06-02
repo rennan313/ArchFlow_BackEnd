@@ -17,23 +17,35 @@ export const clientService = {
 
   async create(userId: string, input: CreateClientInput) {
     return clientRepository.create(userId, {
-      name:  input.name,
-      email: input.email,
-      phone: input.phone,
-      city:  input.city,
-      state: input.state,
-      notes: input.notes,
-    } as Parameters<typeof clientRepository.create>[1])
+      name:           input.name,
+      email:          input.email,
+      phone:          input.phone,
+      company:        input.company,
+      address:        input.address,
+      city:           input.city,
+      state:          input.state,
+      notes:          input.notes,
+      status:         input.status ?? "LEAD",
+      meetingStatus:  input.meetingStatus ?? "NOT_SCHEDULED",
+      meetingType:    input.meetingType,
+      meetingDate:    input.meetingDate,
+      meetingSummary: input.meetingSummary,
+    })
   },
 
   async update(id: string, userId: string, input: UpdateClientInput) {
     await this.getById(id, userId)
-    await clientRepository.update(id, userId, input)
+    await clientRepository.update(id, userId, input as Parameters<typeof clientRepository.update>[2])
     return clientRepository.findById(id, userId)
   },
 
   async delete(id: string, userId: string) {
     await this.getById(id, userId)
     await clientRepository.delete(id, userId)
+  },
+
+  async getProposals(clientId: string, userId: string) {
+    await this.getById(clientId, userId)
+    return clientRepository.findProposals(clientId, userId)
   },
 }
