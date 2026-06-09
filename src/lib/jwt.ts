@@ -9,6 +9,8 @@ export interface JwtPayload {
   workspaceRole?:       string
   workspaceType?:       string | null
   onboardingCompleted?: boolean
+  /** JWT ID — present in refresh tokens for DB-backed replay protection */
+  jti?:                 string
 }
 
 export function signAccessToken(payload: JwtPayload): string {

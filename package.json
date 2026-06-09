@@ -25,6 +25,7 @@
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.106.2",
     "bcryptjs": "^2.4.3",
+    "google-auth-library": "^10.7.0",
     "jsonwebtoken": "^9.0.2",
     "next": "^16.2.6",
     "nodemailer": "^8.0.9",

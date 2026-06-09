@@ -50,8 +50,13 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 })
 
+export const googleAuthSchema = z.object({
+  idToken: z.string().min(1, "Google ID token is required"),
+})
+
 export type CredentialsRegisterInput = z.infer<typeof credentialsRegisterSchema>
 export type CredentialsSigninInput   = z.infer<typeof credentialsSigninSchema>
 export type OnboardingInput          = z.infer<typeof onboardingSchema>
 export type ResetPasswordInput       = z.infer<typeof resetPasswordSchema>
 export type LoginInput               = z.infer<typeof loginSchema>
+export type GoogleAuthInput          = z.infer<typeof googleAuthSchema>

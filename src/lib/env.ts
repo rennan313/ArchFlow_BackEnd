@@ -23,6 +23,8 @@ export const env = {
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   resetPasswordExpiresMin:   Number(optional("RESET_PASSWORD_EXPIRES_IN_MINUTES", "30")),
+  googleClientId:            optional("GOOGLE_CLIENT_ID", ""),
+  googleAuthEnabled:         !!process.env.GOOGLE_CLIENT_ID,
 
   // ── Supabase ───────────────────────────────────────────────────────────────
   // Note: SUPABASE_JWT_SECRET is no longer required. Token validation uses

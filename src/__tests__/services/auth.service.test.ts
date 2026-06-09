@@ -3,6 +3,7 @@ import { AppError, ErrorCode } from "@/lib/errors"
 
 vi.mock("@/repositories/user.repository")
 vi.mock("@/repositories/resetToken.repository")
+vi.mock("@/repositories/refreshToken.repository")
 vi.mock("@/lib/hash")
 vi.mock("@/services/workspace.service")
 

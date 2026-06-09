@@ -110,6 +110,41 @@ enum MediaType {
   VIMEO
 }
 
+enum ProjectStatus {
+  BRIEFING
+  IN_PROGRESS
+  REVIEW
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+enum MeetingEntryStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum MeetingPurpose {
+  INITIAL_CONTACT
+  DISCOVERY
+  BRIEFING
+  PROPOSAL_REVIEW
+  FOLLOW_UP
+  OTHER
+}
+
+enum ProjectType {
+  RESIDENTIAL
+  COMMERCIAL
+  RENOVATION
+  INTERIOR
+  URBAN
+  LANDSCAPE
+}
+
 enum InstanceStatus {
   RUNNING
   STOPPED
@@ -140,6 +175,8 @@ model Workspace {
   clients       Client[]
   opportunities Opportunity[]
   proposals     Proposal[]
+  projects      Project[]
+  meetings      Meeting[]
   branding      OfficeBranding?
 
   @@map("workspaces")
@@ -191,6 +228,8 @@ model User {
   proposals     Proposal[]
   clients       Client[]
   opportunities Opportunity[]
+  projects      Project[]
+  meetings      Meeting[]
   followUps     FollowUp[]
   branding      OfficeBranding?
   workspace     Workspace?      @relation(fields: [workspaceId], references: [id])
@@ -275,6 +314,8 @@ model Client {
   workspace     Workspace?    @relation(fields: [workspaceId], references: [id])
   opportunities Opportunity[]
   proposals     Proposal[]
+  projects      Project[]
+  meetings      Meeting[]
 
   @@index([userId])
   @@index([workspaceId])
@@ -417,6 +458,7 @@ model Proposal {
   workspace     Workspace?              @relation(fields: [workspaceId], references: [id])
   opportunity   Opportunity?            @relation(fields: [opportunityId], references: [id])
   client        Client?                 @relation(fields: [clientId], references: [id])
+  project       Project?
   media         ProposalMedia[]
   statusHistory ProposalStatusHistory[]
   versions      ProposalVersion[]
@@ -477,6 +519,114 @@ model ProposalStatusHistory {
   @@map("proposal_status_history")
 }
 
+// ─── Project Domain ───────────────────────────────────────────────────────────
+
+model Project {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @db.ObjectId
+  workspaceId String? @db.ObjectId
+
+  // Relationships
+  clientId   String  @db.ObjectId
+  proposalId String? @unique @db.ObjectId  // one proposal → at most one project
+
+  // Identity
+  name        String
+  code        String?
+  description String?
+
+  // Classification
+  type   ProjectType
+  status ProjectStatus @default(BRIEFING)
+
+  // Scope
+  squareMeters Float?
+  address      String?
+  city         String?
+  state        String?
+
+  // Timeline
+  startDate        DateTime?
+  estimatedEndDate DateTime?
+  actualEndDate    DateTime?
+
+  // Financial
+  contractValue Float?
+
+  // Internal
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  proposal  Proposal?  @relation(fields: [proposalId], references: [id])
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([userId, status])
+  @@index([userId, clientId])
+  @@index([userId, createdAt])
+  @@map("projects")
+}
+
+// ─── Meeting Domain ───────────────────────────────────────────────────────────
+
+model Meeting {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @db.ObjectId
+  workspaceId String? @db.ObjectId
+  clientId    String  @db.ObjectId
+
+  // Core
+  title   String
+  type    MeetingPurpose
+  status  MeetingEntryStatus @default(SCHEDULED)
+
+  // Schedule
+  scheduledAt DateTime
+  duration    Int?      // minutes
+
+  // Location
+  location String?
+
+  // Structured notes
+  objectives String?
+  notes      String?
+  decisions  String?
+  nextSteps  String?
+
+  // Legacy free-form summary
+  summary String?
+
+  // Future — project / proposal linking
+  projectId  String? @db.ObjectId
+  proposalId String? @db.ObjectId
+
+  // Future — Google Workspace
+  googleCalendarEventId String?
+  meetUrl               String?
+
+  // Future — Integrated AI
+  aiSummary String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([userId, clientId])
+  @@index([userId, status])
+  @@index([userId, scheduledAt])
+  @@map("meetings")
+}
+
 // ─── Location & Pricing ───────────────────────────────────────────────────────
 
 model State {
@@ -534,6 +684,23 @@ model ResetPasswordToken {
 
   @@index([userId])
   @@map("reset_password_tokens")
+}
+
+model RefreshToken {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String    @db.ObjectId
+  tokenHash String    @unique  // sha256(jti) — never store raw jti
+  jti       String    @unique  // UUID embedded in the signed JWT
+  expiresAt DateTime
+  revoked   Boolean   @default(false)
+  revokedAt DateTime?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([userId, revoked])
+  @@map("refresh_tokens")
 }
 
 // ─── User Preferences ────────────────────────────────────────────────────────

@@ -10,6 +10,10 @@ export const userRepository = {
     return prisma.user.findUnique({ where: { email } });
   },
 
+  findByGoogleId(googleId: string) {
+    return prisma.user.findFirst({ where: { googleId } });
+  },
+
   create(data: Prisma.UserCreateInput) {
     return prisma.user.create({ data });
   },

@@ -11,6 +11,8 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.USE_GOOGLE]:               () => R.unauthorized("This account uses Google Sign-In. Please continue with Google."),
   [ErrorCode.INVALID_REFRESH_TOKEN]:    () => R.unauthorized("Invalid or expired refresh token"),
   [ErrorCode.INVALID_OR_EXPIRED_TOKEN]: () => R.badRequest("Reset token is invalid or has expired"),
+  [ErrorCode.GOOGLE_TOKEN_INVALID]:     () => R.unauthorized("Invalid Google token. Please sign in again."),
+  [ErrorCode.GOOGLE_AUTH_DISABLED]:     () => R.badRequest("Google authentication is not enabled on this server"),
   // Users
   [ErrorCode.USER_NOT_FOUND]:           () => R.notFound("User not found"),
   // Generic
@@ -25,6 +27,7 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.CANNOT_REMOVE_OWNER]:      () => R.badRequest("Cannot remove the workspace owner"),
   // Domain
   [ErrorCode.CLIENT_NOT_FOUND]:         () => R.notFound("Client not found"),
+  [ErrorCode.PROJECT_NOT_FOUND]:        () => R.notFound("Project not found"),
   [ErrorCode.OPPORTUNITY_NOT_FOUND]:    () => R.notFound("Opportunity not found"),
   [ErrorCode.BRIEFING_NOT_FOUND]:       () => R.notFound("Briefing not found"),
   [ErrorCode.FOLLOWUP_NOT_FOUND]:       () => R.notFound("Follow-up not found"),
