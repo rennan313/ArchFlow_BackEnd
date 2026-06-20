@@ -158,6 +158,19 @@ enum Environment {
   DEVELOPMENT
 }
 
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
 // ─── Core Domain Models ───────────────────────────────────────────────────────
 
 model Workspace {
@@ -178,6 +191,7 @@ model Workspace {
   projects      Project[]
   meetings      Meeting[]
   branding      OfficeBranding?
+  subscription  Subscription?
 
   @@map("workspaces")
 }
@@ -207,6 +221,7 @@ model User {
   name      String
   email     String    @unique
   password  String?   // Transitional: kept during Phase 1 for NextAuth credentials; removed in Phase 2
+  emailVerified DateTime? // null = unverified; set when the user confirms their email
   image     String?
   provider  String    @default("credentials")
   googleId  String?
@@ -627,6 +642,86 @@ model Meeting {
   @@map("meetings")
 }
 
+// ─── Billing ──────────────────────────────────────────────────────────────────
+// Phase 1 of the billing foundation: data model only, no payment gateway wired
+// up yet. Workspace.plan remains the field every existing read path already
+// uses (feature gates, limits) — Subscription is the new authoritative
+// lifecycle record that the eventual Mercado Pago integration will drive.
+// They're kept in sync by subscription.service.ts, not by a DB constraint.
+
+model Subscription {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @unique @db.ObjectId
+
+  plan         Plan
+  status       SubscriptionStatus @default(TRIALING)
+  billingCycle BillingCycle       @default(MONTHLY)
+
+  // Mercado Pago references — populated once Phase 2 wires up the gateway.
+  // No @unique here on purpose: Prisma's @unique on MongoDB is never sparse,
+  // so it would reject a second null long before any real value collides.
+  // Uniqueness for mpSubscriptionId is enforced only by the manually-created
+  // sparse index documented in docs/indexes.md (same pattern as User.supabaseId).
+  mpCustomerId     String?
+  mpSubscriptionId String?
+
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean   @default(false)
+  canceledAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events    PaymentEvent[]
+  invoices  BillingHistory[]
+
+  @@map("subscriptions")
+}
+
+model PaymentEvent {
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  subscriptionId String @db.ObjectId
+
+  provider    String // "mercadopago" — kept as a free string so a second provider never needs a schema change
+  externalId  String // the gateway's own event id — the idempotency key for webhook processing
+  type        String // e.g. "payment.created", "subscription.updated"
+  rawPayload  String // full JSON of the received webhook body, for audit/replay
+  processedAt DateTime?
+  status      String @default("received") // received | processed | failed
+
+  createdAt DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([externalId])
+  @@index([subscriptionId])
+  @@map("payment_events")
+}
+
+model BillingHistory {
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  subscriptionId String @db.ObjectId
+
+  amount      Float
+  currency    String  @default("BRL")
+  status      String // paid | failed | refunded
+  // No @unique here either — same reasoning as Subscription.mpSubscriptionId.
+  // Uniqueness comes only from the sparse index in docs/indexes.md.
+  mpPaymentId String?
+  paidAt      DateTime?
+  description String
+
+  createdAt DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@map("billing_history")
+}
+
 // ─── Location & Pricing ───────────────────────────────────────────────────────
 
 model State {
@@ -686,6 +781,18 @@ model ResetPasswordToken {
   @@map("reset_password_tokens")
 }
 
+model EmailVerificationToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
 model RefreshToken {
   id        String    @id @default(auto()) @map("_id") @db.ObjectId
   userId    String    @db.ObjectId
@@ -709,7 +816,7 @@ model UserPreferences {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   userId            String   @unique @db.ObjectId
   preferredLanguage String   @default("pt")
-  preferredTheme    String   @default("modern-premium")
+  preferredTheme    String   @default("dark")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

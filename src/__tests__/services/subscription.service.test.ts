@@ -1,22 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-// Inline prisma mock — extends global setup with proposalMedia
+// Inline prisma mock — extends global setup with proposalMedia and $transaction
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    workspace:     { findUnique: vi.fn() },
+    workspace:     { findUnique: vi.fn(), update: vi.fn() },
     user:          { count: vi.fn() },
     proposal:      { count: vi.fn() },
     proposalMedia: { count: vi.fn() },
+    subscription:  { update: vi.fn() },
+    $transaction:  vi.fn(),
+  },
+}))
+
+vi.mock("@/repositories/subscription.repository", () => ({
+  subscriptionRepository: {
+    findByWorkspace: vi.fn(),
+    findById:        vi.fn(),
+    create:          vi.fn(),
+    update:          vi.fn(),
   },
 }))
 
 import { subscriptionService } from "@/services/subscription.service"
 import { prisma } from "@/lib/prisma"
+import { subscriptionRepository } from "@/repositories/subscription.repository"
+import { ErrorCode } from "@/lib/errors"
 
 const ws    = vi.mocked(prisma.workspace)
 const user  = vi.mocked(prisma.user)
 const prop  = vi.mocked(prisma.proposal)
 const media = vi.mocked(prisma.proposalMedia)
+const tx    = vi.mocked(prisma.$transaction)
+const subRepo = vi.mocked(subscriptionRepository)
 
 /** Return a workspace with the given plan */
 function withPlan(plan: string) {
@@ -288,5 +303,207 @@ describe("subscriptionService.getUsageSummary", () => {
 
     expect(user.count).toHaveBeenCalledTimes(1)
     expect(prop.count).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ── Lifecycle: createTrialSubscription ────────────────────────────────────────
+
+describe("subscriptionService.createTrialSubscription", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("creates a 14-day trial defaulting to STARTER", async () => {
+    subRepo.findByWorkspace.mockResolvedValue(null)
+    subRepo.create.mockResolvedValue({ id: "sub-1" } as never)
+
+    await subscriptionService.createTrialSubscription("ws-1")
+
+    expect(subRepo.create).toHaveBeenCalledTimes(1)
+    const data = subRepo.create.mock.calls[0]![0]
+    expect(data.workspaceId).toBe("ws-1")
+    expect(data.plan).toBe("STARTER")
+    expect(data.status).toBe("TRIALING")
+
+    const start = data.currentPeriodStart as Date
+    const end   = data.trialEndsAt as Date
+    const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+    expect(diffDays).toBeCloseTo(14, 1)
+  })
+
+  it("accepts an explicit non-STARTER plan", async () => {
+    subRepo.findByWorkspace.mockResolvedValue(null)
+    subRepo.create.mockResolvedValue({ id: "sub-1" } as never)
+
+    await subscriptionService.createTrialSubscription("ws-1", "PROFESSIONAL")
+
+    const data = subRepo.create.mock.calls[0]![0]
+    expect(data.plan).toBe("PROFESSIONAL")
+  })
+
+  it("throws SUBSCRIPTION_ALREADY_EXISTS if the workspace already has one", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({ id: "sub-existing" } as never)
+
+    await expect(subscriptionService.createTrialSubscription("ws-1")).rejects.toMatchObject({
+      code: ErrorCode.SUBSCRIPTION_ALREADY_EXISTS,
+    })
+    expect(subRepo.create).not.toHaveBeenCalled()
+  })
+})
+
+// ── Lifecycle: ensureSubscription ─────────────────────────────────────────────
+
+describe("subscriptionService.ensureSubscription", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("returns the existing subscription without creating a new one", async () => {
+    const existing = { id: "sub-1" }
+    subRepo.findByWorkspace.mockResolvedValue(existing as never)
+
+    const result = await subscriptionService.ensureSubscription("ws-1")
+
+    expect(result).toBe(existing)
+    expect(subRepo.create).not.toHaveBeenCalled()
+  })
+
+  it("lazily creates a trial subscription when none exists", async () => {
+    subRepo.findByWorkspace.mockResolvedValue(null)
+    subRepo.create.mockResolvedValue({ id: "sub-new" } as never)
+
+    const result = await subscriptionService.ensureSubscription("ws-1")
+
+    expect(subRepo.create).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ id: "sub-new" })
+  })
+})
+
+// ── Lifecycle: changePlan ─────────────────────────────────────────────────────
+
+describe("subscriptionService.changePlan", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("updates Workspace.plan and Subscription.plan in the same transaction", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({ id: "sub-1", billingCycle: "MONTHLY" } as never)
+    tx.mockResolvedValue([{}, { id: "sub-1", plan: "PROFESSIONAL", status: "ACTIVE" }] as never)
+
+    const result = await subscriptionService.changePlan("ws-1", "PROFESSIONAL")
+
+    expect(tx).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ plan: "PROFESSIONAL", status: "ACTIVE" })
+  })
+
+  it("falls back to the existing billingCycle when none is passed explicitly", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({ id: "sub-1", billingCycle: "ANNUAL" } as never)
+    tx.mockResolvedValue([{}, {}] as never)
+
+    await subscriptionService.changePlan("ws-1", "STUDIO")
+
+    // prisma.subscription.update is called to BUILD the transaction array,
+    // before $transaction itself ever runs — so its own mock call args are
+    // what we inspect here, regardless of what $transaction resolves to.
+    const subscriptionUpdateCall = vi.mocked(prisma.subscription.update).mock.calls[0]?.[0]
+    expect(subscriptionUpdateCall?.data).toMatchObject({ billingCycle: "ANNUAL" })
+  })
+
+  it("throws SUBSCRIPTION_NOT_FOUND when the workspace has no subscription yet", async () => {
+    subRepo.findByWorkspace.mockResolvedValue(null)
+
+    await expect(subscriptionService.changePlan("ws-1", "PROFESSIONAL")).rejects.toMatchObject({
+      code: ErrorCode.SUBSCRIPTION_NOT_FOUND,
+    })
+    expect(tx).not.toHaveBeenCalled()
+  })
+})
+
+// ── Lifecycle: cancelSubscription / reactivateSubscription ────────────────────
+
+describe("subscriptionService.cancelSubscription", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("sets cancelAtPeriodEnd and canceledAt without touching the plan", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({ id: "sub-1" } as never)
+    subRepo.update.mockResolvedValue({ id: "sub-1", cancelAtPeriodEnd: true } as never)
+
+    const result = await subscriptionService.cancelSubscription("ws-1")
+
+    expect(subRepo.update).toHaveBeenCalledWith("ws-1", expect.objectContaining({ cancelAtPeriodEnd: true }))
+    const call = subRepo.update.mock.calls[0]![1] as { canceledAt: Date }
+    expect(call.canceledAt).toBeInstanceOf(Date)
+    expect(result.cancelAtPeriodEnd).toBe(true)
+  })
+
+  it("throws SUBSCRIPTION_NOT_FOUND when there's nothing to cancel", async () => {
+    subRepo.findByWorkspace.mockResolvedValue(null)
+    await expect(subscriptionService.cancelSubscription("ws-1")).rejects.toMatchObject({
+      code: ErrorCode.SUBSCRIPTION_NOT_FOUND,
+    })
+  })
+})
+
+describe("subscriptionService.reactivateSubscription", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("clears cancelAtPeriodEnd and canceledAt", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({ id: "sub-1" } as never)
+    subRepo.update.mockResolvedValue({ id: "sub-1", cancelAtPeriodEnd: false } as never)
+
+    await subscriptionService.reactivateSubscription("ws-1")
+
+    expect(subRepo.update).toHaveBeenCalledWith("ws-1", { cancelAtPeriodEnd: false, canceledAt: null })
+  })
+})
+
+// ── Lifecycle: isTrialExpired / expireTrialIfNeeded ───────────────────────────
+
+describe("subscriptionService.isTrialExpired", () => {
+  it("is true for a TRIALING subscription whose trialEndsAt is in the past", () => {
+    const sub = { status: "TRIALING", trialEndsAt: new Date(Date.now() - 1000) }
+    expect(subscriptionService.isTrialExpired(sub as never)).toBe(true)
+  })
+
+  it("is false for a TRIALING subscription whose trialEndsAt is in the future", () => {
+    const sub = { status: "TRIALING", trialEndsAt: new Date(Date.now() + 1000 * 60 * 60 * 24) }
+    expect(subscriptionService.isTrialExpired(sub as never)).toBe(false)
+  })
+
+  it("is false for a non-TRIALING subscription regardless of trialEndsAt", () => {
+    const sub = { status: "ACTIVE", trialEndsAt: new Date(Date.now() - 1000) }
+    expect(subscriptionService.isTrialExpired(sub as never)).toBe(false)
+  })
+
+  it("is false when trialEndsAt was never set", () => {
+    const sub = { status: "TRIALING", trialEndsAt: null }
+    expect(subscriptionService.isTrialExpired(sub as never)).toBe(false)
+  })
+})
+
+describe("subscriptionService.expireTrialIfNeeded", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("downgrades an expired trial to STARTER/ACTIVE", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({
+      id: "sub-1", status: "TRIALING", trialEndsAt: new Date(Date.now() - 1000),
+    } as never)
+    tx.mockResolvedValue([{}, { id: "sub-1", plan: "STARTER", status: "ACTIVE" }] as never)
+
+    const result = await subscriptionService.expireTrialIfNeeded("ws-1")
+
+    expect(tx).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ plan: "STARTER", status: "ACTIVE" })
+  })
+
+  it("does nothing when the trial hasn't expired yet", async () => {
+    const sub = { id: "sub-1", status: "TRIALING", trialEndsAt: new Date(Date.now() + 100000) }
+    subRepo.findByWorkspace.mockResolvedValue(sub as never)
+
+    const result = await subscriptionService.expireTrialIfNeeded("ws-1")
+
+    expect(tx).not.toHaveBeenCalled()
+    expect(result).toBe(sub)
+  })
+
+  it("does nothing when the subscription doesn't exist", async () => {
+    subRepo.findByWorkspace.mockResolvedValue(null)
+    const result = await subscriptionService.expireTrialIfNeeded("ws-1")
+    expect(result).toBeNull()
+    expect(tx).not.toHaveBeenCalled()
   })
 })

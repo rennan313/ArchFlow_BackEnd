@@ -14,6 +14,8 @@
     "migrate:supabase-id": "tsx scripts/migrate-supabase-id.ts",
     "migrate:validate": "tsx scripts/validate-migration.ts",
     "migrate:rollback": "tsx scripts/rollback-supabase-id.ts",
+    "migrate:workspace-dry-run": "tsx scripts/dry-run-workspace-backfill.ts",
+    "migrate:subscriptions": "tsx scripts/backfill-subscriptions.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

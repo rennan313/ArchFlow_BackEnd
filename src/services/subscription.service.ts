@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma"
 import { PLAN_LIMITS, unlimited, type PlanName } from "@/config/plans"
+import { subscriptionRepository } from "@/repositories/subscription.repository"
+import { AppError, ErrorCode } from "@/lib/errors"
+import type { Subscription } from "@prisma/client"
 
 export interface LimitCheckResult {
   allowed:    boolean
@@ -8,6 +11,8 @@ export interface LimitCheckResult {
   current?:   number
   plan:       PlanName
 }
+
+const TRIAL_DURATION_DAYS = 14
 
 export const subscriptionService = {
   async getWorkspacePlan(workspaceId: string): Promise<PlanName> {
@@ -144,5 +149,117 @@ export const subscriptionService = {
         apiAccess:      limits.canApiAccess,
       },
     }
+  },
+
+  // ─── Lifecycle (Phase 1 foundation — no payment gateway wired up yet) ───────
+  //
+  // Workspace.plan stays the field every limit-check method above already
+  // reads — left untouched on purpose, zero behavior change for existing
+  // code. Subscription is the new authoritative lifecycle record; changePlan
+  // is the one place that writes both, so they can never drift apart.
+
+  async getActiveSubscription(workspaceId: string): Promise<Subscription | null> {
+    return subscriptionRepository.findByWorkspace(workspaceId)
+  },
+
+  /** Get-or-create: returns the existing Subscription, or lazily creates a
+   *  trial one if this workspace predates the billing foundation (Phase 1
+   *  migration covers the bulk case; this is the safety net for any gap). */
+  async ensureSubscription(workspaceId: string): Promise<Subscription> {
+    const existing = await subscriptionRepository.findByWorkspace(workspaceId)
+    if (existing) return existing
+    return this.createTrialSubscription(workspaceId)
+  },
+
+  async createTrialSubscription(workspaceId: string, plan: PlanName = "STARTER"): Promise<Subscription> {
+    const existing = await subscriptionRepository.findByWorkspace(workspaceId)
+    if (existing) throw new AppError(ErrorCode.SUBSCRIPTION_ALREADY_EXISTS)
+
+    const now         = new Date()
+    const trialEndsAt = new Date(now.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000)
+
+    return subscriptionRepository.create({
+      workspaceId,
+      plan,
+      status:             "TRIALING",
+      billingCycle:       "MONTHLY",
+      trialEndsAt,
+      currentPeriodStart: now,
+      currentPeriodEnd:   trialEndsAt,
+    })
+  },
+
+  /** Changes the plan immediately, keeping Subscription and Workspace.plan in
+   *  sync in one transaction. Phase 1 has no payment gateway, so this is
+   *  intentionally synchronous/unconditional — Phase 2 moves the actual
+   *  activation into the Mercado Pago webhook handler, with this method (or
+   *  one shaped like it) called only after a payment is confirmed. */
+  async changePlan(workspaceId: string, plan: PlanName, billingCycle?: "MONTHLY" | "ANNUAL"): Promise<Subscription> {
+    const existing = await subscriptionRepository.findByWorkspace(workspaceId)
+    if (!existing) throw new AppError(ErrorCode.SUBSCRIPTION_NOT_FOUND)
+
+    const [, updated] = await prisma.$transaction([
+      prisma.workspace.update({ where: { id: workspaceId }, data: { plan } }),
+      prisma.subscription.update({
+        where: { workspaceId },
+        data: {
+          plan,
+          status:       "ACTIVE",
+          billingCycle: billingCycle ?? existing.billingCycle,
+        },
+      }),
+    ])
+
+    return updated
+  },
+
+  /** Marks the subscription to stop renewing at the end of the current
+   *  period — access is NOT revoked immediately. A future scheduled job
+   *  (Phase 2/3) is responsible for actually downgrading once
+   *  currentPeriodEnd passes; this method only records the intent. */
+  async cancelSubscription(workspaceId: string): Promise<Subscription> {
+    const existing = await subscriptionRepository.findByWorkspace(workspaceId)
+    if (!existing) throw new AppError(ErrorCode.SUBSCRIPTION_NOT_FOUND)
+
+    return subscriptionRepository.update(workspaceId, {
+      cancelAtPeriodEnd: true,
+      canceledAt:        new Date(),
+    })
+  },
+
+  /** Undoes a pending cancellation, as long as the period hasn't ended yet. */
+  async reactivateSubscription(workspaceId: string): Promise<Subscription> {
+    const existing = await subscriptionRepository.findByWorkspace(workspaceId)
+    if (!existing) throw new AppError(ErrorCode.SUBSCRIPTION_NOT_FOUND)
+
+    return subscriptionRepository.update(workspaceId, {
+      cancelAtPeriodEnd: false,
+      canceledAt:        null,
+    })
+  },
+
+  isTrialExpired(subscription: Subscription): boolean {
+    return subscription.status === "TRIALING"
+      && !!subscription.trialEndsAt
+      && subscription.trialEndsAt.getTime() < Date.now()
+  },
+
+  /** Lazily checked on read (no scheduler exists yet in Phase 1). If a trial
+   *  has lapsed without the workspace ever upgrading, it falls back to
+   *  STARTER — STARTER is a usable ongoing tier, not a dead end, so this is
+   *  a downgrade, not a lockout. */
+  async expireTrialIfNeeded(workspaceId: string): Promise<Subscription | null> {
+    const existing = await subscriptionRepository.findByWorkspace(workspaceId)
+    if (!existing || !this.isTrialExpired(existing)) return existing
+
+    const [, updated] = await prisma.$transaction([
+      prisma.workspace.update({ where: { id: workspaceId }, data: { plan: "STARTER" } }),
+      prisma.subscription.update({
+        where: { workspaceId },
+        data:  { plan: "STARTER", status: "ACTIVE" },
+      }),
+    ])
+
+    return updated
   },
 }
