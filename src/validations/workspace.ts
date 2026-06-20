@@ -24,7 +24,13 @@ export const cancelInviteSchema = z.object({
   inviteId: z.string().min(1),
 })
 
+export const updateDashboardLayoutSchema = z.object({
+  order:  z.array(z.string()),
+  hidden: z.array(z.string()),
+})
+
 export type InviteUserInput      = z.infer<typeof inviteUserSchema>
 export type AcceptInviteInput    = z.infer<typeof acceptInviteSchema>
 export type UpdateUserRoleInput  = z.infer<typeof updateUserRoleSchema>
 export type CancelInviteInput    = z.infer<typeof cancelInviteSchema>
+export type UpdateDashboardLayoutInput = z.infer<typeof updateDashboardLayoutSchema>

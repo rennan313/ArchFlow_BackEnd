@@ -180,6 +180,12 @@ model Workspace {
   plan      Plan    @default(STARTER)
   active    Boolean @default(true)
 
+  // Dashboard widget order/visibility, shared by the whole workspace.
+  // Stored as a JSON string — see generatedProposalJson for the same
+  // string-not-Json convention used elsewhere in this schema.
+  // Shape: {"order": string[], "hidden": string[]}
+  dashboardLayout String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

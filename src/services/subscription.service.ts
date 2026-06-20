@@ -124,9 +124,11 @@ export const subscriptionService = {
     startOfMonth.setDate(1)
     startOfMonth.setHours(0, 0, 0, 0)
 
-    const [userCount, proposalsThisMonth] = await Promise.all([
+    const [userCount, proposalsThisMonth, projectCount, subscription] = await Promise.all([
       prisma.user.count({ where: { workspaceId } }),
       prisma.proposal.count({ where: { workspaceId, createdAt: { gte: startOfMonth } } }),
+      prisma.project.count({ where: { workspaceId } }),
+      subscriptionRepository.findByWorkspace(workspaceId),
     ])
 
     return {
@@ -142,12 +144,21 @@ export const subscriptionService = {
           limit:     limits.maxProposalsPerMonth,
           unlimited: unlimited(limits.maxProposalsPerMonth),
         },
+        projects: {
+          current:   projectCount,
+          limit:     limits.maxProjects,
+          unlimited: unlimited(limits.maxProjects),
+        },
       },
       features: {
         customBranding: limits.canCustomBranding,
         exportPdf:      limits.canExportPdf,
         apiAccess:      limits.canApiAccess,
       },
+      subscription: subscription ? {
+        status:      subscription.status,
+        trialEndsAt: subscription.trialEndsAt,
+      } : null,
     }
   },
 

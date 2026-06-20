@@ -13,7 +13,7 @@ export const meetingRepository = {
   },
 
   async findMany(workspaceId: string, query: MeetingQueryInput) {
-    const { page, limit, clientId, projectId, status, type, from, to, sortBy, sortOrder } = query
+    const { page, limit, search, clientId, projectId, status, type, from, to, sortBy, sortOrder } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.MeetingWhereInput = {
@@ -22,6 +22,12 @@ export const meetingRepository = {
       ...(projectId && { projectId }),
       ...(status    && { status }),
       ...(type      && { type }),
+      ...(search    && {
+        OR: [
+          { title:    { contains: search, mode: "insensitive" } },
+          { location: { contains: search, mode: "insensitive" } },
+        ],
+      }),
       ...((from || to) && {
         scheduledAt: {
           ...(from && { gte: from }),

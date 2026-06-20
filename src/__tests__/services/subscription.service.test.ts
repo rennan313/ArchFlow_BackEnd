@@ -6,6 +6,7 @@ vi.mock("@/lib/prisma", () => ({
     workspace:     { findUnique: vi.fn(), update: vi.fn() },
     user:          { count: vi.fn() },
     proposal:      { count: vi.fn() },
+    project:       { count: vi.fn() },
     proposalMedia: { count: vi.fn() },
     subscription:  { update: vi.fn() },
     $transaction:  vi.fn(),
@@ -29,6 +30,7 @@ import { ErrorCode } from "@/lib/errors"
 const ws    = vi.mocked(prisma.workspace)
 const user  = vi.mocked(prisma.user)
 const prop  = vi.mocked(prisma.proposal)
+const proj  = vi.mocked(prisma.project)
 const media = vi.mocked(prisma.proposalMedia)
 const tx    = vi.mocked(prisma.$transaction)
 const subRepo = vi.mocked(subscriptionRepository)
@@ -258,7 +260,11 @@ describe("subscriptionService.canUseFeature", () => {
 // ── getUsageSummary ───────────────────────────────────────────────────────────
 
 describe("subscriptionService.getUsageSummary", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    proj.count.mockResolvedValue(0)
+    subRepo.findByWorkspace.mockResolvedValue(null)
+  })
 
   it("returns full usage summary for STARTER plan", async () => {
     withPlan("STARTER")

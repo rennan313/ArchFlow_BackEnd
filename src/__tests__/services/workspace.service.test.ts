@@ -13,13 +13,14 @@ import { workspaceService } from "@/services/workspace.service"
 import { prisma } from "@/lib/prisma"
 
 const mockWorkspace = {
-  id:        "ws-1",
-  name:      "Test Office",
-  slug:      "test-office",
-  plan:      "STARTER" as const,
-  active:    true,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  id:              "ws-1",
+  name:            "Test Office",
+  slug:            "test-office",
+  plan:            "STARTER" as const,
+  active:          true,
+  dashboardLayout: null,
+  createdAt:       new Date(),
+  updatedAt:       new Date(),
 }
 
 const mockUser = {

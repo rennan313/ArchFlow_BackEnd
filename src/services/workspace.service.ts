@@ -44,8 +44,25 @@ export const workspaceService = {
   async get(workspaceId: string) {
     return prisma.workspace.findUnique({
       where:  { id: workspaceId },
-      select: { id: true, name: true, slug: true, plan: true, active: true, createdAt: true },
+      select: { id: true, name: true, slug: true, plan: true, active: true, dashboardLayout: true, createdAt: true },
     })
+  },
+
+  async getDashboardLayout(workspaceId: string) {
+    const ws = await prisma.workspace.findUnique({
+      where:  { id: workspaceId },
+      select: { dashboardLayout: true },
+    })
+    if (!ws?.dashboardLayout) return null
+    try { return JSON.parse(ws.dashboardLayout) as { order: string[]; hidden: string[] } } catch { return null }
+  },
+
+  async updateDashboardLayout(workspaceId: string, layout: { order: string[]; hidden: string[] }) {
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data:  { dashboardLayout: JSON.stringify(layout) },
+    })
+    return layout
   },
 
   async listUsers(workspaceId: string) {
