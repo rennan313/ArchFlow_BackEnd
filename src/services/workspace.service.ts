@@ -97,6 +97,21 @@ export const workspaceService = {
     return prisma.user.update({ where: { id: targetUserId }, data: { workspaceRole: role } })
   },
 
+  async listPendingInvites(workspaceId: string) {
+    return prisma.workspaceInvite.findMany({
+      where:  { workspaceId, accepted: false },
+      select: { id: true, email: true, role: true, expiresAt: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    })
+  },
+
+  async cancelInvite(workspaceId: string, inviteId: string) {
+    const invite = await prisma.workspaceInvite.findFirst({ where: { id: inviteId, workspaceId } })
+    if (!invite) throw new AppError(ErrorCode.NOT_FOUND, "Invite not found")
+
+    await prisma.workspaceInvite.delete({ where: { id: inviteId } })
+  },
+
   async removeUser(workspaceId: string, targetUserId: string) {
     const target = await prisma.user.findFirst({ where: { id: targetUserId, workspaceId } })
     if (!target)              throw new AppError(ErrorCode.USER_NOT_FOUND)

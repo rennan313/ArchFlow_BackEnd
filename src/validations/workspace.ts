@@ -20,6 +20,11 @@ export const removeUserSchema = z.object({
   userId: z.string().min(1),
 })
 
+export const cancelInviteSchema = z.object({
+  inviteId: z.string().min(1),
+})
+
 export type InviteUserInput      = z.infer<typeof inviteUserSchema>
 export type AcceptInviteInput    = z.infer<typeof acceptInviteSchema>
 export type UpdateUserRoleInput  = z.infer<typeof updateUserRoleSchema>
+export type CancelInviteInput    = z.infer<typeof cancelInviteSchema>
