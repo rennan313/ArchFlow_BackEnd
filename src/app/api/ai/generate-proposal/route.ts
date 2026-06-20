@@ -1,18 +1,29 @@
 import { type NextRequest } from "next/server"
 import { requireProposalLimit } from "@/middlewares/limits"
 import { aiRateLimit } from "@/middlewares/rateLimiter"
+import { hasPermission } from "@/middlewares/rbac"
 import { generationService } from "@/services/ai/generation.service"
 import { proposalService } from "@/services/proposal.service"
 import { brandingService } from "@/services/branding.service"
 import { generatePremiumProposalSchema } from "@/validations/ai-proposal"
-import { ok, internalError } from "@/lib/response"
+import { ok, internalError, forbidden } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
 import { logger } from "@/lib/logger"
 import type { JwtPayload } from "@/lib/jwt"
 
 export const maxDuration = 60
 
+// requireProposalLimit wraps withAuth (not withWorkspace), since it needs to
+// run its own plan-limit check first — so the workspace guard and the RBAC
+// permission check are both inline here. Generating a proposal is a creation
+// action, gated the same as the manual POST /api/proposals route.
 export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload) => {
+  if (!user.workspaceId) return forbidden("This action requires a workspace. Complete onboarding first.")
+  if (!hasPermission(user.workspaceRole ?? "VIEWER", "create:proposals")) {
+    return forbidden("Permission denied: create:proposals")
+  }
+  const workspaceId = user.workspaceId
+
   const limited = aiRateLimit(req)
   if (limited) return limited
 
@@ -21,13 +32,13 @@ export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params
     const input = generatePremiumProposalSchema.parse(body)
 
     // 1. Fetch office branding context
-    const branding = await brandingService.getBrandingContext(user.sub)
+    const branding = await brandingService.getBrandingContext(workspaceId)
 
     // 2. Generate premium structured proposal via AI
     const result = await generationService.generate(input, branding ?? undefined)
 
-    // 3. Persist proposal — include workspaceId for multi-tenant queries
-    const saved = await proposalService.create(user.sub, {
+    // 3. Persist proposal
+    const saved = await proposalService.create(workspaceId, user.sub, {
       clientName:    input.clientName,
       projectType:   input.projectType,
       squareMeters:  input.squareMeters ?? 1,
@@ -45,12 +56,11 @@ export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params
       status:        "DRAFT",
     })
 
-    await proposalService.update(saved!.id, user.sub, {
+    await proposalService.update(saved!.id, workspaceId, {
       generatedProposalJson: JSON.stringify(result.proposal),
       proposalTone:          result.tone,
       architectureStyle:     input.style ?? "Contemporâneo",
-      ...(user.workspaceId   && { workspaceId: user.workspaceId }),
-    } as Parameters<typeof proposalService.update>[2])
+    })
 
     return ok(
       {

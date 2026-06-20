@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
-import { withAuth } from "@/middlewares/auth";
+import { withWorkspace } from "@/middlewares/auth";
+import { requireWorkspacePermission } from "@/middlewares/rbac";
 import { proposalService } from "@/services/proposal.service";
 import { updateProposalSchema } from "@/validations/proposal";
 import { ok, noContent } from "@/lib/response";
@@ -8,32 +9,32 @@ import type { JwtPayload } from "@/lib/jwt";
 
 type Ctx = { params: Promise<Record<string, string>> };
 
-export const GET = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const GET = withWorkspace(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params;
-    const proposal = await proposalService.getById(id, user.sub);
+    const proposal = await proposalService.getById(id, workspaceId);
     return ok(proposal);
   } catch (error) {
     return handleServiceError(error);
   }
 });
 
-export const PUT = withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const PUT = requireWorkspacePermission("update:proposals")(async (req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params;
     const body = await req.json();
     const input = updateProposalSchema.parse(body);
-    const proposal = await proposalService.update(id, user.sub, input);
+    const proposal = await proposalService.update(id, workspaceId, input);
     return ok(proposal, "Proposal updated successfully");
   } catch (error) {
     return handleServiceError(error);
   }
 });
 
-export const DELETE = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const DELETE = requireWorkspacePermission("delete:proposals")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params;
-    await proposalService.delete(id, user.sub);
+    await proposalService.delete(id, workspaceId);
     return noContent();
   } catch (error) {
     return handleServiceError(error);

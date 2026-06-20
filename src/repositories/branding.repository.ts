@@ -2,19 +2,20 @@ import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 
 export const brandingRepository = {
-  findByUser(userId: string) {
-    return prisma.officeBranding.findUnique({ where: { userId } })
+  findByWorkspace(workspaceId: string) {
+    return prisma.officeBranding.findUnique({ where: { workspaceId } })
   },
 
-  upsert(userId: string, data: Omit<Prisma.OfficeBrandingCreateInput, "user">) {
+  upsert(workspaceId: string, userId: string, data: Omit<Prisma.OfficeBrandingCreateInput, "user" | "workspace">) {
     return prisma.officeBranding.upsert({
-      where:  { userId },
-      create: { ...data, user: { connect: { id: userId } } },
+      where:  { workspaceId },
+      create: { ...data, user: { connect: { id: userId } }, workspace: { connect: { id: workspaceId } } },
       update: data,
     })
   },
 
   updateAsset(
+    workspaceId: string,
     userId: string,
     fields: Partial<{
       logoUrl:              string
@@ -26,8 +27,8 @@ export const brandingRepository = {
     }>,
   ) {
     return prisma.officeBranding.upsert({
-      where:  { userId },
-      create: { ...fields, user: { connect: { id: userId } } },
+      where:  { workspaceId },
+      create: { ...fields, user: { connect: { id: userId } }, workspace: { connect: { id: workspaceId } } },
       update: fields,
     })
   },

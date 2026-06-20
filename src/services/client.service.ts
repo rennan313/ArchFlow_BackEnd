@@ -4,19 +4,19 @@ import { AppError, ErrorCode } from "@/lib/errors"
 import type { CreateClientInput, UpdateClientInput, ClientQueryInput } from "@/validations/client"
 
 export const clientService = {
-  async list(userId: string, query: ClientQueryInput) {
-    const { data, total } = await clientRepository.findMany(userId, query)
+  async list(workspaceId: string, query: ClientQueryInput) {
+    const { data, total } = await clientRepository.findMany(workspaceId, query)
     return { data, pagination: buildMeta(total, query.page, query.limit) }
   },
 
-  async getById(id: string, userId: string) {
-    const client = await clientRepository.findById(id, userId)
+  async getById(id: string, workspaceId: string) {
+    const client = await clientRepository.findById(id, workspaceId)
     if (!client) throw new AppError(ErrorCode.CLIENT_NOT_FOUND)
     return client
   },
 
-  async create(userId: string, input: CreateClientInput) {
-    return clientRepository.create(userId, {
+  async create(workspaceId: string, userId: string, input: CreateClientInput) {
+    return clientRepository.create(workspaceId, userId, {
       name:           input.name,
       email:          input.email,
       phone:          input.phone,
@@ -33,19 +33,19 @@ export const clientService = {
     })
   },
 
-  async update(id: string, userId: string, input: UpdateClientInput) {
-    await this.getById(id, userId)
-    await clientRepository.update(id, userId, input as Parameters<typeof clientRepository.update>[2])
-    return clientRepository.findById(id, userId)
+  async update(id: string, workspaceId: string, input: UpdateClientInput) {
+    await this.getById(id, workspaceId)
+    await clientRepository.update(id, workspaceId, input as Parameters<typeof clientRepository.update>[2])
+    return clientRepository.findById(id, workspaceId)
   },
 
-  async delete(id: string, userId: string) {
-    await this.getById(id, userId)
-    await clientRepository.delete(id, userId)
+  async delete(id: string, workspaceId: string) {
+    await this.getById(id, workspaceId)
+    await clientRepository.delete(id, workspaceId)
   },
 
-  async getProposals(clientId: string, userId: string) {
-    await this.getById(clientId, userId)
-    return clientRepository.findProposals(clientId, userId)
+  async getProposals(clientId: string, workspaceId: string) {
+    await this.getById(clientId, workspaceId)
+    return clientRepository.findProposals(clientId, workspaceId)
   },
 }

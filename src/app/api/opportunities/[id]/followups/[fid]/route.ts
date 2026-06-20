@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server"
-import { withAuth } from "@/middlewares/auth"
+import { withWorkspace } from "@/middlewares/auth"
+import { requireWorkspacePermission } from "@/middlewares/rbac"
 import { followUpService } from "@/services/followup.service"
 import { updateFollowUpSchema } from "@/validations/followup"
 import { ok, noContent } from "@/lib/response"
@@ -8,18 +9,18 @@ import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<{ id: string; fid: string }> }
 
-export const PATCH = withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const PATCH = requireWorkspacePermission("update:opportunities")(async (req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { fid } = await ctx.params
     const input   = updateFollowUpSchema.parse(await req.json())
-    return ok(await followUpService.update(fid, user.sub, input), "Follow-up updated")
+    return ok(await followUpService.update(fid, workspaceId, input), "Follow-up updated")
   } catch (error) { return handleServiceError(error) }
 })
 
-export const DELETE = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const DELETE = requireWorkspacePermission("update:opportunities")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { fid } = await ctx.params
-    await followUpService.delete(fid, user.sub)
+    await followUpService.delete(fid, workspaceId)
     return noContent()
   } catch (error) { return handleServiceError(error) }
 })

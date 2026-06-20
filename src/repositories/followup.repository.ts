@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 
+// FollowUp has no workspaceId column of its own — it's always reached through
+// an Opportunity, which does carry workspaceId, so every tenant-scoped query
+// here filters through that relation instead of adding a redundant column.
 export const followUpRepository = {
-  findById(id: string, userId: string) {
-    return prisma.followUp.findFirst({ where: { id, userId } })
+  findById(id: string, workspaceId: string) {
+    return prisma.followUp.findFirst({ where: { id, opportunity: { workspaceId } } })
   },
 
   findByOpportunity(opportunityId: string) {
@@ -13,9 +16,9 @@ export const followUpRepository = {
     })
   },
 
-  findPending(userId: string) {
+  findPending(workspaceId: string) {
     return prisma.followUp.findMany({
-      where:   { userId, completed: false },
+      where:   { completed: false, opportunity: { workspaceId } },
       orderBy: { nextContactDate: "asc" },
       include: {
         opportunity: { select: { id: true, title: true, stage: true, client: { select: { name: true } } } },
@@ -23,9 +26,9 @@ export const followUpRepository = {
     })
   },
 
-  findOverdue(userId: string) {
+  findOverdue(workspaceId: string) {
     return prisma.followUp.findMany({
-      where: { userId, completed: false, nextContactDate: { lt: new Date() } },
+      where: { completed: false, nextContactDate: { lt: new Date() }, opportunity: { workspaceId } },
       include: {
         opportunity: { select: { id: true, title: true, client: { select: { name: true } } } },
       },
@@ -36,11 +39,11 @@ export const followUpRepository = {
     return prisma.followUp.create({ data })
   },
 
-  update(id: string, userId: string, data: Prisma.FollowUpUpdateInput) {
-    return prisma.followUp.updateMany({ where: { id, userId }, data })
+  update(id: string, workspaceId: string, data: Prisma.FollowUpUpdateInput) {
+    return prisma.followUp.updateMany({ where: { id, opportunity: { workspaceId } }, data })
   },
 
-  delete(id: string, userId: string) {
-    return prisma.followUp.deleteMany({ where: { id, userId } })
+  delete(id: string, workspaceId: string) {
+    return prisma.followUp.deleteMany({ where: { id, opportunity: { workspaceId } } })
   },
 }

@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { withAuth } from "@/middlewares/auth"
+import { requireAnyWorkspacePermission } from "@/middlewares/rbac"
 import { mediaService } from "@/services/media.service"
 import { proposalService } from "@/services/proposal.service"
 import { addEmbedSchema } from "@/validations/media"
@@ -9,11 +9,11 @@ import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<{ id: string }> }
 
-export const POST = withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const POST = requireAnyWorkspacePermission("upload:media", "update:proposals")(async (req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
 
-    await proposalService.getById(id, user.sub)
+    await proposalService.getById(id, workspaceId)
 
     const body  = await req.json()
     const input = addEmbedSchema.parse(body)

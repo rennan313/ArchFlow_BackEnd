@@ -2,9 +2,9 @@ import { type NextRequest } from "next/server"
 import { withAuth } from "@/middlewares/auth"
 import { prisma } from "@/lib/prisma"
 import { PLAN_LIMITS, PLAN_LABELS } from "@/config/plans"
-import { ok, badRequest, forbidden } from "@/lib/response"
+import { ok, badRequest } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
-import { withRole } from "@/middlewares/rbac"
+import { requireWorkspaceRole } from "@/middlewares/rbac"
 import type { JwtPayload } from "@/lib/jwt"
 import { z } from "zod"
 
@@ -35,16 +35,15 @@ export const GET = withAuth(async (_req: NextRequest, _ctx: { params: Promise<Re
   }
 })
 
-// PATCH — upgrade/downgrade plan (OWNER only)
-export const PATCH = withRole("OWNER", async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload) => {
+// PATCH — upgrade/downgrade plan (OWNER only — billing stays OWNER-exclusive,
+// not even ADMIN can change it)
+export const PATCH = requireWorkspaceRole("OWNER")(async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, _user: JwtPayload, workspaceId: string) => {
   try {
-    if (!user.workspaceId) return forbidden("No workspace")
-
     const body   = await req.json()
     const { plan } = upgradeSchema.parse(body)
 
     const workspace = await prisma.workspace.update({
-      where: { id: user.workspaceId },
+      where: { id: workspaceId },
       data:  { plan },
       select: { id: true, name: true, plan: true },
     })

@@ -3,19 +3,19 @@ import type { Prisma } from "@prisma/client"
 import type { ClientQueryInput } from "@/validations/client"
 
 export const clientRepository = {
-  findById(id: string, userId: string) {
+  findById(id: string, workspaceId: string) {
     return prisma.client.findFirst({
-      where: { id, userId },
-      include: { _count: { select: { proposals: true } } },
+      where: { id, workspaceId },
+      include: { _count: { select: { proposals: true, meetings: true } } },
     })
   },
 
-  async findMany(userId: string, query: ClientQueryInput) {
+  async findMany(workspaceId: string, query: ClientQueryInput) {
     const { page, limit, search, status, state, sortBy, sortOrder } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.ClientWhereInput = {
-      userId,
+      workspaceId,
       ...(status && { status }),
       ...(state  && { state }),
       ...(search && {
@@ -34,31 +34,35 @@ export const clientRepository = {
         skip,
         take:      limit,
         orderBy:   { [sortBy]: sortOrder },
-        include:   { _count: { select: { proposals: true } } },
+        include:   { _count: { select: { proposals: true, meetings: true } } },
       }),
       prisma.client.count({ where }),
     ])
     return { data, total }
   },
 
-  create(userId: string, data: Omit<Prisma.ClientUncheckedCreateInput, "id" | "userId" | "createdAt" | "updatedAt">) {
+  create(
+    workspaceId: string,
+    userId: string,
+    data: Omit<Prisma.ClientUncheckedCreateInput, "id" | "userId" | "workspaceId" | "createdAt" | "updatedAt">,
+  ) {
     return prisma.client.create({
-      data: { ...data, userId },
-      include: { _count: { select: { proposals: true } } },
+      data: { ...data, userId, workspaceId },
+      include: { _count: { select: { proposals: true, meetings: true } } },
     })
   },
 
-  update(id: string, userId: string, data: Prisma.ClientUpdateInput) {
-    return prisma.client.updateMany({ where: { id, userId }, data })
+  update(id: string, workspaceId: string, data: Prisma.ClientUpdateInput) {
+    return prisma.client.updateMany({ where: { id, workspaceId }, data })
   },
 
-  delete(id: string, userId: string) {
-    return prisma.client.deleteMany({ where: { id, userId } })
+  delete(id: string, workspaceId: string) {
+    return prisma.client.deleteMany({ where: { id, workspaceId } })
   },
 
-  findProposals(clientId: string, userId: string) {
+  findProposals(clientId: string, workspaceId: string) {
     return prisma.proposal.findMany({
-      where:   { clientId, userId },
+      where:   { clientId, workspaceId },
       orderBy: { createdAt: "desc" },
     })
   },

@@ -4,15 +4,15 @@ import { AppError, ErrorCode } from "@/lib/errors"
 import type { UpsertBriefingInput } from "@/validations/briefing"
 
 export const briefingService = {
-  async get(opportunityId: string, userId: string) {
-    const opp = await opportunityRepository.findById(opportunityId, userId)
+  async get(opportunityId: string, workspaceId: string) {
+    const opp = await opportunityRepository.findById(opportunityId, workspaceId)
     if (!opp) throw new AppError(ErrorCode.OPPORTUNITY_NOT_FOUND)
     const briefing = await briefingRepository.findByOpportunity(opportunityId)
     return briefing ?? null
   },
 
-  async upsert(opportunityId: string, userId: string, input: UpsertBriefingInput) {
-    const opp = await opportunityRepository.findById(opportunityId, userId)
+  async upsert(opportunityId: string, workspaceId: string, input: UpsertBriefingInput) {
+    const opp = await opportunityRepository.findById(opportunityId, workspaceId)
     if (!opp) throw new AppError(ErrorCode.OPPORTUNITY_NOT_FOUND)
     return briefingRepository.upsert(opportunityId, input)
   },

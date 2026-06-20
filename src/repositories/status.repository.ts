@@ -15,9 +15,9 @@ export const statusRepository = {
     })
   },
 
-  updateProposalStatus(proposalId: string, userId: string, newStatus: ProposalStatus) {
+  updateProposalStatus(proposalId: string, workspaceId: string, newStatus: ProposalStatus) {
     return prisma.proposal.updateMany({
-      where: { id: proposalId, userId },
+      where: { id: proposalId, workspaceId },
       data:  { status: newStatus, statusUpdatedAt: new Date() },
     })
   },

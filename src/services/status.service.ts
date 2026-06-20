@@ -6,8 +6,8 @@ import type { UpdateStatusInput } from "@/validations/status"
 import type { ProposalStatus } from "@prisma/client"
 
 export const statusService = {
-  async update(proposalId: string, userId: string, input: UpdateStatusInput) {
-    const proposal = await proposalRepository.findById(proposalId, userId)
+  async update(proposalId: string, workspaceId: string, input: UpdateStatusInput) {
+    const proposal = await proposalRepository.findById(proposalId, workspaceId)
     if (!proposal) throw new AppError(ErrorCode.NOT_FOUND)
 
     const currentStatus = proposal.status as ProposalStatus
@@ -23,10 +23,10 @@ export const statusService = {
       )
     }
 
-    await statusRepository.updateProposalStatus(proposalId, userId, newStatus)
+    await statusRepository.updateProposalStatus(proposalId, workspaceId, newStatus)
     await statusRepository.recordHistory(proposalId, currentStatus, newStatus)
 
-    const updated = await proposalRepository.findById(proposalId, userId)
+    const updated = await proposalRepository.findById(proposalId, workspaceId)
 
     return {
       proposal: updated,
@@ -37,8 +37,8 @@ export const statusService = {
     }
   },
 
-  async getHistory(proposalId: string, userId: string) {
-    const proposal = await proposalRepository.findById(proposalId, userId)
+  async getHistory(proposalId: string, workspaceId: string) {
+    const proposal = await proposalRepository.findById(proposalId, workspaceId)
     if (!proposal) throw new AppError(ErrorCode.NOT_FOUND)
 
     const history = await statusRepository.getHistory(proposalId)

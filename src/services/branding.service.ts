@@ -3,8 +3,8 @@ import { storageService, type BrandingAssetType } from "@/services/storage/supab
 import type { UpdateBrandingInput } from "@/validations/branding"
 
 export const brandingService = {
-  async get(userId: string) {
-    const branding = await brandingRepository.findByUser(userId)
+  async get(workspaceId: string) {
+    const branding = await brandingRepository.findByWorkspace(workspaceId)
 
     if (!branding) return null
 
@@ -13,12 +13,12 @@ export const brandingService = {
     return refreshed
   },
 
-  async update(userId: string, input: UpdateBrandingInput) {
-    await brandingRepository.upsert(userId, input)
-    return this.get(userId)
+  async update(workspaceId: string, userId: string, input: UpdateBrandingInput) {
+    await brandingRepository.upsert(workspaceId, userId, input)
+    return this.get(workspaceId)
   },
 
-  async uploadAsset(userId: string, assetType: BrandingAssetType, file: File) {
+  async uploadAsset(workspaceId: string, userId: string, assetType: BrandingAssetType, file: File) {
     const result = await storageService.uploadBrandingAsset(userId, assetType, file)
 
     const fieldMap: Record<BrandingAssetType, {
@@ -32,7 +32,7 @@ export const brandingService = {
 
     const { urlField, pathField } = fieldMap[assetType]
 
-    await brandingRepository.updateAsset(userId, {
+    await brandingRepository.updateAsset(workspaceId, userId, {
       [urlField]:  result.url,
       [pathField]: result.storagePath,
     })
@@ -41,8 +41,8 @@ export const brandingService = {
   },
 
   // Called by proposal generation to inject branding context
-  async getBrandingContext(userId: string) {
-    const branding = await brandingRepository.findByUser(userId)
+  async getBrandingContext(workspaceId: string) {
+    const branding = await brandingRepository.findByWorkspace(workspaceId)
     if (!branding) return null
 
     return {
@@ -60,7 +60,7 @@ export const brandingService = {
   },
 }
 
-async function refreshAssetUrls(branding: Awaited<ReturnType<typeof brandingRepository.findByUser>>) {
+async function refreshAssetUrls(branding: Awaited<ReturnType<typeof brandingRepository.findByWorkspace>>) {
   if (!branding) return branding
 
   const paths: Array<[keyof typeof branding, keyof typeof branding]> = [

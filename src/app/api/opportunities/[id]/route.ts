@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server"
-import { withAuth } from "@/middlewares/auth"
+import { withWorkspace } from "@/middlewares/auth"
+import { requireWorkspacePermission } from "@/middlewares/rbac"
 import { opportunityService } from "@/services/opportunity.service"
 import { updateOpportunitySchema } from "@/validations/opportunity"
 import { ok, noContent } from "@/lib/response"
@@ -8,25 +9,25 @@ import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<{ id: string }> }
 
-export const GET = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const GET = withWorkspace(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
-    return ok(await opportunityService.getById(id, user.sub))
+    return ok(await opportunityService.getById(id, workspaceId))
   } catch (error) { return handleServiceError(error) }
 })
 
-export const PUT = withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const PUT = requireWorkspacePermission("update:opportunities")(async (req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
     const input  = updateOpportunitySchema.parse(await req.json())
-    return ok(await opportunityService.update(id, user.sub, input), "Opportunity updated")
+    return ok(await opportunityService.update(id, workspaceId, input), "Opportunity updated")
   } catch (error) { return handleServiceError(error) }
 })
 
-export const DELETE = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const DELETE = requireWorkspacePermission("delete:opportunities")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
-    await opportunityService.delete(id, user.sub)
+    await opportunityService.delete(id, workspaceId)
     return noContent()
   } catch (error) { return handleServiceError(error) }
 })

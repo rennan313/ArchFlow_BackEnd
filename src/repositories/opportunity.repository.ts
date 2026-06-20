@@ -8,16 +8,16 @@ const INCLUDE_RELATIONS = {
 } as const
 
 export const opportunityRepository = {
-  findById(id: string, userId: string) {
-    return prisma.opportunity.findFirst({ where: { id, userId }, include: INCLUDE_RELATIONS })
+  findById(id: string, workspaceId: string) {
+    return prisma.opportunity.findFirst({ where: { id, workspaceId }, include: INCLUDE_RELATIONS })
   },
 
-  async findMany(userId: string, query: OpportunityQueryInput) {
+  async findMany(workspaceId: string, query: OpportunityQueryInput) {
     const { page, limit, search, stage, clientId, sortBy, sortOrder } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.OpportunityWhereInput = {
-      userId,
+      workspaceId,
       ...(stage    && { stage }),
       ...(clientId && { clientId }),
       ...(search   && {
@@ -46,19 +46,22 @@ export const opportunityRepository = {
     return prisma.opportunity.create({ data, include: INCLUDE_RELATIONS })
   },
 
-  update(id: string, userId: string, data: Prisma.OpportunityUpdateInput) {
-    return prisma.opportunity.update({ where: { id }, data })
+  // NOTE: this previously filtered by { id } only — no userId/workspaceId —
+  // a confirmed cross-tenant IDOR (any authenticated caller could update any
+  // workspace's opportunity by id). Now scoped like every other write here.
+  update(id: string, workspaceId: string, data: Prisma.OpportunityUpdateInput) {
+    return prisma.opportunity.updateMany({ where: { id, workspaceId }, data })
   },
 
-  delete(id: string, userId: string) {
-    return prisma.opportunity.deleteMany({ where: { id, userId } })
+  delete(id: string, workspaceId: string) {
+    return prisma.opportunity.deleteMany({ where: { id, workspaceId } })
   },
 
   // Pipeline aggregations
-  async pipelineStats(userId: string) {
+  async pipelineStats(workspaceId: string) {
     return prisma.opportunity.groupBy({
       by:    ["stage"],
-      where: { userId },
+      where: { workspaceId },
       _count: { _all: true },
       _sum:   { estimatedRevenue: true },
     })

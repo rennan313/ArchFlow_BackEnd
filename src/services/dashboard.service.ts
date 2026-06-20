@@ -6,7 +6,7 @@ import type { OpportunityStage } from "@prisma/client"
 const ACTIVE_STAGES: OpportunityStage[] = ["LEAD", "BRIEFING", "PROPOSAL_DRAFT", "PROPOSAL_SENT", "NEGOTIATION"]
 
 export const dashboardService = {
-  async getAggregations(userId: string) {
+  async getAggregations(workspaceId: string) {
     const [
       stageGroups,
       approvedCount,
@@ -18,25 +18,25 @@ export const dashboardService = {
       // Pipeline by stage (active only)
       prisma.opportunity.groupBy({
         by:    ["stage"],
-        where: { userId, stage: { in: ACTIVE_STAGES } },
+        where: { workspaceId, stage: { in: ACTIVE_STAGES } },
         _count: { _all: true },
         _sum:   { estimatedRevenue: true },
       }),
       // Approved count (for rate)
-      prisma.opportunity.count({ where: { userId, stage: "APPROVED" } }),
+      prisma.opportunity.count({ where: { workspaceId, stage: "APPROVED" } }),
       // Lost count (for rate)
-      prisma.opportunity.count({ where: { userId, stage: "LOST" } }),
+      prisma.opportunity.count({ where: { workspaceId, stage: "LOST" } }),
       // Approved revenue
       prisma.opportunity.aggregate({
-        where: { userId, stage: "APPROVED" },
+        where: { workspaceId, stage: "APPROVED" },
         _sum:  { estimatedRevenue: true },
         _avg:  { estimatedRevenue: true },
       }),
       // Overdue follow-ups
-      followUpRepository.findOverdue(userId),
+      followUpRepository.findOverdue(workspaceId),
       // Recent proposals
       prisma.proposal.findMany({
-        where:   { userId },
+        where:   { workspaceId },
         orderBy: { createdAt: "desc" },
         take:    5,
         select:  { id: true, clientName: true, status: true, estimatedTotal: true, createdAt: true },

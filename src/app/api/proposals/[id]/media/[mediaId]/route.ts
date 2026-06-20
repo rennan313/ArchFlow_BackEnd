@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { withAuth } from "@/middlewares/auth"
+import { requireAnyWorkspacePermission } from "@/middlewares/rbac"
 import { mediaService } from "@/services/media.service"
 import { proposalService } from "@/services/proposal.service"
 import { updateMediaSchema } from "@/validations/media"
@@ -9,11 +9,11 @@ import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<{ id: string; mediaId: string }> }
 
-export const PATCH = withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const PATCH = requireAnyWorkspacePermission("upload:media", "update:proposals")(async (req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id, mediaId } = await ctx.params
 
-    await proposalService.getById(id, user.sub)
+    await proposalService.getById(id, workspaceId)
 
     const body  = await req.json()
     const input = updateMediaSchema.parse(body)
@@ -25,11 +25,11 @@ export const PATCH = withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayloa
   }
 })
 
-export const DELETE = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const DELETE = requireAnyWorkspacePermission("upload:media", "update:proposals")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id, mediaId } = await ctx.params
 
-    await proposalService.getById(id, user.sub)
+    await proposalService.getById(id, workspaceId)
     await mediaService.delete(mediaId, id)
 
     return noContent()

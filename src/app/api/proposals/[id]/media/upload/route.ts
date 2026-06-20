@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { withAuth } from "@/middlewares/auth"
+import { requireAnyWorkspacePermission } from "@/middlewares/rbac"
 import { mediaService } from "@/services/media.service"
 import { proposalService } from "@/services/proposal.service"
 import { subscriptionService } from "@/services/subscription.service"
@@ -9,11 +9,13 @@ import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<{ id: string }> }
 
-export const POST = withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+// DESIGNER reaches this via upload:media; ARCHITECT/ADMIN/ASSISTANT/OWNER via
+// update:proposals (editing a proposal includes managing its media).
+export const POST = requireAnyWorkspacePermission("upload:media", "update:proposals")(async (req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
 
-    await proposalService.getById(id, user.sub)
+    await proposalService.getById(id, workspaceId)
 
     const formData = await req.formData()
     const file     = formData.get("file")
@@ -23,11 +25,9 @@ export const POST = withAuth(async (req: NextRequest, ctx: Ctx, user: JwtPayload
     }
 
     // Check storage limit before uploading
-    if (user.workspaceId) {
-      const sizeMb    = file.size / (1024 * 1024)
-      const limitCheck = await subscriptionService.canUploadFile(user.workspaceId, sizeMb)
-      if (!limitCheck.allowed) return forbidden(limitCheck.reason ?? "Storage limit reached")
-    }
+    const sizeMb    = file.size / (1024 * 1024)
+    const limitCheck = await subscriptionService.canUploadFile(workspaceId, sizeMb)
+    if (!limitCheck.allowed) return forbidden(limitCheck.reason ?? "Storage limit reached")
 
     const media = await mediaService.upload(id, file)
     return created(media, "Media uploaded successfully")

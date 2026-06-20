@@ -3,16 +3,16 @@ import type { Prisma } from "@prisma/client";
 import type { ProposalQueryInput } from "@/validations/proposal";
 
 export const proposalRepository = {
-  findById(id: string, userId: string) {
-    return prisma.proposal.findFirst({ where: { id, userId } });
+  findById(id: string, workspaceId: string) {
+    return prisma.proposal.findFirst({ where: { id, workspaceId } });
   },
 
-  async findMany(userId: string, query: ProposalQueryInput) {
+  async findMany(workspaceId: string, query: ProposalQueryInput) {
     const { page, limit, search, status, sortBy, sortOrder } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.ProposalWhereInput = {
-      userId,
+      workspaceId,
       ...(status && { status }),
       ...(search && {
         OR: [
@@ -41,11 +41,11 @@ export const proposalRepository = {
     return prisma.proposal.create({ data });
   },
 
-  update(id: string, userId: string, data: Prisma.ProposalUpdateInput) {
-    return prisma.proposal.updateMany({ where: { id, userId }, data });
+  update(id: string, workspaceId: string, data: Prisma.ProposalUpdateInput) {
+    return prisma.proposal.updateMany({ where: { id, workspaceId }, data });
   },
 
-  delete(id: string, userId: string) {
-    return prisma.proposal.deleteMany({ where: { id, userId } });
+  delete(id: string, workspaceId: string) {
+    return prisma.proposal.deleteMany({ where: { id, workspaceId } });
   },
 };

@@ -4,16 +4,14 @@ import { subscriptionService } from "@/services/subscription.service"
 import { inviteUserSchema } from "@/validations/workspace"
 import { created, forbidden, badRequest } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
-import { withRole } from "@/middlewares/rbac"
+import { requireWorkspaceRole } from "@/middlewares/rbac"
 import type { JwtPayload } from "@/lib/jwt"
 import { env } from "@/lib/env"
 
-export const POST = withRole("ADMIN", async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload) => {
+export const POST = requireWorkspaceRole("ADMIN")(async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload, workspaceId: string) => {
   try {
-    if (!user.workspaceId) return forbidden("No workspace")
-
     // Check user seat limit before sending invite
-    const limitCheck = await subscriptionService.canAddUser(user.workspaceId)
+    const limitCheck = await subscriptionService.canAddUser(workspaceId)
     if (!limitCheck.allowed) return forbidden(limitCheck.reason ?? "User limit reached")
 
     const body  = await req.json()
@@ -23,7 +21,7 @@ export const POST = withRole("ADMIN", async (req: NextRequest, _ctx: { params: P
       return badRequest("Only OWNER can invite another OWNER")
     }
 
-    const invite = await workspaceService.invite(user.workspaceId, input.email, input.role)
+    const invite = await workspaceService.invite(workspaceId, input.email, input.role)
 
     return created(
       {

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { withAuth } from "@/middlewares/auth"
+import { withWorkspace } from "@/middlewares/auth"
 import { prisma } from "@/lib/prisma"
 import { renderToBuffer } from "@react-pdf/renderer"
 import React from "react"
@@ -11,13 +11,13 @@ import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<{ id: string }> }
 
-export const GET = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload) => {
+export const GET = withWorkspace(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
 
-    // Verify ownership
+    // Verify the proposal belongs to this workspace
     const proposal = await prisma.proposal.findFirst({
-      where: { id, userId: user.sub },
+      where: { id, workspaceId },
     })
 
     if (!proposal) {
@@ -54,7 +54,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: Ctx, user: JwtPayload
     }
 
     // Fetch branding
-    const branding = await brandingService.getBrandingContext(user.sub)
+    const branding = await brandingService.getBrandingContext(workspaceId)
 
     const pdfData: ProposalPdfData = {
       id:          proposal.id,
