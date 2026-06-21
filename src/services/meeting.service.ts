@@ -1,6 +1,8 @@
 import { meetingRepository } from "@/repositories/meeting.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { assertWorkspaceReferences } from "@/lib/tenantGuard"
+import { automationService } from "@/services/automation.service"
 import type { CreateMeetingInput, UpdateMeetingInput, MeetingQueryInput } from "@/validations/meeting"
 
 export const meetingService = {
@@ -16,7 +18,17 @@ export const meetingService = {
   },
 
   async create(workspaceId: string, userId: string, input: CreateMeetingInput) {
-    return meetingRepository.create(workspaceId, userId, {
+    // P0 #1 (Fase 5 audit) — clientId/projectId/proposalId previously reached
+    // the repository unvalidated, letting a workspace create a meeting linked
+    // to another tenant's client/project/proposal (confirmed cross-tenant
+    // PII leak: the created meeting embedded the foreign client's name).
+    await assertWorkspaceReferences(workspaceId, {
+      clientId:   input.clientId,
+      projectId:  input.projectId,
+      proposalId: input.proposalId,
+    })
+
+    const meeting = await meetingRepository.create(workspaceId, userId, {
       clientId:    input.clientId,
       title:       input.title,
       type:        input.type,
@@ -32,9 +44,26 @@ export const meetingService = {
       projectId:   input.projectId,
       proposalId:  input.proposalId,
     })
+
+    // Automação 08 — a reunião já É o evento de agenda (Meeting.scheduledAt);
+    // este log só confirma a automação para o widget/tela de Automações.
+    if (await automationService.isEnabled(workspaceId, "MEETING_AGENDA_SYNC")) {
+      await automationService.record(workspaceId, "MEETING_AGENDA_SYNC", {
+        resultType: "NOOP",
+        entityType: "Meeting",
+        entityId:   meeting.id,
+        message:    `Reunião "${meeting.title}" sincronizada com a Agenda`,
+      })
+    }
+
+    return meeting
   },
 
   async update(id: string, workspaceId: string, input: UpdateMeetingInput) {
+    // clientId is omitted from UpdateMeetingInput (validations/meeting.ts), but
+    // projectId/proposalId still reach here from request input.
+    await assertWorkspaceReferences(workspaceId, { projectId: input.projectId, proposalId: input.proposalId })
+
     await this.getById(id, workspaceId)
     return meetingRepository.update(id, workspaceId, {
       ...(input.title       !== undefined && { title:       input.title }),

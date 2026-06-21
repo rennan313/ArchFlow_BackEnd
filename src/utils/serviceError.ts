@@ -13,6 +13,9 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.INVALID_OR_EXPIRED_TOKEN]: () => R.badRequest("Reset token is invalid or has expired"),
   [ErrorCode.GOOGLE_TOKEN_INVALID]:     () => R.unauthorized("Invalid Google token. Please sign in again."),
   [ErrorCode.GOOGLE_AUTH_DISABLED]:     () => R.badRequest("Google authentication is not enabled on this server"),
+  [ErrorCode.EMAIL_VERIFICATION_TOKEN_INVALID]: () => R.badRequest("Verification token is invalid"),
+  [ErrorCode.EMAIL_VERIFICATION_TOKEN_EXPIRED]: () => R.badRequest("Verification token has expired"),
+  [ErrorCode.EMAIL_ALREADY_VERIFIED]:   () => R.conflict("This email address is already verified"),
   // Users
   [ErrorCode.USER_NOT_FOUND]:           () => R.notFound("User not found"),
   // Generic
@@ -28,10 +31,19 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   // Domain
   [ErrorCode.CLIENT_NOT_FOUND]:         () => R.notFound("Client not found"),
   [ErrorCode.PROJECT_NOT_FOUND]:        () => R.notFound("Project not found"),
+  [ErrorCode.MEETING_NOT_FOUND]:        () => R.notFound("Meeting not found"),
   [ErrorCode.OPPORTUNITY_NOT_FOUND]:    () => R.notFound("Opportunity not found"),
   [ErrorCode.BRIEFING_NOT_FOUND]:       () => R.notFound("Briefing not found"),
   [ErrorCode.FOLLOWUP_NOT_FOUND]:       () => R.notFound("Follow-up not found"),
   [ErrorCode.VERSION_NOT_FOUND]:        () => R.notFound("Proposal version not found"),
+  [ErrorCode.DOCUMENT_NOT_FOUND]:       () => R.notFound("Document not found"),
+  [ErrorCode.DOCUMENT_FOLDER_NOT_FOUND]: () => R.notFound("Document folder not found"),
+  [ErrorCode.AUTOMATION_NOT_FOUND]:     () => R.notFound("Automation not found"),
+  [ErrorCode.TASK_NOT_FOUND]:           () => R.notFound("Task not found"),
+  [ErrorCode.CROSS_TENANT_REFERENCE]:   () => R.forbidden("One or more referenced resources do not belong to this workspace"),
+  // Billing
+  [ErrorCode.SUBSCRIPTION_NOT_FOUND]:        () => R.notFound("Subscription not found"),
+  [ErrorCode.SUBSCRIPTION_ALREADY_EXISTS]:   () => R.conflict("Subscription already exists for this workspace"),
   // Legacy string aliases kept for backward compat during migration
   INVALID_TOKEN:     () => R.badRequest("Invalid reset token"),
   TOKEN_ALREADY_USED: () => R.badRequest("Reset token has already been used"),

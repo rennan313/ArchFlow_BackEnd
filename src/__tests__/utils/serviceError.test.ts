@@ -143,6 +143,44 @@ describe("handleServiceError — domain AppErrors", () => {
     const body = await res.json()
     expect(body.message).toMatch(/media/i)
   })
+
+  // Fase 5 audit, P1 #2 — this used to fall through to the 500 default because
+  // MEETING_NOT_FOUND had no entry in SERVICE_ERRORS, even though
+  // meeting.service.ts already threw it correctly. Every GET/PUT/DELETE on a
+  // missing or cross-tenant meeting id surfaced as a 500 "[Unhandled error]".
+  it("maps MEETING_NOT_FOUND to 404 (regression: used to fall through to 500)", async () => {
+    const res = handleServiceError(new AppError(ErrorCode.MEETING_NOT_FOUND))
+    expect(res.status).toBe(404)
+    const body = await res.json()
+    expect(body.message).toMatch(/meeting/i)
+  })
+
+  // Fase 5 audit, P0 #1 — thrown by src/lib/tenantGuard.ts whenever a
+  // request references another workspace's client/project/proposal/opportunity/
+  // folder. Must be 403, not 404, so it's visibly distinct from "doesn't exist".
+  it("maps CROSS_TENANT_REFERENCE to 403", async () => {
+    const res = handleServiceError(new AppError(ErrorCode.CROSS_TENANT_REFERENCE))
+    expect(res.status).toBe(403)
+    const body = await res.json()
+    expect(body.success).toBe(false)
+  })
+
+  // Same fall-through-to-500 bug class as MEETING_NOT_FOUND, found while
+  // auditing every ErrorCode against SERVICE_ERRORS — thrown in
+  // billing.service.ts/subscription.service.ts but never mapped.
+  it("maps SUBSCRIPTION_NOT_FOUND to 404 (regression: used to fall through to 500)", async () => {
+    const res = handleServiceError(new AppError(ErrorCode.SUBSCRIPTION_NOT_FOUND))
+    expect(res.status).toBe(404)
+    const body = await res.json()
+    expect(body.message).toMatch(/subscription/i)
+  })
+
+  it("maps SUBSCRIPTION_ALREADY_EXISTS to 409 (regression: used to fall through to 500)", async () => {
+    const res = handleServiceError(new AppError(ErrorCode.SUBSCRIPTION_ALREADY_EXISTS))
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.message).toMatch(/subscription/i)
+  })
 })
 
 // ── Workspace ErrorCodes ──────────────────────────────────────────────────────
