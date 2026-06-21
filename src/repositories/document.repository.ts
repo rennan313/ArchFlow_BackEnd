@@ -69,10 +69,21 @@ export const documentRepository = {
 
   async addVersion(
     documentId: string,
+    workspaceId: string,
     userId: string,
     nextVersion: number,
     version: { fileName: string; mimeType: string; size: number; url: string; storagePath: string },
   ) {
+    // Code review finding (Fase 5.95) — `update()`'s `where` only accepts
+    // unique fields (Prisma/Mongo can't combine `id` with a non-unique
+    // `workspaceId` there), so the workspace check has to happen as a
+    // separate read immediately before the write, same pattern as every
+    // other scoped mutation in this file. The caller (documentService) also
+    // checks via getById first — this re-check closes most of that gap at
+    // the data-access layer itself instead of relying solely on the caller.
+    const owned = await prisma.document.findFirst({ where: { id: documentId, workspaceId }, select: { id: true } })
+    if (!owned) return null
+
     await prisma.document.update({
       where: { id: documentId },
       data: {
@@ -80,7 +91,7 @@ export const documentRepository = {
         versions: { create: { ...version, userId, version: nextVersion } },
       },
     })
-    return prisma.document.findUnique({ where: { id: documentId }, include: VERSION_INCLUDE })
+    return prisma.document.findFirst({ where: { id: documentId, workspaceId }, include: VERSION_INCLUDE })
   },
 
   delete(id: string, workspaceId: string) {

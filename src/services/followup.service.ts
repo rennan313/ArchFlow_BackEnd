@@ -1,13 +1,15 @@
 import { followUpRepository } from "@/repositories/followup.repository"
-import { opportunityRepository } from "@/repositories/opportunity.repository"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
 import type { CreateFollowUpInput, UpdateFollowUpInput } from "@/validations/followup"
 
 export const followUpService = {
+  // Code review finding (Fase 5.95) — this used to throw OPPORTUNITY_NOT_FOUND
+  // (404) ad hoc while create() below threw CROSS_TENANT_REFERENCE (403) for
+  // the exact same "opportunityId not in this workspace" condition. Routed
+  // through the same guard so both endpoints agree on one error/status code.
   async listByOpportunity(opportunityId: string, workspaceId: string) {
-    const opp = await opportunityRepository.findById(opportunityId, workspaceId)
-    if (!opp) throw new AppError(ErrorCode.OPPORTUNITY_NOT_FOUND)
+    await assertWorkspaceReferences(workspaceId, { opportunityId })
     return followUpRepository.findByOpportunity(opportunityId, workspaceId)
   },
 

@@ -36,3 +36,28 @@ describe("followUpService.create", () => {
     expect(followUpRepository.create).not.toHaveBeenCalled()
   })
 })
+
+describe("followUpService.listByOpportunity", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("returns the follow-ups when the opportunityId belongs to the workspace", async () => {
+    vi.mocked(opportunityRepository.findById).mockResolvedValue({ id: "opp-1" } as never)
+    vi.mocked(followUpRepository.findByOpportunity).mockResolvedValue([{ id: "fu-1" }] as never)
+
+    const result = await followUpService.listByOpportunity("opp-1", "workspace-1")
+
+    expect(result).toEqual([{ id: "fu-1" }])
+  })
+
+  // Code review finding (Fase 5.95) — this used to throw OPPORTUNITY_NOT_FOUND
+  // (404) via an ad-hoc check while create() threw CROSS_TENANT_REFERENCE (403)
+  // for the same condition. Both now go through the same guard.
+  it("rejects with CROSS_TENANT_REFERENCE when opportunityId belongs to a different workspace", async () => {
+    vi.mocked(opportunityRepository.findById).mockResolvedValue(null)
+
+    await expect(
+      followUpService.listByOpportunity("opp-from-workspace-A", "workspace-B"),
+    ).rejects.toMatchObject({ code: ErrorCode.CROSS_TENANT_REFERENCE })
+    expect(followUpRepository.findByOpportunity).not.toHaveBeenCalled()
+  })
+})

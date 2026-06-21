@@ -69,12 +69,15 @@ export const documentService = {
     }
 
     const uploaded = await storageService.uploadDocument(workspaceId, file, isImage)
-    return documentRepository.addVersion(
+    const updated  = await documentRepository.addVersion(
       id,
+      workspaceId,
       userId,
       document.currentVersion + 1,
       { fileName: file.name, mimeType: file.type || "application/octet-stream", size: file.size, url: uploaded.url, storagePath: uploaded.storagePath },
     )
+    if (!updated) throw new AppError(ErrorCode.DOCUMENT_NOT_FOUND)
+    return updated
   },
 
   async delete(id: string, workspaceId: string) {
