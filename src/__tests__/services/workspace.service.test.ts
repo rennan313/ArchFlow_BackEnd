@@ -8,9 +8,16 @@ vi.mock("@/lib/prisma", () => ({
     user:            { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   },
 }))
+vi.mock("@/services/automation.service", () => ({
+  automationService: { ensureDefaults: vi.fn().mockResolvedValue(undefined) },
+}))
+vi.mock("@/services/subscription.service", () => ({
+  subscriptionService: { createTrialSubscription: vi.fn().mockResolvedValue({ id: "sub-1", status: "TRIAL" }) },
+}))
 
 import { workspaceService } from "@/services/workspace.service"
 import { prisma } from "@/lib/prisma"
+import { subscriptionService } from "@/services/subscription.service"
 
 const mockWorkspace = {
   id:              "ws-1",
@@ -65,6 +72,18 @@ describe("workspaceService.createForUser", () => {
       where: { id: "user-1" },
       data:  { workspaceId: mockWorkspace.id, workspaceRole: "OWNER" },
     })
+  })
+
+  // No free tier — every new workspace must start with an explicit trial,
+  // created eagerly here rather than lazily on first limit check.
+  it("creates a trial subscription for the new workspace", async () => {
+    vi.mocked(prisma.workspace.findUnique).mockResolvedValue(null)
+    vi.mocked(prisma.workspace.create).mockResolvedValue(mockWorkspace)
+    vi.mocked(prisma.user.update).mockResolvedValue({ id: "user-1" } as never)
+
+    await workspaceService.createForUser("user-1", "Test User")
+
+    expect(subscriptionService.createTrialSubscription).toHaveBeenCalledWith(mockWorkspace.id)
   })
 
   it("generates unique slug by appending counter on collision", async () => {

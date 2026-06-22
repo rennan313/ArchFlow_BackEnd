@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server"
-import { withWorkspace, type WithWorkspaceHandler, type RouteHandler } from "./auth"
+import { withWorkspace, withWorkspaceNoBillingGate, type WithWorkspaceHandler, type RouteHandler } from "./auth"
 import { forbidden } from "@/lib/response"
 import type { JwtPayload } from "@/lib/jwt"
 
@@ -38,6 +38,8 @@ const PERMISSIONS: Record<string, string[]> = {
     "update:branding",
     "update:workspace", "invite:users", "remove:users", "change-role:users",
     "manage:briefings",
+    "create:documents", "update:documents", "delete:documents",
+    "update:tasks", "manage:automations",
     // NOT billing:manage — billing stays OWNER-only.
   ],
 
@@ -49,15 +51,21 @@ const PERMISSIONS: Record<string, string[]> = {
     "create:opportunities", "update:opportunities", "delete:opportunities",
     "create:meetings", "update:meetings", "delete:meetings",
     "manage:briefings",
-    // No workspace/branding/billing administration.
+    "create:documents", "update:documents", "delete:documents",
+    "update:tasks",
+    // No workspace/branding/billing administration, no manage:automations
+    // (toggling automations on/off is OWNER/ADMIN-only, same tier as billing).
   ],
 
   DESIGNER: [
     "read:*",
     "upload:media",
     "manage:moodboards",
+    "create:documents", "update:documents",
+    "update:tasks",
     // update:projects is intentionally absent here — DESIGNER may only edit
-    // projects they created, enforced via requirePermissionOrOwner().
+    // projects they created, enforced via requirePermissionOrOwner(). Same
+    // reasoning applies to documents: no delete:documents for DESIGNER.
   ],
 
   ASSISTANT: [
@@ -67,6 +75,8 @@ const PERMISSIONS: Record<string, string[]> = {
     "create:opportunities", "update:opportunities",
     "create:meetings", "update:meetings",
     "manage:briefings",
+    "create:documents", "update:documents",
+    "update:tasks",
     // No delete, no approve, no admin, no billing.
   ],
 
@@ -92,6 +102,22 @@ export function hasPermission(role: string, permission: string): boolean {
 export function requireWorkspaceRole(...roles: string[]) {
   return (handler: WithWorkspaceHandler): RouteHandler => {
     return withWorkspace(async (req: NextRequest, ctx, user: JwtPayload, workspaceId: string) => {
+      const userRole = user.workspaceRole ?? "VIEWER"
+      const allowed  = roles.some((r) => ROLE_RANK[userRole] >= ROLE_RANK[r])
+      if (!allowed) return forbidden(`Role ${userRole} cannot perform this action. Requires: ${roles.join(" | ")}`)
+      return handler(req, ctx, user, workspaceId)
+    })
+  }
+}
+
+/** Identical to requireWorkspaceRole, but built on withWorkspaceNoBillingGate
+ *  instead of withWorkspace — used exclusively by PATCH /api/subscription/upgrade,
+ *  the one write that must stay reachable even when the workspace is
+ *  read-only (it's how the OWNER pays to unlock it). Do not reuse this for
+ *  any other route. */
+export function requireWorkspaceRoleNoBillingGate(...roles: string[]) {
+  return (handler: WithWorkspaceHandler): RouteHandler => {
+    return withWorkspaceNoBillingGate(async (req: NextRequest, ctx, user: JwtPayload, workspaceId: string) => {
       const userRole = user.workspaceRole ?? "VIEWER"
       const allowed  = roles.some((r) => ROLE_RANK[userRole] >= ROLE_RANK[r])
       if (!allowed) return forbidden(`Role ${userRole} cannot perform this action. Requires: ${roles.join(" | ")}`)

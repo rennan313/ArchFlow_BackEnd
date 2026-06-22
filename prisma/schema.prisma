@@ -60,12 +60,57 @@ enum MeetingType {
 
 enum OpportunityStage {
   LEAD
+  FIRST_CONTACT
   BRIEFING
-  PROPOSAL_DRAFT
+  PROPOSAL_DRAFT // legacy stage, kept for existing data — Kanban groups it visually under BRIEFING
   PROPOSAL_SENT
   NEGOTIATION
   APPROVED
   LOST
+}
+
+// ─── Fase 5: Automações ─────────────────────────────────────────────────────
+// Pure business-rule automations — no LLM/AI involved anywhere in this domain.
+
+enum RecordSource {
+  MANUAL
+  AUTOMATION
+}
+
+enum AutomationKey {
+  AUTO_CREATE_PROJECT_ON_APPROVED
+  TASK_PRELIMINARY_DESIGN
+  TASK_EXECUTIVE_DESIGN
+  TASK_COMPATIBILIZATION
+  TASK_APPROVAL
+  PROJECT_OVERDUE_ALERT
+  PROPOSAL_STALE_FOLLOWUP
+  MEETING_AGENDA_SYNC
+  CLIENT_TIMELINE_INIT
+  POST_DELIVERY_FOLLOWUP
+}
+
+enum AutomationResultType {
+  PROJECT_CREATED
+  TASK_CREATED
+  FOLLOWUP_CREATED
+  ALERT_GENERATED
+  TIMELINE_INITIALIZED
+  NOOP
+}
+
+enum TaskStatus {
+  PENDING
+  DONE
+}
+
+enum ProjectPhase {
+  BRIEFING
+  PRELIMINARY_DESIGN
+  EXECUTIVE_DESIGN
+  COMPATIBILIZATION
+  APPROVAL
+  DELIVERY
 }
 
 enum PricingMethod {
@@ -100,6 +145,14 @@ enum PrimaryGoal {
   BRIEFING_ORGANIZATION
   PRICING_WORKFLOW
   VISUAL_REFERENCES
+}
+
+enum DocumentType {
+  PDF
+  JPG
+  PNG
+  DWG
+  DOCX
 }
 
 enum MediaType {
@@ -159,7 +212,7 @@ enum Environment {
 }
 
 enum SubscriptionStatus {
-  TRIALING
+  TRIAL
   ACTIVE
   PAST_DUE
   CANCELED
@@ -174,11 +227,11 @@ enum BillingCycle {
 // ─── Core Domain Models ───────────────────────────────────────────────────────
 
 model Workspace {
-  id        String  @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  slug      String  @unique
-  plan      Plan    @default(STARTER)
-  active    Boolean @default(true)
+  id     String  @id @default(auto()) @map("_id") @db.ObjectId
+  name   String
+  slug   String  @unique
+  plan   Plan    @default(STARTER)
+  active Boolean @default(true)
 
   // Dashboard widget order/visibility, shared by the whole workspace.
   // Stored as a JSON string — see generatedProposalJson for the same
@@ -189,15 +242,21 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users         User[]
-  invites       WorkspaceInvite[]
-  clients       Client[]
-  opportunities Opportunity[]
-  proposals     Proposal[]
-  projects      Project[]
-  meetings      Meeting[]
-  branding      OfficeBranding?
-  subscription  Subscription?
+  users           User[]
+  invites         WorkspaceInvite[]
+  clients         Client[]
+  opportunities   Opportunity[]
+  proposals       Proposal[]
+  projects        Project[]
+  meetings        Meeting[]
+  automations     Automation[]
+  automationRuns  AutomationRun[]
+  tasks           Task[]
+  followUps       FollowUp[]
+  branding        OfficeBranding?
+  subscription    Subscription?
+  documents       Document[]
+  documentFolders DocumentFolder[]
 
   @@map("workspaces")
 }
@@ -220,17 +279,17 @@ model WorkspaceInvite {
 }
 
 model User {
-  id         String  @id @default(auto()) @map("_id") @db.ObjectId
-  supabaseId String?  // Supabase auth.users UUID — null for pre-migration users
-                      // IMPORTANT: uniqueness enforced by a MongoDB sparse index (see docs/indexes.md)
-                      // Prisma's @unique creates a non-sparse index that rejects multiple nulls.
-  name      String
-  email     String    @unique
-  password  String?   // Transitional: kept during Phase 1 for NextAuth credentials; removed in Phase 2
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  supabaseId    String? // Supabase auth.users UUID — null for pre-migration users
+  // IMPORTANT: uniqueness enforced by a MongoDB sparse index (see docs/indexes.md)
+  // Prisma's @unique creates a non-sparse index that rejects multiple nulls.
+  name          String
+  email         String        @unique
+  password      String? // Transitional: kept during Phase 1 for NextAuth credentials; removed in Phase 2
   emailVerified DateTime? // null = unverified; set when the user confirms their email
-  image     String?
-  provider  String    @default("credentials")
-  googleId  String?
+  image         String?
+  provider      String        @default("credentials")
+  googleId      String?
   role          Role          @default(USER)
   workspaceId   String?       @db.ObjectId
   workspaceRole WorkspaceRole @default(OWNER)
@@ -246,14 +305,18 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  proposals     Proposal[]
-  clients       Client[]
-  opportunities Opportunity[]
-  projects      Project[]
-  meetings      Meeting[]
-  followUps     FollowUp[]
-  branding      OfficeBranding?
-  workspace     Workspace?      @relation(fields: [workspaceId], references: [id])
+  proposals        Proposal[]
+  clients          Client[]
+  opportunities    Opportunity[]
+  projects         Project[]
+  meetings         Meeting[]
+  followUps        FollowUp[]
+  assignedTasks    Task[]
+  branding         OfficeBranding?
+  workspace        Workspace?        @relation(fields: [workspaceId], references: [id])
+  documents        Document[]
+  documentVersions DocumentVersion[]
+  documentFolders  DocumentFolder[]
 
   @@index([workspaceId])
   @@map("users")
@@ -303,8 +366,8 @@ model OfficeBranding {
 }
 
 model Client {
-  id          String @id @default(auto()) @map("_id") @db.ObjectId
-  userId      String @db.ObjectId
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @db.ObjectId
   workspaceId String? @db.ObjectId
 
   // Basic information
@@ -326,17 +389,19 @@ model Client {
   meetingStatus  MeetingStatus @default(NOT_SCHEDULED)
   meetingType    MeetingType?
   meetingDate    DateTime?
-  meetingSummary String?        // long text — AI input source
+  meetingSummary String? // long text — AI input source
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace     Workspace?    @relation(fields: [workspaceId], references: [id])
-  opportunities Opportunity[]
-  proposals     Proposal[]
-  projects      Project[]
-  meetings      Meeting[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace       Workspace?       @relation(fields: [workspaceId], references: [id])
+  opportunities   Opportunity[]
+  proposals       Proposal[]
+  projects        Project[]
+  meetings        Meeting[]
+  documents       Document[]
+  documentFolders DocumentFolder[]
 
   @@index([userId])
   @@index([workspaceId])
@@ -372,6 +437,7 @@ model Opportunity {
   briefing  Briefing?
   proposals Proposal[]
   followUps FollowUp[]
+  projects  Project[] // app-enforced "at most one" — see Project.opportunityId comment
 
   @@index([userId, stage])
   @@index([workspaceId, stage])
@@ -402,23 +468,41 @@ model Briefing {
 }
 
 model FollowUp {
-  id            String @id @default(auto()) @map("_id") @db.ObjectId
-  opportunityId String @db.ObjectId
-  userId        String @db.ObjectId
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  // Direct workspace scoping — needed now that a FollowUp can exist without an
+  // Opportunity (projectId/clientId-only links have no relation to scope through).
+  // Optional to match the same nullable-workspaceId convention used by every
+  // other domain model here (Opportunity, Proposal, Project, Client, Meeting);
+  // backfilled for existing rows via scripts/backfill-followup-workspace.ts.
+  workspaceId   String? @db.ObjectId
+  opportunityId String? @db.ObjectId
+  userId        String  @db.ObjectId
 
+  // Alternate links for follow-ups not tied to an Opportunity (e.g. automation
+  // 07/10 below) — same plain-scalar pattern as Meeting.projectId/proposalId,
+  // no @relation wired on purpose (Mongo + Prisma, no enforced referential integrity).
+  projectId String? @db.ObjectId
+  clientId  String? @db.ObjectId
+
+  title           String?
   nextContactDate DateTime
   notes           String?
-  completed       Boolean  @default(false)
+  completed       Boolean      @default(false)
+  source          RecordSource @default(MANUAL)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace?   @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId])
   @@index([opportunityId])
-  @@index([userId, completed])
-  @@index([userId, nextContactDate])
+  @@index([projectId])
+  @@index([clientId])
+  @@index([workspaceId, completed])
+  @@index([workspaceId, nextContactDate])
   @@map("follow_ups")
 }
 
@@ -479,7 +563,7 @@ model Proposal {
   workspace     Workspace?              @relation(fields: [workspaceId], references: [id])
   opportunity   Opportunity?            @relation(fields: [opportunityId], references: [id])
   client        Client?                 @relation(fields: [clientId], references: [id])
-  project       Project?
+  projects      Project[] // app-enforced "at most one" — see Project.proposalId comment
   media         ProposalMedia[]
   statusHistory ProposalStatusHistory[]
   versions      ProposalVersion[]
@@ -488,6 +572,7 @@ model Proposal {
   @@index([workspaceId, status])
   @@index([userId, createdAt])
   @@index([opportunityId])
+  @@index([clientId])
   @@map("proposals")
 }
 
@@ -526,6 +611,76 @@ model ProposalMedia {
   @@map("proposal_media")
 }
 
+model DocumentFolder {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  workspaceId String?  @db.ObjectId
+  clientId    String?  @db.ObjectId
+  projectId   String?  @db.ObjectId
+  name        String
+  createdAt   DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  client    Client?    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@index([workspaceId])
+  @@index([clientId])
+  @@index([projectId])
+  @@map("document_folders")
+}
+
+model Document {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String       @db.ObjectId
+  workspaceId    String?      @db.ObjectId
+  clientId       String?      @db.ObjectId
+  projectId      String?      @db.ObjectId
+  folderId       String?      @db.ObjectId
+  name           String
+  type           DocumentType
+  currentVersion Int          @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace?        @relation(fields: [workspaceId], references: [id])
+  client    Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project   Project?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder    DocumentFolder?   @relation(fields: [folderId], references: [id])
+  versions  DocumentVersion[]
+
+  @@index([workspaceId])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([folderId])
+  @@index([workspaceId, createdAt])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  documentId  String   @db.ObjectId
+  userId      String   @db.ObjectId
+  version     Int
+  fileName    String
+  mimeType    String
+  size        Int
+  url         String
+  storagePath String
+  createdAt   DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([documentId, version])
+  @@map("document_versions")
+}
+
 model ProposalStatusHistory {
   id         String         @id @default(auto()) @map("_id") @db.ObjectId
   proposalId String         @db.ObjectId
@@ -548,8 +703,15 @@ model Project {
   workspaceId String? @db.ObjectId
 
   // Relationships
-  clientId   String  @db.ObjectId
-  proposalId String? @unique @db.ObjectId  // one proposal → at most one project
+  // NOT @unique: MongoDB's unique index on an optional field is non-sparse —
+  // every doc missing the field is indexed as null, so a second project with
+  // no proposalId/opportunityId would violate the constraint and crash every
+  // manual "create project" after the first. One-project-per-source is
+  // enforced at the application layer instead (see projectRepository.findByOpportunityId
+  // and the pre-create check in opportunity.service.ts).
+  clientId      String  @db.ObjectId
+  proposalId    String? @db.ObjectId // one proposal → at most one project (app-enforced)
+  opportunityId String? @db.ObjectId // one opportunity → at most one auto-created project (Automação 01 idempotency guard, app-enforced)
 
   // Identity
   name        String
@@ -559,6 +721,7 @@ model Project {
   // Classification
   type   ProjectType
   status ProjectStatus @default(BRIEFING)
+  phase  ProjectPhase  @default(BRIEFING) // AEC pipeline phase for the Kanban board — independent from `status`
 
   // Scope
   squareMeters Float?
@@ -580,16 +743,23 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace? @relation(fields: [workspaceId], references: [id])
-  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  proposal  Proposal?  @relation(fields: [proposalId], references: [id])
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace       Workspace?       @relation(fields: [workspaceId], references: [id])
+  client          Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  proposal        Proposal?        @relation(fields: [proposalId], references: [id])
+  opportunity     Opportunity?     @relation(fields: [opportunityId], references: [id])
+  documents       Document[]
+  documentFolders DocumentFolder[]
+  tasks           Task[]
 
   @@index([userId])
   @@index([workspaceId])
   @@index([userId, status])
   @@index([userId, clientId])
   @@index([userId, createdAt])
+  @@index([workspaceId, phase])
+  @@index([proposalId])
+  @@index([opportunityId])
   @@map("projects")
 }
 
@@ -602,13 +772,13 @@ model Meeting {
   clientId    String  @db.ObjectId
 
   // Core
-  title   String
-  type    MeetingPurpose
-  status  MeetingEntryStatus @default(SCHEDULED)
+  title  String
+  type   MeetingPurpose
+  status MeetingEntryStatus @default(SCHEDULED)
 
   // Schedule
   scheduledAt DateTime
-  duration    Int?      // minutes
+  duration    Int? // minutes
 
   // Location
   location String?
@@ -643,9 +813,78 @@ model Meeting {
   @@index([userId])
   @@index([workspaceId])
   @@index([userId, clientId])
+  @@index([clientId])
   @@index([userId, status])
   @@index([userId, scheduledAt])
   @@map("meetings")
+}
+
+// ─── Automation Domain ────────────────────────────────────────────────────────
+// Fixed, hardcoded business-rule automations (Fase 5) — no AI/LLM involved.
+// `Automation` is the per-workspace on/off toggle + display row; `AutomationRun`
+// is the execution log that feeds the dashboard widget and the "Última
+// Execução"/"Executada Hoje" columns on the Automações screen.
+
+model Automation {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String        @db.ObjectId
+  key         AutomationKey
+  name        String
+  description String
+  trigger     String
+  enabled     Boolean       @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@map("automations")
+}
+
+model AutomationRun {
+  id          String               @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String               @db.ObjectId
+  key         AutomationKey
+  resultType  AutomationResultType
+  entityType  String
+  entityId    String
+  message     String?
+
+  createdAt DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, key, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("automation_runs")
+}
+
+model Task {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId   String         @db.ObjectId
+  projectId     String         @db.ObjectId
+  assigneeId    String         @db.ObjectId
+  title         String
+  status        TaskStatus     @default(PENDING)
+  source        RecordSource   @default(AUTOMATION)
+  // Which per-phase automation (Automações 02-05) created this task, if any —
+  // lets onPhaseChanged() check "was this phase's task already created for this
+  // project?" before inserting, instead of relying on title string matching.
+  automationKey AutomationKey?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee  User      @relation(fields: [assigneeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, projectId])
+  @@index([workspaceId, projectId, automationKey])
+  @@index([assigneeId, status])
+  @@map("tasks")
 }
 
 // ─── Billing ──────────────────────────────────────────────────────────────────
@@ -660,7 +899,7 @@ model Subscription {
   workspaceId String @unique @db.ObjectId
 
   plan         Plan
-  status       SubscriptionStatus @default(TRIALING)
+  status       SubscriptionStatus @default(TRIAL)
   billingCycle BillingCycle       @default(MONTHLY)
 
   // Mercado Pago references — populated once Phase 2 wires up the gateway.
@@ -671,6 +910,7 @@ model Subscription {
   mpCustomerId     String?
   mpSubscriptionId String?
 
+  trialStartedAt     DateTime?
   trialEndsAt        DateTime?
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
@@ -696,7 +936,7 @@ model PaymentEvent {
   type        String // e.g. "payment.created", "subscription.updated"
   rawPayload  String // full JSON of the received webhook body, for audit/replay
   processedAt DateTime?
-  status      String @default("received") // received | processed | failed
+  status      String    @default("received") // received | processed | failed
 
   createdAt DateTime @default(now())
 
@@ -712,7 +952,7 @@ model BillingHistory {
   subscriptionId String @db.ObjectId
 
   amount      Float
-  currency    String  @default("BRL")
+  currency    String    @default("BRL")
   status      String // paid | failed | refunded
   // No @unique here either — same reasoning as Subscription.mpSubscriptionId.
   // Uniqueness comes only from the sparse index in docs/indexes.md.
@@ -802,8 +1042,8 @@ model EmailVerificationToken {
 model RefreshToken {
   id        String    @id @default(auto()) @map("_id") @db.ObjectId
   userId    String    @db.ObjectId
-  tokenHash String    @unique  // sha256(jti) — never store raw jti
-  jti       String    @unique  // UUID embedded in the signed JWT
+  tokenHash String    @unique // sha256(jti) — never store raw jti
+  jti       String    @unique // UUID embedded in the signed JWT
   expiresAt DateTime
   revoked   Boolean   @default(false)
   revokedAt DateTime?

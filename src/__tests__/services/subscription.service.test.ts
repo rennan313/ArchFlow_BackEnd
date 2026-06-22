@@ -64,7 +64,10 @@ describe("subscriptionService.getWorkspacePlan", () => {
 // ── getLimits ─────────────────────────────────────────────────────────────────
 
 describe("subscriptionService.getLimits", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    subRepo.findByWorkspace.mockResolvedValue(null) // no active trial unless a test says otherwise
+  })
 
   it("returns plan name and its limit set", async () => {
     withPlan("STUDIO")
@@ -86,7 +89,10 @@ describe("subscriptionService.getLimits", () => {
 // ── canAddUser ────────────────────────────────────────────────────────────────
 
 describe("subscriptionService.canAddUser", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    subRepo.findByWorkspace.mockResolvedValue(null) // no active trial unless a test says otherwise
+  })
 
   it("allows when plan has unlimited users (STUDIO)", async () => {
     withPlan("STUDIO")
@@ -131,12 +137,31 @@ describe("subscriptionService.canAddUser", () => {
     expect(result.allowed).toBe(false)
     expect(result.plan).toBe("PROFESSIONAL")
   })
+
+  // "Todos os recursos liberados" during the trial — a workspace nominally
+  // on STARTER (max 1 user) gets STUDIO's unlimited-users limit while its
+  // trial is still active.
+  it("allows beyond STARTER's limit while the workspace is in an active trial", async () => {
+    withPlan("STARTER")
+    subRepo.findByWorkspace.mockResolvedValue({
+      status: "TRIAL", trialEndsAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    } as never)
+    user.count.mockResolvedValue(3)
+
+    const result = await subscriptionService.canAddUser("ws-1")
+
+    expect(result.allowed).toBe(true)
+    expect(user.count).not.toHaveBeenCalled() // STUDIO's maxUsers is unlimited, so it short-circuits
+  })
 })
 
 // ── canCreateProposal ─────────────────────────────────────────────────────────
 
 describe("subscriptionService.canCreateProposal", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    subRepo.findByWorkspace.mockResolvedValue(null) // no active trial unless a test says otherwise
+  })
 
   it("allows when plan has unlimited proposals (STUDIO)", async () => {
     withPlan("STUDIO")
@@ -180,7 +205,10 @@ describe("subscriptionService.canCreateProposal", () => {
 // ── canUploadFile ─────────────────────────────────────────────────────────────
 
 describe("subscriptionService.canUploadFile", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    subRepo.findByWorkspace.mockResolvedValue(null) // no active trial unless a test says otherwise
+  })
 
   it("allows when plan has unlimited storage (STUDIO)", async () => {
     withPlan("STUDIO")
@@ -216,7 +244,10 @@ describe("subscriptionService.canUploadFile", () => {
 // ── canUseFeature ─────────────────────────────────────────────────────────────
 
 describe("subscriptionService.canUseFeature", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    subRepo.findByWorkspace.mockResolvedValue(null) // no active trial unless a test says otherwise
+  })
 
   it("allows customBranding on PROFESSIONAL plan", async () => {
     withPlan("PROFESSIONAL")
@@ -317,7 +348,7 @@ describe("subscriptionService.getUsageSummary", () => {
 describe("subscriptionService.createTrialSubscription", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("creates a 14-day trial defaulting to STARTER", async () => {
+  it("creates a 30-day trial defaulting to STARTER", async () => {
     subRepo.findByWorkspace.mockResolvedValue(null)
     subRepo.create.mockResolvedValue({ id: "sub-1" } as never)
 
@@ -327,12 +358,13 @@ describe("subscriptionService.createTrialSubscription", () => {
     const data = subRepo.create.mock.calls[0]![0]
     expect(data.workspaceId).toBe("ws-1")
     expect(data.plan).toBe("STARTER")
-    expect(data.status).toBe("TRIALING")
+    expect(data.status).toBe("TRIAL")
+    expect(data.trialStartedAt).toBeInstanceOf(Date)
 
     const start = data.currentPeriodStart as Date
     const end   = data.trialEndsAt as Date
     const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    expect(diffDays).toBeCloseTo(14, 1)
+    expect(diffDays).toBeCloseTo(30, 1)
   })
 
   it("accepts an explicit non-STARTER plan", async () => {
@@ -409,6 +441,17 @@ describe("subscriptionService.changePlan", () => {
     expect(subscriptionUpdateCall?.data).toMatchObject({ billingCycle: "ANNUAL" })
   })
 
+  // No free tier — paying is the only way out of a read-only workspace, and
+  // it must work starting from EXPIRED, not just from TRIAL/ACTIVE.
+  it("reactivates a workspace from EXPIRED to ACTIVE on the new plan", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({ id: "sub-1", status: "EXPIRED", billingCycle: "MONTHLY" } as never)
+    tx.mockResolvedValue([{}, { id: "sub-1", plan: "STUDIO", status: "ACTIVE" }] as never)
+
+    const result = await subscriptionService.changePlan("ws-1", "STUDIO")
+
+    expect(result).toMatchObject({ plan: "STUDIO", status: "ACTIVE" })
+  })
+
   it("throws SUBSCRIPTION_NOT_FOUND when the workspace has no subscription yet", async () => {
     subRepo.findByWorkspace.mockResolvedValue(null)
 
@@ -460,23 +503,23 @@ describe("subscriptionService.reactivateSubscription", () => {
 // ── Lifecycle: isTrialExpired / expireTrialIfNeeded ───────────────────────────
 
 describe("subscriptionService.isTrialExpired", () => {
-  it("is true for a TRIALING subscription whose trialEndsAt is in the past", () => {
-    const sub = { status: "TRIALING", trialEndsAt: new Date(Date.now() - 1000) }
+  it("is true for a TRIAL subscription whose trialEndsAt is in the past", () => {
+    const sub = { status: "TRIAL", trialEndsAt: new Date(Date.now() - 1000) }
     expect(subscriptionService.isTrialExpired(sub as never)).toBe(true)
   })
 
-  it("is false for a TRIALING subscription whose trialEndsAt is in the future", () => {
-    const sub = { status: "TRIALING", trialEndsAt: new Date(Date.now() + 1000 * 60 * 60 * 24) }
+  it("is false for a TRIAL subscription whose trialEndsAt is in the future", () => {
+    const sub = { status: "TRIAL", trialEndsAt: new Date(Date.now() + 1000 * 60 * 60 * 24) }
     expect(subscriptionService.isTrialExpired(sub as never)).toBe(false)
   })
 
-  it("is false for a non-TRIALING subscription regardless of trialEndsAt", () => {
+  it("is false for a non-TRIAL subscription regardless of trialEndsAt", () => {
     const sub = { status: "ACTIVE", trialEndsAt: new Date(Date.now() - 1000) }
     expect(subscriptionService.isTrialExpired(sub as never)).toBe(false)
   })
 
   it("is false when trialEndsAt was never set", () => {
-    const sub = { status: "TRIALING", trialEndsAt: null }
+    const sub = { status: "TRIAL", trialEndsAt: null }
     expect(subscriptionService.isTrialExpired(sub as never)).toBe(false)
   })
 })
@@ -484,32 +527,141 @@ describe("subscriptionService.isTrialExpired", () => {
 describe("subscriptionService.expireTrialIfNeeded", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("downgrades an expired trial to STARTER/ACTIVE", async () => {
+  // No free tier — a lapsed trial does NOT fall back to a usable plan
+  // anymore. It moves to EXPIRED (read-only via canWrite), and
+  // Workspace.plan is left untouched so changePlan() has the right plan to
+  // reactivate into once the OWNER pays.
+  it("marks an expired trial as EXPIRED without touching the plan", async () => {
     subRepo.findByWorkspace.mockResolvedValue({
-      id: "sub-1", status: "TRIALING", trialEndsAt: new Date(Date.now() - 1000),
+      id: "sub-1", status: "TRIAL", trialEndsAt: new Date(Date.now() - 1000),
     } as never)
-    tx.mockResolvedValue([{}, { id: "sub-1", plan: "STARTER", status: "ACTIVE" }] as never)
+    subRepo.update.mockResolvedValue({ id: "sub-1", status: "EXPIRED" } as never)
 
     const result = await subscriptionService.expireTrialIfNeeded("ws-1")
 
-    expect(tx).toHaveBeenCalledTimes(1)
-    expect(result).toMatchObject({ plan: "STARTER", status: "ACTIVE" })
+    expect(subRepo.update).toHaveBeenCalledWith("ws-1", { status: "EXPIRED" })
+    expect(tx).not.toHaveBeenCalled()
+    expect(ws.update).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ status: "EXPIRED" })
   })
 
   it("does nothing when the trial hasn't expired yet", async () => {
-    const sub = { id: "sub-1", status: "TRIALING", trialEndsAt: new Date(Date.now() + 100000) }
+    const sub = { id: "sub-1", status: "TRIAL", trialEndsAt: new Date(Date.now() + 100000) }
     subRepo.findByWorkspace.mockResolvedValue(sub as never)
 
     const result = await subscriptionService.expireTrialIfNeeded("ws-1")
 
-    expect(tx).not.toHaveBeenCalled()
+    expect(subRepo.update).not.toHaveBeenCalled()
     expect(result).toBe(sub)
   })
 
-  it("does nothing when the subscription doesn't exist", async () => {
+  // Self-heals instead of returning null — every workspace is supposed to
+  // have a Subscription (eager creation in workspaceService.createForUser);
+  // a missing row is treated as legacy data, not "no trial needed".
+  it("creates a fresh trial subscription when none exists, instead of returning null", async () => {
     subRepo.findByWorkspace.mockResolvedValue(null)
+    subRepo.create.mockResolvedValue({ id: "sub-new", status: "TRIAL" } as never)
+
     const result = await subscriptionService.expireTrialIfNeeded("ws-1")
-    expect(result).toBeNull()
-    expect(tx).not.toHaveBeenCalled()
+
+    expect(subRepo.create).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ id: "sub-new", status: "TRIAL" })
+  })
+})
+
+// ── getEffectiveLimits ───────────────────────────────────────────────────────
+
+describe("subscriptionService.getEffectiveLimits", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("returns STUDIO limits during an active trial, even on a nominally STARTER workspace", async () => {
+    withPlan("STARTER")
+    subRepo.findByWorkspace.mockResolvedValue({
+      status: "TRIAL", trialEndsAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    } as never)
+
+    const { plan, limits, inActiveTrial } = await subscriptionService.getEffectiveLimits("ws-1")
+
+    expect(plan).toBe("STARTER")          // nominal plan unchanged
+    expect(inActiveTrial).toBe(true)
+    expect(limits.maxUsers).toBe(-1)      // STUDIO's limits, not STARTER's
+  })
+
+  it("returns the nominal plan's limits once the trial has expired", async () => {
+    withPlan("STARTER")
+    subRepo.findByWorkspace.mockResolvedValue({
+      status: "TRIAL", trialEndsAt: new Date(Date.now() - 1000),
+    } as never)
+    subRepo.update.mockResolvedValue({ status: "EXPIRED" } as never)
+
+    const { limits, inActiveTrial } = await subscriptionService.getEffectiveLimits("ws-1")
+
+    expect(inActiveTrial).toBe(false)
+    expect(limits.maxUsers).toBe(1) // back to STARTER
+  })
+
+  it("returns the nominal plan's limits for an ACTIVE paid subscription", async () => {
+    withPlan("PROFESSIONAL")
+    subRepo.findByWorkspace.mockResolvedValue({ status: "ACTIVE" } as never)
+
+    const { limits, inActiveTrial } = await subscriptionService.getEffectiveLimits("ws-1")
+
+    expect(inActiveTrial).toBe(false)
+    expect(limits.maxUsers).toBe(5) // PROFESSIONAL's limit
+  })
+})
+
+// ── canWrite ──────────────────────────────────────────────────────────────────
+
+describe("subscriptionService.canWrite", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("is true for an ACTIVE subscription", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({ status: "ACTIVE" } as never)
+    expect(await subscriptionService.canWrite("ws-1")).toBe(true)
+  })
+
+  it("is true for a TRIAL subscription whose trialEndsAt is in the future", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({
+      status: "TRIAL", trialEndsAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    } as never)
+    expect(await subscriptionService.canWrite("ws-1")).toBe(true)
+  })
+
+  it("is false for a TRIAL subscription whose trialEndsAt has passed", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({
+      status: "TRIAL", trialEndsAt: new Date(Date.now() - 1000),
+    } as never)
+    subRepo.update.mockResolvedValue({ status: "EXPIRED" } as never)
+    expect(await subscriptionService.canWrite("ws-1")).toBe(false)
+  })
+
+  it.each(["EXPIRED", "CANCELED", "PAST_DUE"])("is false for status=%s", async (status) => {
+    subRepo.findByWorkspace.mockResolvedValue({ status } as never)
+    expect(await subscriptionService.canWrite("ws-1")).toBe(false)
+  })
+})
+
+// ── daysLeftInTrial ───────────────────────────────────────────────────────────
+
+describe("subscriptionService.daysLeftInTrial", () => {
+  it("returns the number of whole days remaining, rounded up", () => {
+    const sub = { status: "TRIAL", trialEndsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 6.2) }
+    expect(subscriptionService.daysLeftInTrial(sub as never)).toBe(7)
+  })
+
+  it("returns 0 (not negative) once trialEndsAt has just passed", () => {
+    const sub = { status: "TRIAL", trialEndsAt: new Date(Date.now() - 1000) }
+    expect(subscriptionService.daysLeftInTrial(sub as never)).toBe(0)
+  })
+
+  it("returns null when status is not TRIAL", () => {
+    const sub = { status: "ACTIVE", trialEndsAt: new Date(Date.now() + 100000) }
+    expect(subscriptionService.daysLeftInTrial(sub as never)).toBeNull()
+  })
+
+  it("returns null when trialEndsAt was never set", () => {
+    const sub = { status: "TRIAL", trialEndsAt: null }
+    expect(subscriptionService.daysLeftInTrial(sub as never)).toBeNull()
   })
 })

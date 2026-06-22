@@ -7,7 +7,7 @@
  *
  * Rule: workspaces already on a paid plan (anything above STARTER) get
  * status=ACTIVE with a full current period starting now. Workspaces on
- * STARTER get status=TRIALING with a 14-day trial — they're being granted a
+ * STARTER get status=TRIAL with a 14-day trial — they're being granted a
  * trial retroactively rather than assumed to have exhausted one, since no
  * trial concept existed before this migration.
  *
@@ -52,7 +52,7 @@ async function main() {
     else active++
 
     console.log(
-      `  ${ws.id}  "${ws.name}"  plan=${ws.plan}  -> ${isStarter ? "TRIALING (14d trial)" : "ACTIVE"}`,
+      `  ${ws.id}  "${ws.name}"  plan=${ws.plan}  -> ${isStarter ? "TRIAL (14d trial)" : "ACTIVE"}`,
     )
 
     if (!EXECUTE) continue
@@ -65,7 +65,7 @@ async function main() {
       data: {
         workspaceId:        ws.id,
         plan:               ws.plan,
-        status:             isStarter ? "TRIALING" : "ACTIVE",
+        status:             isStarter ? "TRIAL" : "ACTIVE",
         billingCycle:       "MONTHLY",
         trialEndsAt,
         currentPeriodStart: now,
@@ -74,7 +74,7 @@ async function main() {
     })
   }
 
-  console.log(`\n— Plan: ${trialing} TRIALING, ${active} ACTIVE`)
+  console.log(`\n— Plan: ${trialing} TRIAL, ${active} ACTIVE`)
   console.log(EXECUTE ? "\nDone — Subscriptions created." : "\nDry run only — re-run with --execute to write.")
 }
 

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma"
 import { randomBytes } from "crypto"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { automationService } from "@/services/automation.service"
+import { subscriptionService } from "@/services/subscription.service"
 import type { WorkspaceRole } from "@prisma/client"
 
 function slugify(name: string): string {
@@ -37,6 +39,18 @@ export const workspaceService = {
       where: { id: userId },
       data:  { workspaceId: workspace.id, workspaceRole: "OWNER" },
     })
+
+    // Materialize Automation rows immediately so the fail-open default in
+    // automationService.isEnabled() (used before the admin ever opens the
+    // Automações screen) never has a window where it's silently relying on
+    // the in-memory default instead of the workspace's actual saved config.
+    await automationService.ensureDefaults(workspace.id)
+
+    // No free tier — every workspace must start with an explicit 30-day
+    // trial, created eagerly here rather than lazily on first limit check
+    // (subscriptionService.ensureSubscription remains a safety net for any
+    // legacy workspace that predates this).
+    await subscriptionService.createTrialSubscription(workspace.id)
 
     return workspace.id
   },

@@ -12,7 +12,7 @@ export interface LimitCheckResult {
   plan:       PlanName
 }
 
-const TRIAL_DURATION_DAYS = 14
+const TRIAL_DURATION_DAYS = 30
 
 export const subscriptionService = {
   async getWorkspacePlan(workspaceId: string): Promise<PlanName> {
@@ -23,17 +23,31 @@ export const subscriptionService = {
     return (ws?.plan ?? "STARTER") as PlanName
   },
 
+  /** Resolves which PLAN_LIMITS apply right now. A workspace in an active
+   *  trial gets PLAN_LIMITS.STUDIO regardless of its nominal Workspace.plan —
+   *  "all features unlocked" during the 30-day trial, with no free tier to
+   *  fall back to once it lapses. Routes through expireTrialIfNeeded so a
+   *  trial whose date has passed is treated as expired even before the lazy
+   *  status flip has physically happened. */
+  async getEffectiveLimits(workspaceId: string) {
+    const [plan, sub] = await Promise.all([
+      this.getWorkspacePlan(workspaceId),
+      this.expireTrialIfNeeded(workspaceId),
+    ])
+    const inActiveTrial = sub?.status === "TRIAL"
+    const limits = inActiveTrial ? PLAN_LIMITS.STUDIO : PLAN_LIMITS[plan]
+    return { plan, limits, inActiveTrial }
+  },
+
   async getLimits(workspaceId: string) {
-    const plan   = await this.getWorkspacePlan(workspaceId)
-    const limits = PLAN_LIMITS[plan]
+    const { plan, limits } = await this.getEffectiveLimits(workspaceId)
     return { plan, limits }
   },
 
   // ─── Individual checks ─────────────────────────────────────────────────────
 
   async canAddUser(workspaceId: string): Promise<LimitCheckResult> {
-    const plan   = await this.getWorkspacePlan(workspaceId)
-    const limits = PLAN_LIMITS[plan]
+    const { plan, limits } = await this.getEffectiveLimits(workspaceId)
 
     if (unlimited(limits.maxUsers)) return { allowed: true, plan }
 
@@ -52,8 +66,7 @@ export const subscriptionService = {
   },
 
   async canCreateProposal(workspaceId: string): Promise<LimitCheckResult> {
-    const plan   = await this.getWorkspacePlan(workspaceId)
-    const limits = PLAN_LIMITS[plan]
+    const { plan, limits } = await this.getEffectiveLimits(workspaceId)
 
     if (unlimited(limits.maxProposalsPerMonth)) return { allowed: true, plan }
 
@@ -81,8 +94,7 @@ export const subscriptionService = {
   },
 
   async canUploadFile(workspaceId: string, fileSizeMb: number): Promise<LimitCheckResult> {
-    const plan   = await this.getWorkspacePlan(workspaceId)
-    const limits = PLAN_LIMITS[plan]
+    const { plan, limits } = await this.getEffectiveLimits(workspaceId)
 
     if (unlimited(limits.maxStorageMb)) return { allowed: true, plan }
 
@@ -103,8 +115,7 @@ export const subscriptionService = {
   },
 
   async canUseFeature(workspaceId: string, feature: keyof typeof PLAN_LIMITS["STARTER"]): Promise<LimitCheckResult> {
-    const plan   = await this.getWorkspacePlan(workspaceId)
-    const limits = PLAN_LIMITS[plan]
+    const { plan, limits } = await this.getEffectiveLimits(workspaceId)
     const allowed = !!limits[feature]
 
     return {
@@ -117,18 +128,25 @@ export const subscriptionService = {
   // ─── Summary ─────────────────────────────────────────────────────────────────
 
   async getUsageSummary(workspaceId: string) {
-    const plan   = await this.getWorkspacePlan(workspaceId)
-    const limits = PLAN_LIMITS[plan]
+    // expireTrialIfNeeded (not a raw findByWorkspace) so a lapsed trial reads
+    // as EXPIRED here even on the very first read after trialEndsAt passes.
+    // Called once and reused below — getEffectiveLimits is not used here to
+    // avoid resolving the same subscription twice in one request.
+    const [plan, sub] = await Promise.all([
+      this.getWorkspacePlan(workspaceId),
+      this.expireTrialIfNeeded(workspaceId),
+    ])
+    const inActiveTrial = sub?.status === "TRIAL"
+    const limits = inActiveTrial ? PLAN_LIMITS.STUDIO : PLAN_LIMITS[plan]
 
     const startOfMonth = new Date()
     startOfMonth.setDate(1)
     startOfMonth.setHours(0, 0, 0, 0)
 
-    const [userCount, proposalsThisMonth, projectCount, subscription] = await Promise.all([
+    const [userCount, proposalsThisMonth, projectCount] = await Promise.all([
       prisma.user.count({ where: { workspaceId } }),
       prisma.proposal.count({ where: { workspaceId, createdAt: { gte: startOfMonth } } }),
       prisma.project.count({ where: { workspaceId } }),
-      subscriptionRepository.findByWorkspace(workspaceId),
     ])
 
     return {
@@ -155,9 +173,12 @@ export const subscriptionService = {
         exportPdf:      limits.canExportPdf,
         apiAccess:      limits.canApiAccess,
       },
-      subscription: subscription ? {
-        status:      subscription.status,
-        trialEndsAt: subscription.trialEndsAt,
+      subscription: sub ? {
+        status:         sub.status,
+        trialStartedAt: sub.trialStartedAt,
+        trialEndsAt:    sub.trialEndsAt,
+        daysLeft:       this.daysLeftInTrial(sub),
+        isReadOnly:     !(sub.status === "ACTIVE" || sub.status === "TRIAL"),
       } : null,
     }
   },
@@ -192,8 +213,9 @@ export const subscriptionService = {
     return subscriptionRepository.create({
       workspaceId,
       plan,
-      status:             "TRIALING",
+      status:             "TRIAL",
       billingCycle:       "MONTHLY",
+      trialStartedAt:     now,
       trialEndsAt,
       currentPeriodStart: now,
       currentPeriodEnd:   trialEndsAt,
@@ -250,27 +272,49 @@ export const subscriptionService = {
   },
 
   isTrialExpired(subscription: Subscription): boolean {
-    return subscription.status === "TRIALING"
+    return subscription.status === "TRIAL"
       && !!subscription.trialEndsAt
       && subscription.trialEndsAt.getTime() < Date.now()
   },
 
-  /** Lazily checked on read (no scheduler exists yet in Phase 1). If a trial
-   *  has lapsed without the workspace ever upgrading, it falls back to
-   *  STARTER — STARTER is a usable ongoing tier, not a dead end, so this is
-   *  a downgrade, not a lockout. */
-  async expireTrialIfNeeded(workspaceId: string): Promise<Subscription | null> {
+  /** Lazily checked on read (no scheduler exists yet in Phase 1) — the single
+   *  place every other method routes through to get an up-to-date
+   *  Subscription. Two responsibilities, both about never returning stale
+   *  state:
+   *   1. Self-heals a workspace with no Subscription row at all (legacy data
+   *      predating eager creation in workspaceService.createForUser, or any
+   *      gap the Phase 1 backfill missed) by granting it a fresh 30-day
+   *      trial, instead of leaving canWrite/getUsageSummary to disagree about
+   *      whether a workspace with no row is blocked.
+   *   2. Flips a lapsed trial to EXPIRED. With no free tier, this is *not* a
+   *      downgrade to a usable plan (the old behavior fell back to STARTER)
+   *      — EXPIRED is read-only via canWrite() until the OWNER pays.
+   *      Workspace.plan is left untouched so changePlan() has the right
+   *      nominal plan to reactivate into. */
+  async expireTrialIfNeeded(workspaceId: string): Promise<Subscription> {
     const existing = await subscriptionRepository.findByWorkspace(workspaceId)
-    if (!existing || !this.isTrialExpired(existing)) return existing
+    if (!existing) return this.createTrialSubscription(workspaceId)
+    if (!this.isTrialExpired(existing)) return existing
+    return subscriptionRepository.update(workspaceId, { status: "EXPIRED" })
+  },
 
-    const [, updated] = await prisma.$transaction([
-      prisma.workspace.update({ where: { id: workspaceId }, data: { plan: "STARTER" } }),
-      prisma.subscription.update({
-        where: { workspaceId },
-        data:  { plan: "STARTER", status: "ACTIVE" },
-      }),
-    ])
+  /** Single fast check used by withWorkspace on every write request. ACTIVE
+   *  and a not-yet-expired TRIAL are writable; EXPIRED/CANCELED/PAST_DUE are
+   *  read-only. Goes through expireTrialIfNeeded so a trial whose date has
+   *  passed is already reported as EXPIRED here, even before this exact
+   *  request, by being the first to notice. */
+  async canWrite(workspaceId: string): Promise<boolean> {
+    const sub = await this.expireTrialIfNeeded(workspaceId)
+    return sub.status === "ACTIVE" || sub.status === "TRIAL"
+  },
 
-    return updated
+  /** Pure — days remaining in an active trial, rounded up so "less than a
+   *  day left" still reads as 1, not 0, until it actually expires. null when
+   *  not applicable (not in TRIAL, or no trialEndsAt) rather than 0, so the
+   *  frontend can tell "not on a trial" apart from "trial ends today". */
+  daysLeftInTrial(subscription: Subscription): number | null {
+    if (subscription.status !== "TRIAL" || !subscription.trialEndsAt) return null
+    const ms = subscription.trialEndsAt.getTime() - Date.now()
+    return Math.max(0, Math.ceil(ms / 86_400_000))
   },
 }
