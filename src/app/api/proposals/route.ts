@@ -20,18 +20,18 @@ export const GET = withWorkspace(async (req: NextRequest, _ctx: Ctx, _user: JwtP
   }
 })
 
-// requireProposalLimit wraps withAuth (not withWorkspace), since it needs to
-// run its own plan-limit check first — so the workspace guard and the RBAC
-// permission check are both inline here instead of composed middleware.
-export const POST = requireProposalLimit(async (req: NextRequest, _ctx: Ctx, user: JwtPayload) => {
+// requireProposalLimit is built on withWorkspace, so the trial/subscription
+// write-gate and the workspace-existence check both already ran before this
+// handler runs — only the RBAC permission check is inline here (limits.ts
+// only knows about plan limits, not the permission matrix).
+export const POST = requireProposalLimit(async (req: NextRequest, _ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
-    if (!user.workspaceId) return forbidden("This action requires a workspace. Complete onboarding first.")
     if (!hasPermission(user.workspaceRole ?? "VIEWER", "create:proposals")) {
       return forbidden("Permission denied: create:proposals")
     }
     const body     = await req.json()
     const input    = createProposalSchema.parse(body)
-    const proposal = await proposalService.create(user.workspaceId, user.sub, input)
+    const proposal = await proposalService.create(workspaceId, user.sub, input)
     return created(proposal, "Proposal created successfully")
   } catch (error) {
     return handleServiceError(error)

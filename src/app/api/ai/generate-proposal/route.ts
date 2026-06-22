@@ -13,16 +13,14 @@ import type { JwtPayload } from "@/lib/jwt"
 
 export const maxDuration = 60
 
-// requireProposalLimit wraps withAuth (not withWorkspace), since it needs to
-// run its own plan-limit check first — so the workspace guard and the RBAC
-// permission check are both inline here. Generating a proposal is a creation
-// action, gated the same as the manual POST /api/proposals route.
-export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload) => {
-  if (!user.workspaceId) return forbidden("This action requires a workspace. Complete onboarding first.")
+// requireProposalLimit is built on withWorkspace, so the trial/subscription
+// write-gate and the workspace-existence check both already ran before this
+// handler runs. Generating a proposal is a creation action, gated the same
+// as the manual POST /api/proposals route.
+export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload, workspaceId: string) => {
   if (!hasPermission(user.workspaceRole ?? "VIEWER", "create:proposals")) {
     return forbidden("Permission denied: create:proposals")
   }
-  const workspaceId = user.workspaceId
 
   const limited = aiRateLimit(req)
   if (limited) return limited
