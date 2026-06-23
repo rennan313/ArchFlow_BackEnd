@@ -9,6 +9,13 @@ const CORS_HEADERS = [
   { key: "Access-Control-Max-Age",       value: "86400" },
 ];
 
+const SECURITY_HEADERS = [
+  { key: "X-Frame-Options",           value: "DENY" },
+  { key: "X-Content-Type-Options",    value: "nosniff" },
+  { key: "Referrer-Policy",           value: "strict-origin-when-cross-origin" },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+];
+
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@prisma/client", "bcryptjs", "@react-pdf/renderer"],
 
@@ -24,6 +31,10 @@ const nextConfig: NextConfig = {
       {
         source: "/api/:path*",
         headers: CORS_HEADERS,
+      },
+      {
+        source: "/:path*",
+        headers: SECURITY_HEADERS,
       },
     ];
   },
