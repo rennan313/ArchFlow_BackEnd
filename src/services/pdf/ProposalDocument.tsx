@@ -1,4 +1,5 @@
 import React from "react"
+import path from "path"
 import {
   Document, Page, Text, View, StyleSheet, Font, Image,
   type DocumentProps,
@@ -45,14 +46,20 @@ export interface ProposalPdfData {
 }
 
 // ─── Fonts ────────────────────────────────────────────────────────────────────
+// Self-hosted, not fetched from Google's CDN at render time: the old
+// versioned gstatic URLs (v13) 404'd once Google rotated the font build —
+// PDF generation has zero business depending on a third-party CDN being up.
+// process.cwd() (not __dirname) — Next.js bundles server code into .next/,
+// so __dirname would resolve relative to the bundle output, not the source tree.
+const FONTS_DIR = path.join(process.cwd(), "src/assets/fonts/inter")
 
 Font.register({
   family: "Inter",
   fonts: [
-    { src: "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2",  fontWeight: 400 },
-    { src: "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYAZ9hiA.woff2",  fontWeight: 600 },
-    { src: "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fAZ9hiA.woff2", fontWeight: 700 },
-    { src: "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuJKfAZ9hiA.woff2", fontWeight: 900 },
+    { src: path.join(FONTS_DIR, "Inter-Regular.ttf"),  fontWeight: 400 },
+    { src: path.join(FONTS_DIR, "Inter-SemiBold.ttf"), fontWeight: 600 },
+    { src: path.join(FONTS_DIR, "Inter-Bold.ttf"),     fontWeight: 700 },
+    { src: path.join(FONTS_DIR, "Inter-Black.ttf"),    fontWeight: 900 },
   ],
 })
 
