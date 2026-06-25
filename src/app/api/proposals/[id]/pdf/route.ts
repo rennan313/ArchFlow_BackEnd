@@ -1,78 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { withWorkspace } from "@/middlewares/auth"
-import { prisma } from "@/lib/prisma"
-import { renderToBuffer } from "@react-pdf/renderer"
-import React from "react"
-import { ProposalDocument, type ProposalPdfData } from "@/services/pdf/ProposalDocument"
-import { brandingService } from "@/services/branding.service"
+import { proposalRendererService } from "@/services/render/proposal-renderer.service"
+import { RenderError } from "@/types/proposal-render-model"
 import { handleServiceError } from "@/utils/serviceError"
 import { logger } from "@/lib/logger"
 import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<{ id: string }> }
 
+// Fase 2.0 — this route no longer reads generatedProposalJson directly.
+// ProposalRendererService is the single source of truth: it loads
+// ProposalSectionInstance rows (migrating legacy generatedProposalJson into
+// instances on first access if none exist yet — see legacy-migration.service.ts),
+// maps them through ProposalRenderModel, and only then renders. Whatever the
+// Editor shows is exactly what this route exports — there is no second copy
+// of the content anywhere in this path.
 export const GET = withWorkspace(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
 
-    // Verify the proposal belongs to this workspace
-    const proposal = await prisma.proposal.findFirst({
-      where: { id, workspaceId },
-    })
+    const { buffer, doc } = await proposalRendererService.renderToPdf(id, workspaceId)
 
-    if (!proposal) {
-      return NextResponse.json({ success: false, message: "Proposal not found" }, { status: 404 })
-    }
-
-    if (!proposal.generatedText && !proposal.generatedProposalJson) {
-      return NextResponse.json(
-        { success: false, message: "Proposal has no generated content yet. Generate it first." },
-        { status: 422 }
-      )
-    }
-
-    // Parse generated content
-    let generated: ProposalPdfData["generated"] | null = null
-
-    if (proposal.generatedProposalJson) {
-      try { generated = JSON.parse(proposal.generatedProposalJson) } catch {}
-    }
-
-    if (!generated && proposal.generatedText) {
-      try {
-        const legacy = JSON.parse(proposal.generatedText)
-        // Adapt legacy format to premium format
-        generated = adaptLegacyFormat(legacy, proposal.clientName, proposal.projectType)
-      } catch {}
-    }
-
-    if (!generated) {
-      return NextResponse.json(
-        { success: false, message: "Could not parse proposal content" },
-        { status: 422 }
-      )
-    }
-
-    // Fetch branding
-    const branding = await brandingService.getBrandingContext(workspaceId)
-
-    const pdfData: ProposalPdfData = {
-      id:          proposal.id,
-      clientName:  proposal.clientName,
-      projectType: proposal.projectType,
-      city:        proposal.city,
-      style:       proposal.style,
-      createdAt:   proposal.createdAt.toISOString(),
-      generated,
-      branding,
-    }
-
-    // Generate PDF buffer
-    const buffer = await renderToBuffer(
-      React.createElement(ProposalDocument, { data: pdfData })
-    )
-
-    const filename = `proposta-${proposal.clientName.toLowerCase().replace(/\s+/g, "-")}.pdf`
+    const filename = `proposta-${doc.cover.clientName.toLowerCase().replace(/\s+/g, "-")}.pdf`
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
@@ -83,71 +32,11 @@ export const GET = withWorkspace(async (_req: NextRequest, ctx: Ctx, _user: JwtP
       },
     })
   } catch (error) {
+    if (error instanceof RenderError) {
+      const status = error.code === "PROPOSAL_NOT_FOUND" ? 404 : 422
+      return NextResponse.json({ success: false, message: error.message, code: error.code }, { status })
+    }
     logger.error({ err: error }, "[pdf] generation failed")
     return handleServiceError(error)
   }
 })
-
-// ─── Adapter: legacy GeneratedProposal → premium ProposalPdfData["generated"] ─
-
-function adaptLegacyFormat(
-  legacy: Record<string, unknown>,
-  clientName: string,
-  projectType: string,
-): ProposalPdfData["generated"] {
-  const tl = (legacy.timeline as { phase: string; duration: string; description: string }[]) ?? []
-
-  return {
-    cover: {
-      title:       (legacy.title as string) ?? `Proposta — ${clientName}`,
-      subtitle:    `Projeto de ${projectType}`,
-      projectType,
-      city:        "",
-      style:       "",
-    },
-    summary: {
-      title:   "Resumo Executivo",
-      content: (legacy.project_summary as string) ?? "",
-    },
-    clientUnderstanding: {
-      title:   "Entendimento das suas Necessidades",
-      content: (legacy.client_needs as string) ?? (legacy.client_greeting as string) ?? "",
-    },
-    architecturalDirection: {
-      title:   "Direção Arquitetônica",
-      content: (legacy.architectural_direction as string) ?? (legacy.scope_description as string) ?? "",
-    },
-    objectives: (legacy.objectives as string[])?.map((o) => ({ title: o, description: "" })) ?? [],
-    scope: {
-      included: (legacy.deliverables as string[])?.map((d) => ({ item: d, description: "" })) ?? [],
-      excluded: (legacy.excluded_items as string[]) ?? [],
-    },
-    stages: tl.map((t, i) => ({
-      number:       i + 1,
-      name:         t.phase,
-      duration:     t.duration,
-      description:  t.description,
-      deliverables: [],
-    })),
-    timeline: tl.map((t) => ({
-      phase:       t.phase,
-      duration:    t.duration,
-      description: t.description,
-    })),
-    investment: {
-      pricingMethod:     "A definir",
-      estimatedValue:    "A confirmar",
-      paymentConditions: [
-        "30% na assinatura do contrato",
-        "40% na entrega do anteprojeto",
-        "30% na entrega final",
-      ],
-    },
-    differentials: (legacy.differentials as { title: string; description: string }[]) ?? [],
-    risks:          (legacy.risks as { risk: string; mitigation: string; severity: "low" | "medium" | "high" }[]) ?? [],
-    finalConsiderations: {
-      title:   "Considerações Finais",
-      content: (legacy.closing as string) ?? "",
-    },
-  }
-}

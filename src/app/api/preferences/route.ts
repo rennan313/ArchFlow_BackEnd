@@ -7,7 +7,7 @@ import { handleServiceError } from "@/utils/serviceError"
 import type { JwtPayload } from "@/lib/jwt"
 
 const VALID_LANGUAGES = ["pt", "en", "es"] as const
-const VALID_THEMES    = ["modern-premium", "luxury-architecture", "dark-future"] as const
+const VALID_THEMES    = ["dark", "light", "system"] as const
 
 const updateSchema = z.object({
   preferredLanguage: z.enum(VALID_LANGUAGES).optional(),
@@ -17,7 +17,7 @@ const updateSchema = z.object({
 export const GET = withAuth(async (_req: NextRequest, _ctx, user: JwtPayload) => {
   try {
     const prefs = await preferencesRepository.findByUserId(user.sub)
-    return ok(prefs ?? { preferredLanguage: "pt", preferredTheme: "modern-premium" })
+    return ok(prefs ?? { preferredLanguage: "pt", preferredTheme: "dark" })
   } catch (error) {
     return handleServiceError(error)
   }

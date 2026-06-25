@@ -17,6 +17,7 @@ export interface ProposalGenerationInput {
   pricingMethod?:    "HOURLY" | "SQUARE_METER"
   estimatedValue?:   number
   complexity?:       "LOW" | "MEDIUM" | "HIGH" | "PREMIUM"
+  visualRefUrls?:    string[]
 }
 
 export type ProposalTone = "residential" | "commercial" | "luxury" | "interiors" | "landscape"

@@ -1,24 +1,21 @@
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 
-// FollowUp has no workspaceId column of its own — it's always reached through
-// an Opportunity, which does carry workspaceId, so every tenant-scoped query
-// here filters through that relation instead of adding a redundant column.
 export const followUpRepository = {
   findById(id: string, workspaceId: string) {
-    return prisma.followUp.findFirst({ where: { id, opportunity: { workspaceId } } })
+    return prisma.followUp.findFirst({ where: { id, workspaceId } })
   },
 
-  findByOpportunity(opportunityId: string) {
+  findByOpportunity(opportunityId: string, workspaceId: string) {
     return prisma.followUp.findMany({
-      where:   { opportunityId },
+      where:   { opportunityId, workspaceId },
       orderBy: { nextContactDate: "asc" },
     })
   },
 
   findPending(workspaceId: string) {
     return prisma.followUp.findMany({
-      where:   { completed: false, opportunity: { workspaceId } },
+      where:   { completed: false, workspaceId },
       orderBy: { nextContactDate: "asc" },
       include: {
         opportunity: { select: { id: true, title: true, stage: true, client: { select: { name: true } } } },
@@ -28,22 +25,52 @@ export const followUpRepository = {
 
   findOverdue(workspaceId: string) {
     return prisma.followUp.findMany({
-      where: { completed: false, nextContactDate: { lt: new Date() }, opportunity: { workspaceId } },
+      where: { completed: false, nextContactDate: { lt: new Date() }, workspaceId },
       include: {
         opportunity: { select: { id: true, title: true, client: { select: { name: true } } } },
       },
     })
   },
 
-  create(data: Prisma.FollowUpCreateInput) {
+  /**
+   * Batched form of findByProposalAutomation — one query covering every
+   * candidate opportunityId/clientId instead of one query per stale proposal.
+   * Returns the sets of ids that already have an automation-sourced FollowUp.
+   */
+  async findExistingProposalAutomationLinks(workspaceId: string, opportunityIds: string[], clientIds: string[]) {
+    if (opportunityIds.length === 0 && clientIds.length === 0) {
+      return { opportunityIds: new Set<string>(), clientIds: new Set<string>() }
+    }
+    const rows = await prisma.followUp.findMany({
+      where: {
+        workspaceId,
+        source: "AUTOMATION",
+        OR: [
+          ...(opportunityIds.length ? [{ opportunityId: { in: opportunityIds } }] : []),
+          ...(clientIds.length ? [{ clientId: { in: clientIds }, opportunityId: null }] : []),
+        ],
+      },
+      select: { opportunityId: true, clientId: true },
+    })
+    return {
+      opportunityIds: new Set(rows.filter((r) => r.opportunityId).map((r) => r.opportunityId as string)),
+      clientIds: new Set(rows.filter((r) => !r.opportunityId && r.clientId).map((r) => r.clientId as string)),
+    }
+  },
+
+  findByProjectAutomation(projectId: string, workspaceId: string) {
+    return prisma.followUp.findFirst({ where: { projectId, workspaceId, source: "AUTOMATION" } })
+  },
+
+  create(data: Prisma.FollowUpUncheckedCreateInput) {
     return prisma.followUp.create({ data })
   },
 
-  update(id: string, workspaceId: string, data: Prisma.FollowUpUpdateInput) {
-    return prisma.followUp.updateMany({ where: { id, opportunity: { workspaceId } }, data })
+  update(id: string, workspaceId: string, data: Prisma.FollowUpUncheckedUpdateInput) {
+    return prisma.followUp.updateMany({ where: { id, workspaceId }, data })
   },
 
   delete(id: string, workspaceId: string) {
-    return prisma.followUp.deleteMany({ where: { id, opportunity: { workspaceId } } })
+    return prisma.followUp.deleteMany({ where: { id, workspaceId } })
   },
 }

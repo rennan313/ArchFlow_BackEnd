@@ -2,6 +2,7 @@ import crypto from "crypto"
 import { prisma } from "@/lib/prisma"
 import { userRepository } from "@/repositories/user.repository"
 import { resetTokenRepository } from "@/repositories/resetToken.repository"
+import { emailVerificationTokenRepository } from "@/repositories/emailVerificationToken.repository"
 import { refreshTokenRepository } from "@/repositories/refreshToken.repository"
 import { hashPassword, comparePassword } from "@/lib/hash"
 import { buildPayload, signAccessToken, signRefreshToken, verifyRefreshToken } from "@/lib/jwt"
@@ -11,7 +12,7 @@ import { googleTokenService } from "@/services/googleToken.service"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { env } from "@/lib/env"
 import { emitEvent, emitErrorEvent } from "@/lib/events"
-import type { ResetPasswordInput, LoginInput, CredentialsRegisterInput } from "@/validations/auth"
+import type { ResetPasswordInput, LoginInput, CredentialsRegisterInput, VerifyEmailInput } from "@/validations/auth"
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -176,18 +177,74 @@ export const authService = {
     emitEvent("auth.password_reset.completed", { userId: record.userId })
   },
 
+  // ─── Email verification ────────────────────────────────────────────────────
+
+  async sendEmailVerification({ email }: { email: string }) {
+    const user = await userRepository.findByEmail(email)
+    if (!user) {
+      emitErrorEvent("auth.email_verification.failure", { email, reason: "user_not_found" })
+      return null
+    }
+    if (user.emailVerified) {
+      emitEvent("auth.email_verification.already_verified", { userId: user.id, email: user.email })
+      return null
+    }
+
+    const rawToken  = crypto.randomUUID()
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex")
+    const expiresAt = new Date(Date.now() + env.emailVerificationExpiresMin * 60_000)
+
+    await emailVerificationTokenRepository.deleteByUserId(user.id)
+    await emailVerificationTokenRepository.create(user.id, tokenHash, expiresAt)
+
+    emitEvent("auth.email_verification.requested", { userId: user.id, email: user.email })
+    return { user, token: rawToken }
+  },
+
+  async verifyEmail(input: VerifyEmailInput) {
+    const tokenHash = crypto.createHash("sha256").update(input.token).digest("hex")
+    const record    = await emailVerificationTokenRepository.findByToken(tokenHash)
+
+    if (!record || record.used) {
+      emitErrorEvent("auth.email_verification.failure", { reason: "invalid_token" })
+      throw new AppError(ErrorCode.EMAIL_VERIFICATION_TOKEN_INVALID)
+    }
+
+    if (record.expiresAt < new Date()) {
+      emitErrorEvent("auth.email_verification.failure", { userId: record.userId, reason: "token_expired" })
+      throw new AppError(ErrorCode.EMAIL_VERIFICATION_TOKEN_EXPIRED)
+    }
+
+    const user = await userRepository.findById(record.userId)
+    if (!user) {
+      emitErrorEvent("auth.email_verification.failure", { userId: record.userId, reason: "user_not_found" })
+      throw new AppError(ErrorCode.USER_NOT_FOUND)
+    }
+
+    if (user.emailVerified) {
+      await emailVerificationTokenRepository.markUsed(record.id)
+      emitEvent("auth.email_verification.already_verified", { userId: user.id, email: user.email })
+      throw new AppError(ErrorCode.EMAIL_ALREADY_VERIFIED)
+    }
+
+    await userRepository.update(user.id, { emailVerified: new Date() })
+    await emailVerificationTokenRepository.markUsed(record.id)
+    emitEvent("auth.email_verification.completed", { userId: user.id, email: user.email })
+  },
+
   async googleSignIn(input: { email: string; name: string; image?: string | null; googleId: string }) {
     let user = await prisma.user.findUnique({ where: { email: input.email } })
 
     if (!user) {
       user = await prisma.user.create({
         data: {
-          email:     input.email,
-          name:      input.name,
-          image:     input.image ?? null,
-          googleId:  input.googleId,
-          provider:  "google",
-          lastLogin: new Date(),
+          email:         input.email,
+          name:          input.name,
+          image:         input.image ?? null,
+          googleId:      input.googleId,
+          provider:      "google",
+          emailVerified: new Date(), // Google has already verified this email
+          lastLogin:     new Date(),
         },
       })
       await workspaceService.createForUser(user.id, user.name)
@@ -196,10 +253,11 @@ export const authService = {
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
-          name:      input.name,
-          image:     input.image ?? user.image ?? null,
-          googleId:  user.googleId ?? input.googleId,
-          lastLogin: new Date(),
+          name:          input.name,
+          image:         input.image ?? user.image ?? null,
+          googleId:      user.googleId ?? input.googleId,
+          emailVerified: user.emailVerified ?? new Date(),
+          lastLogin:     new Date(),
         },
       })
       if (!user.workspaceId) {
@@ -293,12 +351,13 @@ export const authService = {
       // 3a. New user — create account + provision workspace
       user = await prisma.user.create({
         data: {
-          email:     googleUser.email,
-          name:      googleUser.name,
-          image:     googleUser.avatar ?? null,
-          googleId:  googleUser.googleId,
-          provider:  "google",
-          lastLogin: new Date(),
+          email:         googleUser.email,
+          name:          googleUser.name,
+          image:         googleUser.avatar ?? null,
+          googleId:      googleUser.googleId,
+          provider:      "google",
+          emailVerified: new Date(), // Google has already verified this email
+          lastLogin:     new Date(),
         },
       })
       await workspaceService.createForUser(user.id, user.name)
@@ -308,9 +367,10 @@ export const authService = {
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
-          image:     googleUser.avatar ?? user.image ?? null,
-          googleId:  user.googleId ?? googleUser.googleId,
-          lastLogin: new Date(),
+          image:         googleUser.avatar ?? user.image ?? null,
+          googleId:      user.googleId ?? googleUser.googleId,
+          emailVerified: user.emailVerified ?? new Date(),
+          lastLogin:     new Date(),
         },
       })
       if (!user.workspaceId) {

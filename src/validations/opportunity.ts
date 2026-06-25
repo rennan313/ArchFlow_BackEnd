@@ -1,12 +1,13 @@
 import { z } from "zod"
 
 export const OpportunityStageEnum = z.enum([
-  "LEAD", "BRIEFING", "PROPOSAL_DRAFT", "PROPOSAL_SENT",
+  "LEAD", "FIRST_CONTACT", "BRIEFING", "PROPOSAL_DRAFT", "PROPOSAL_SENT",
   "NEGOTIATION", "APPROVED", "LOST",
 ])
 
 export const STAGE_PROBABILITY: Record<string, number> = {
   LEAD:          10,
+  FIRST_CONTACT: 15,
   BRIEFING:      25,
   PROPOSAL_DRAFT: 50,
   PROPOSAL_SENT:  70,
@@ -35,7 +36,7 @@ export const updateOpportunitySchema = createOpportunitySchema
 
 export const opportunityQuerySchema = z.object({
   page:      z.coerce.number().int().min(1).optional().default(1),
-  limit:     z.coerce.number().int().min(1).max(100).optional().default(20),
+  limit:     z.coerce.number().int().min(1).max(200).optional().default(20),
   search:    z.string().optional(),
   stage:     OpportunityStageEnum.optional(),
   clientId:  z.string().optional(),

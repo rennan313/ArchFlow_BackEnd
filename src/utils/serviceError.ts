@@ -41,6 +41,13 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.AUTOMATION_NOT_FOUND]:     () => R.notFound("Automation not found"),
   [ErrorCode.TASK_NOT_FOUND]:           () => R.notFound("Task not found"),
   [ErrorCode.CROSS_TENANT_REFERENCE]:   () => R.forbidden("One or more referenced resources do not belong to this workspace"),
+  [ErrorCode.PROPOSAL_TEMPLATE_NOT_FOUND]:  () => R.notFound("Proposal template not found"),
+  [ErrorCode.PROPOSAL_SECTION_NOT_FOUND]:   () => R.notFound("Proposal section not found"),
+  [ErrorCode.PROPOSAL_BLOCK_NOT_FOUND]:     () => R.notFound("Proposal block not found"),
+  [ErrorCode.PROPOSAL_NARRATIVE_NOT_FOUND]: () => R.notFound("Proposal narrative not found"),
+  [ErrorCode.SECTION_INSTANCE_NOT_FOUND]:   () => R.notFound("Section instance not found"),
+  [ErrorCode.PROPOSAL_PROJECT_NOT_LINKED]:  () => R.badRequest("This proposal has no linked project yet — link a project before starting proposal editing"),
+  [ErrorCode.INVALID_REORDER]:              () => R.badRequest("Reorder list must contain exactly the section instances that belong to this proposal"),
   // Billing
   [ErrorCode.SUBSCRIPTION_NOT_FOUND]:        () => R.notFound("Subscription not found"),
   [ErrorCode.SUBSCRIPTION_ALREADY_EXISTS]:   () => R.conflict("Subscription already exists for this workspace"),

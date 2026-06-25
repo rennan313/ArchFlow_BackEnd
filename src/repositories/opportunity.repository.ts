@@ -5,6 +5,9 @@ import type { OpportunityQueryInput } from "@/validations/opportunity"
 const INCLUDE_RELATIONS = {
   client:  { select: { id: true, name: true, email: true, city: true, state: true } },
   briefing: true,
+  // Most recent linked proposal only — used by the Kanban Comercial card as a
+  // secondary sub-status badge, not as a separate board entity (see Fase 4 plan).
+  proposals: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, status: true, createdAt: true } },
 } as const
 
 export const opportunityRepository = {

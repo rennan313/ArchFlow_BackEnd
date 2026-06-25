@@ -8,6 +8,7 @@ export function createMockUser(overrides: Partial<User> = {}): User {
     name:                "Test User",
     email:               "test@example.com",
     password:            "$2b$12$hashedpassword",
+    emailVerified:       null,
     image:               null,
     role:                "USER",
     provider:            "credentials",

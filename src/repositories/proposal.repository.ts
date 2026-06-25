@@ -45,7 +45,35 @@ export const proposalRepository = {
     return prisma.proposal.updateMany({ where: { id, workspaceId }, data });
   },
 
+  /** Atomic compare-and-swap: flips builderStatus DRAFT -> BUILDING only if
+   *  it is still DRAFT. Closes a TOCTOU race in
+   *  proposalSectionInstanceService.initialize() where two near-simultaneous
+   *  requests could both pass a "do section instances already exist?" check
+   *  and both create snapshots. Returns true iff THIS call won the claim. */
+  async claimForInitialize(id: string, workspaceId: string): Promise<boolean> {
+    const result = await prisma.proposal.updateMany({
+      where: { id, workspaceId, builderStatus: "DRAFT" },
+      data:  { builderStatus: "BUILDING" },
+    });
+    return result.count === 1;
+  },
+
   delete(id: string, workspaceId: string) {
     return prisma.proposal.deleteMany({ where: { id, workspaceId } });
+  },
+
+  /** SENT proposals with no movement since `cutoff` — feeds the on-demand stale-proposal follow-up automation. */
+  findStaleSent(workspaceId: string, cutoff: Date) {
+    return prisma.proposal.findMany({
+      where: {
+        workspaceId,
+        status: "SENT",
+        OR: [
+          { statusUpdatedAt: { lt: cutoff } },
+          { statusUpdatedAt: null, updatedAt: { lt: cutoff } },
+        ],
+      },
+      select: { id: true, userId: true, opportunityId: true, clientId: true, clientName: true },
+    });
   },
 };

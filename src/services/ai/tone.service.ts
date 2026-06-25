@@ -1,6 +1,7 @@
 import type { ProposalTone, ProposalGenerationInput } from "@/types/proposal-generation"
 
 const LUXURY_TYPES = new Set(["Residencial de Alto Padrão", "Luxury", "Alto Padrão"])
+const LUXURY_STYLES = new Set(["Neoclássico", "Neoclassico"])
 const COMMERCIAL_TYPES = new Set(["Comercial", "Industrial", "Corporativo", "Urbanismo"])
 const INTERIOR_TYPES = new Set(["Interiores", "Design de Interiores"])
 const LANDSCAPE_TYPES = new Set(["Paisagismo"])
@@ -10,6 +11,7 @@ export function resolveTone(input: ProposalGenerationInput): ProposalTone {
 
   if (input.complexity === "PREMIUM") return "luxury"
   if (LUXURY_TYPES.has(input.projectType)) return "luxury"
+  if (input.style && LUXURY_STYLES.has(input.style)) return "luxury"
   if (type.includes("interior") || type.includes("interiores")) return "interiors"
   if (type.includes("paisag") || type.includes("landscape")) return "landscape"
   if (COMMERCIAL_TYPES.has(input.projectType)) return "commercial"

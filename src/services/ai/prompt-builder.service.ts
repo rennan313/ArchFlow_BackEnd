@@ -162,6 +162,10 @@ export function buildUserPrompt(input: ProposalGenerationInput, tone: ProposalTo
   }
 }`
 
+  const visualRefsLine = input.visualRefUrls?.length
+    ? `• Referências visuais: ${input.visualRefUrls.length} imagem(ns)/vídeo(s) fornecido(s) pelo cliente como inspiração — integre essa riqueza visual à narrativa`
+    : ""
+
   return `Gere uma proposta comercial PREMIUM e PERSONALIZADA para o projeto abaixo.
 
 ━━━ DADOS DO PROJETO ━━━
@@ -170,6 +174,7 @@ ${line("Tipo de projeto",     input.projectType)}
 ${line("Localização",         location)}
 ${input.squareMeters ? line("Área total", `${input.squareMeters} m²`) : ""}
 ${input.style ? line("Estilo arquitetônico", input.style) : ""}
+${visualRefsLine}
 
 ${briefing ? `━━━ BRIEFING DO CLIENTE ━━━\n${briefing}` : ""}
 

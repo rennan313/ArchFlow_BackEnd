@@ -1,9 +1,14 @@
 import { prisma } from "@/lib/prisma"
 import { followUpRepository } from "@/repositories/followup.repository"
+import { opportunityRepository } from "@/repositories/opportunity.repository"
+import { projectService } from "@/services/project.service"
+import { automationService } from "@/services/automation.service"
 
 import type { OpportunityStage } from "@prisma/client"
 
-const ACTIVE_STAGES: OpportunityStage[] = ["LEAD", "BRIEFING", "PROPOSAL_DRAFT", "PROPOSAL_SENT", "NEGOTIATION"]
+// FIRST_CONTACT must stay in this list — leaving it out silently drops those
+// opportunities from pipelineValue/expectedRevenue on the existing dashboard.
+const ACTIVE_STAGES: OpportunityStage[] = ["LEAD", "FIRST_CONTACT", "BRIEFING", "PROPOSAL_DRAFT", "PROPOSAL_SENT", "NEGOTIATION"]
 
 export const dashboardService = {
   async getAggregations(workspaceId: string) {
@@ -85,11 +90,33 @@ export const dashboardService = {
       },
     }
   },
+
+  // Visão Executiva widgets (Kanban Comercial / Kanban de Projetos summaries).
+  // Kept separate from getAggregations() to avoid risking a regression in the
+  // existing dashboard payload while this feature is built out.
+  async getKanbanWidgets(workspaceId: string) {
+    const [opportunityStageGroups, projectPhaseStats, automationStats] = await Promise.all([
+      opportunityRepository.pipelineStats(workspaceId),
+      projectService.phaseStats(workspaceId),
+      automationService.getDashboardStats(workspaceId),
+    ])
+
+    const byStage: Record<string, { count: number; revenue: number }> = {}
+    for (const g of opportunityStageGroups) {
+      byStage[g.stage] = { count: g._count._all, revenue: g._sum.estimatedRevenue ?? 0 }
+    }
+
+    return {
+      commercialPipeline: { byStage },
+      projectsByPhase:    { byPhase: projectPhaseStats.byPhase, overdueCount: projectPhaseStats.overdueCount },
+      automationStats,
+    }
+  },
 }
 
 function stageProbability(stage: string): number {
   const map: Record<string, number> = {
-    LEAD: 10, BRIEFING: 25, PROPOSAL_DRAFT: 50,
+    LEAD: 10, FIRST_CONTACT: 15, BRIEFING: 25, PROPOSAL_DRAFT: 50,
     PROPOSAL_SENT: 70, NEGOTIATION: 85, APPROVED: 100, LOST: 0,
   }
   return map[stage] ?? 0

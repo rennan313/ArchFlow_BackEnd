@@ -61,3 +61,15 @@ export function aiRateLimit(req: NextRequest): NextResponse | null {
   }
   return null
 }
+
+// Proposal advisor: deterministic, no LLM call — looser limit than aiRateLimit,
+// just enough to stop accidental hammering. 20 requests per 10 minutes per IP.
+export function advisorRateLimit(req: NextRequest): NextResponse | null {
+  const key    = getKey(req, "advisor")
+  const result = check(key, 20, 10 * 60_000)
+
+  if (!result.allowed) {
+    return tooManyRequests(`Advisor limit reached. Try again in ${Math.ceil((result.resetAt - Date.now()) / 1000)}s`)
+  }
+  return null
+}

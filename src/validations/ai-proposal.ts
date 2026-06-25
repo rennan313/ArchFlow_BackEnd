@@ -22,6 +22,8 @@ export const generatePremiumProposalSchema = z.object({
   pricingMethod:    PricingMethodEnum.optional(),
   estimatedValue:   z.number().nonnegative().optional(),
   complexity:       ComplexityEnum.optional(),
+  // Visual references from moodboard
+  visualRefUrls:    z.array(z.string().url()).optional(),
 })
 
 export type GeneratePremiumProposalInput = z.infer<typeof generatePremiumProposalSchema>

@@ -7,7 +7,10 @@ import type { JwtPayload } from "@/lib/jwt"
 
 export const GET = withWorkspace(async (_req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, _user: JwtPayload, workspaceId: string) => {
   try {
-    const data = await dashboardService.getAggregations(workspaceId)
-    return ok(data)
+    const [data, kanbanWidgets] = await Promise.all([
+      dashboardService.getAggregations(workspaceId),
+      dashboardService.getKanbanWidgets(workspaceId),
+    ])
+    return ok({ ...data, ...kanbanWidgets })
   } catch (error) { return handleServiceError(error) }
 })

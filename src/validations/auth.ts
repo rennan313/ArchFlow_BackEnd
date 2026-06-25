@@ -45,6 +45,14 @@ export const resetPasswordSchema = z.object({
   password: passwordSchema,
 })
 
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+})
+
+export const resendVerificationSchema = z.object({
+  email: z.string().email(),
+})
+
 export const loginSchema = z.object({
   email:    z.string().email(),
   password: z.string().min(1),
@@ -58,5 +66,7 @@ export type CredentialsRegisterInput = z.infer<typeof credentialsRegisterSchema>
 export type CredentialsSigninInput   = z.infer<typeof credentialsSigninSchema>
 export type OnboardingInput          = z.infer<typeof onboardingSchema>
 export type ResetPasswordInput       = z.infer<typeof resetPasswordSchema>
+export type VerifyEmailInput         = z.infer<typeof verifyEmailSchema>
+export type ResendVerificationInput  = z.infer<typeof resendVerificationSchema>
 export type LoginInput               = z.infer<typeof loginSchema>
 export type GoogleAuthInput          = z.infer<typeof googleAuthSchema>

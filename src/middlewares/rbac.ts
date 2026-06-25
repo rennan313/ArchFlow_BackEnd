@@ -40,6 +40,10 @@ const PERMISSIONS: Record<string, string[]> = {
     "manage:briefings",
     "create:documents", "update:documents", "delete:documents",
     "update:tasks", "manage:automations",
+    "create:proposal-templates", "update:proposal-templates", "delete:proposal-templates",
+    "create:proposal-sections", "update:proposal-sections", "delete:proposal-sections",
+    "create:proposal-blocks", "update:proposal-blocks", "delete:proposal-blocks", "share:proposal-blocks",
+    "create:proposal-narratives", "update:proposal-narratives", "delete:proposal-narratives",
     // NOT billing:manage — billing stays OWNER-only.
   ],
 
@@ -53,6 +57,10 @@ const PERMISSIONS: Record<string, string[]> = {
     "manage:briefings",
     "create:documents", "update:documents", "delete:documents",
     "update:tasks",
+    "create:proposal-templates", "update:proposal-templates", "delete:proposal-templates",
+    "create:proposal-sections", "update:proposal-sections", "delete:proposal-sections",
+    "create:proposal-blocks", "update:proposal-blocks", "delete:proposal-blocks", "share:proposal-blocks",
+    "create:proposal-narratives", "update:proposal-narratives", "delete:proposal-narratives",
     // No workspace/branding/billing administration, no manage:automations
     // (toggling automations on/off is OWNER/ADMIN-only, same tier as billing).
   ],
@@ -63,9 +71,13 @@ const PERMISSIONS: Record<string, string[]> = {
     "manage:moodboards",
     "create:documents", "update:documents",
     "update:tasks",
+    "create:proposal-templates", "update:proposal-templates",
+    "create:proposal-sections", "update:proposal-sections",
+    "create:proposal-blocks", "update:proposal-blocks", "share:proposal-blocks",
     // update:projects is intentionally absent here — DESIGNER may only edit
     // projects they created, enforced via requirePermissionOrOwner(). Same
     // reasoning applies to documents: no delete:documents for DESIGNER.
+    // No delete:proposal-* either, same tier as documents.
   ],
 
   ASSISTANT: [

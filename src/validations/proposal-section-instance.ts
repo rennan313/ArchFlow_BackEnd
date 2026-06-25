@@ -1,0 +1,22 @@
+import { z } from "zod"
+
+export const addSectionInstanceSchema = z.object({
+  sectionId: z.string().min(1),
+  blockId:   z.string().min(1).optional(),
+  title:     z.string().max(200).optional(),
+  content:   z.string().max(20000).optional(),
+})
+
+export const updateSectionInstanceSchema = z.object({
+  title:    z.string().min(1).max(200).optional(),
+  content:  z.string().max(20000).optional(),
+  metadata: z.string().max(10000).optional(),
+})
+
+export const reorderSectionInstancesSchema = z.object({
+  order: z.array(z.string().min(1)).min(1),
+})
+
+export type AddSectionInstanceInput     = z.infer<typeof addSectionInstanceSchema>
+export type UpdateSectionInstanceInput  = z.infer<typeof updateSectionInstanceSchema>
+export type ReorderSectionInstancesInput = z.infer<typeof reorderSectionInstancesSchema>

@@ -39,6 +39,33 @@ enum ProposalStatus {
   REJECTED
 }
 
+// Visual treatment for a proposal/template — schema field exists ahead of the
+// rendering work; only one stylesheet renders today (see plan Phase 2/5).
+enum ProposalSkin {
+  EDITORIAL
+  MINIMAL
+  PREMIUM
+  CORPORATE
+  LUXURY
+  // Fase 2.1 — enterprise design pass. Additive: the 5 above keep working
+  // (existing ProposalTemplate rows and the advisor's recommendSkin() still
+  // emit them), these 4 are new, explicitly-named enterprise treatments
+  // available for future template/advisor wiring without touching the
+  // renderer again.
+  ENTERPRISE_LIGHT
+  ENTERPRISE_DARK
+  PREMIUM_GOLD
+  CORPORATE_EXECUTIVE
+}
+
+enum ProposalBuilderStatus {
+  DRAFT
+  BUILDING
+  READY
+  GENERATED
+  ARCHIVED
+}
+
 enum ClientStatus {
   LEAD
   NEGOTIATION
@@ -258,6 +285,11 @@ model Workspace {
   documents       Document[]
   documentFolders DocumentFolder[]
 
+  proposalTemplates  ProposalTemplate[]
+  proposalSections   ProposalSection[]
+  proposalBlocks     ProposalBlock[]
+  proposalNarratives ProposalNarrative[]
+
   @@map("workspaces")
 }
 
@@ -317,6 +349,11 @@ model User {
   documents        Document[]
   documentVersions DocumentVersion[]
   documentFolders  DocumentFolder[]
+
+  proposalTemplates  ProposalTemplate[]
+  proposalSections   ProposalSection[]
+  proposalBlocks     ProposalBlock[]
+  proposalNarratives ProposalNarrative[]
 
   @@index([workspaceId])
   @@map("users")
@@ -556,17 +593,26 @@ model Proposal {
   regionalAverageMin  Float?
   regionalAverageMax  Float?
 
+  // Proposal Builder — set by ProposalAdvisorService's recommendation when
+  // the builder is initialized; "builder" prefix keeps these distinct from
+  // the legacy one-shot fields above (generatedProposalJson/proposalTone).
+  builderTemplateId       String?              @db.ObjectId
+  builderNarrativeProfile String? // NarrativeProfile value, e.g. "CONSULTIVE" — not a ProposalNarrative id, see proposal-advisor types
+  builderSkin             ProposalSkin?
+  builderStatus           ProposalBuilderStatus @default(DRAFT)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace     Workspace?              @relation(fields: [workspaceId], references: [id])
-  opportunity   Opportunity?            @relation(fields: [opportunityId], references: [id])
-  client        Client?                 @relation(fields: [clientId], references: [id])
-  projects      Project[] // app-enforced "at most one" — see Project.proposalId comment
-  media         ProposalMedia[]
-  statusHistory ProposalStatusHistory[]
-  versions      ProposalVersion[]
+  user            User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace       Workspace?                @relation(fields: [workspaceId], references: [id])
+  opportunity     Opportunity?              @relation(fields: [opportunityId], references: [id])
+  client          Client?                   @relation(fields: [clientId], references: [id])
+  projects        Project[] // app-enforced "at most one" — see Project.proposalId comment
+  media           ProposalMedia[]
+  statusHistory   ProposalStatusHistory[]
+  versions        ProposalVersion[]
+  sectionInstances ProposalSectionInstance[]
 
   @@index([userId, status])
   @@index([workspaceId, status])
@@ -693,6 +739,160 @@ model ProposalStatusHistory {
   @@index([proposalId])
   @@index([proposalId, changedAt])
   @@map("proposal_status_history")
+}
+
+// ─── Proposal Content Library ────────────────────────────────────────────────
+// workspaceId: null rows are the platform-default library every workspace
+// falls back to. Workspace rows take precedence over defaults by key/sectionKey
+// (resolved in the repository layer, not via a DB constraint).
+
+model ProposalTemplate {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @db.ObjectId
+  workspaceId String? @db.ObjectId
+
+  name        String
+  description String?
+  skin        ProposalSkin @default(EDITORIAL)
+  sectionOrder String[] // ordered ProposalSection.key refs
+
+  isArchived       Boolean @default(false)
+  isFavorite       Boolean @default(false)
+  isPlatformDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([workspaceId, isArchived])
+  @@map("proposal_templates")
+}
+
+model ProposalSection {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @db.ObjectId
+  workspaceId String? @db.ObjectId
+
+  key         String // e.g. "executive-summary" — stable reference used by blocks/instances
+  name        String
+  description String?
+  order       Int     @default(0)
+
+  isArchived Boolean @default(false)
+  // Fase 2.0 — Etapa 6: true for sections that exist only to receive content
+  // migrated from legacy generatedProposalJson proposals (e.g. "Investimento",
+  // "Riscos"). Excluded from the AI advisor's recommendations and from the
+  // manual "Adicionar seção" picker for new proposals — the legacy migrator
+  // is the only caller allowed to use them.
+  isMigrationOnly Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([workspaceId, key])
+  @@map("proposal_sections")
+}
+
+model ProposalBlock {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @db.ObjectId
+  workspaceId String? @db.ObjectId
+
+  sectionKey   String // ProposalSection.key this block belongs to
+  name         String // e.g. "Executive Premium"
+  variantLabel String?
+  content      String // static starting prose — architect always hand-edits after picking
+
+  toneTags String[]
+
+  // Scoring axes consumed by ProposalAdvisorService's deterministic rules
+  // engine (see services/ai/proposal-advisor-scoring.ts) — distinct from
+  // toneTags, which drives the AI prose-generation personas instead.
+  projectTypeTags      String[] // ProjectTypeCategory values this block fits (e.g. "RESIDENTIAL_PREMIUM")
+  investmentTags       String[] // InvestmentTier values this block fits (e.g. "HIGH")
+  narrativeProfileTags String[] // NarrativeProfile values this block fits (e.g. "CONSULTIVE")
+  keywords             String[] // free-text synonyms matched against briefing/notes signals
+
+  version       Int     @default(1)
+  parentBlockId String? @db.ObjectId // previous version in the chain, if any
+
+  isArchived        Boolean @default(false)
+  isFavorite        Boolean @default(false)
+  sharedInWorkspace Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([workspaceId, sectionKey])
+  @@index([workspaceId, isArchived])
+  @@map("proposal_blocks")
+}
+
+model ProposalNarrative {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String  @db.ObjectId
+  workspaceId String? @db.ObjectId
+
+  name        String
+  description String?
+  toneKey     String // maps to the existing 5 tone personas in tone.service.ts
+  sectionFlow String[] // recommended ProposalSection.key order
+
+  isArchived Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@map("proposal_narratives")
+}
+
+// A per-proposal snapshot, deliberately decoupled from the library — once a
+// block is inserted into a proposal, editing or archiving that ProposalBlock
+// later must never change a proposal that already snapshotted it. sectionId/
+// blockId are plain scalars with no @relation (same pattern as
+// FollowUp.projectId/clientId): blockId may point at a platform-default
+// block (workspaceId: null), a different "scope" than the instance's own
+// workspaceId, so relation enforcement isn't meaningful here on Mongo anyway.
+model ProposalSectionInstance {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String  @db.ObjectId
+  proposalId  String  @db.ObjectId
+
+  sectionId String  @db.ObjectId // ProposalSection.id this slot represents
+  blockId   String? @db.ObjectId // ProposalBlock.id this was snapshotted from — null for fully custom sections
+
+  sortOrder Int
+  title     String
+  content   String
+  metadata  String? // JSON-stringified — see Workspace.dashboardLayout for the same string-not-Json convention
+
+  createdFromLibrary Boolean @default(false)
+  isCustomized        Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([proposalId])
+  @@index([proposalId, sortOrder])
+  @@map("proposal_section_instances")
 }
 
 // ─── Project Domain ───────────────────────────────────────────────────────────

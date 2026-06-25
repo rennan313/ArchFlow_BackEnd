@@ -14,6 +14,10 @@ const MAX_IMAGE_SIZE         = 10 * 1024 * 1024   // 10 MB
 const MAX_BRANDING_ASSET_SIZE = 5 * 1024 * 1024   //  5 MB
 const MAX_VIDEO_SIZE         = 100 * 1024 * 1024  // 100 MB
 
+const DOCUMENT_TTL              = 60 * 60 * 24       // 24 hours — signed URL for documents
+const MAX_DOCUMENT_IMAGE_SIZE   = 10 * 1024 * 1024   //  10 MB — JPG/PNG
+const MAX_DOCUMENT_FILE_SIZE    = 50 * 1024 * 1024   //  50 MB — PDF/DOCX/DWG
+
 export type UploadCategory    = "image" | "gif" | "video"
 export type BrandingAssetType = "logo" | "logo-white" | "favicon"
 
@@ -24,6 +28,11 @@ export interface UploadResult {
 }
 
 export interface BrandingUploadResult {
+  url:         string
+  storagePath: string
+}
+
+export interface DocumentUploadResult {
   url:         string
   storagePath: string
 }
@@ -130,6 +139,34 @@ export const storageService = {
   async refreshBrandingUrl(storagePath: string): Promise<string> {
     const { data, error } = await getClient().storage.from(BUCKET).createSignedUrl(storagePath, BRANDING_TTL)
     if (error || !data) throw new Error(`Failed to refresh branding URL: ${error?.message}`)
+    return data.signedUrl
+  },
+
+  async uploadDocument(workspaceId: string, file: File, isImage: boolean): Promise<DocumentUploadResult> {
+    const maxSize = isImage ? MAX_DOCUMENT_IMAGE_SIZE : MAX_DOCUMENT_FILE_SIZE
+    if (file.size > maxSize) {
+      throw new Error(`File exceeds ${maxSize / (1024 * 1024)} MB limit`)
+    }
+
+    const supabase    = getClient()
+    const ext         = path.extname(file.name).toLowerCase()
+    const storagePath = `documents/${workspaceId}/${randomUUID()}${ext}`
+    const buffer      = Buffer.from(await file.arrayBuffer())
+
+    const { error } = await supabase.storage
+      .from(BUCKET).upload(storagePath, buffer, { contentType: file.type || "application/octet-stream", upsert: false })
+    if (error) throw new Error(`Storage upload failed: ${error.message}`)
+
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from(BUCKET).createSignedUrl(storagePath, DOCUMENT_TTL)
+    if (signedError || !signedData) throw new Error(`Failed to create signed URL: ${signedError?.message}`)
+
+    return { url: signedData.signedUrl, storagePath }
+  },
+
+  async refreshDocumentUrl(storagePath: string): Promise<string> {
+    const { data, error } = await getClient().storage.from(BUCKET).createSignedUrl(storagePath, DOCUMENT_TTL)
+    if (error || !data) throw new Error(`Failed to refresh document URL: ${error?.message}`)
     return data.signedUrl
   },
 }
