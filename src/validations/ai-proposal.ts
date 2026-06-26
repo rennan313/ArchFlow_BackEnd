@@ -23,7 +23,10 @@ export const generatePremiumProposalSchema = z.object({
   estimatedValue:   z.number().nonnegative().optional(),
   complexity:       ComplexityEnum.optional(),
   // Visual references from moodboard
-  visualRefUrls:    z.array(z.string().url()).optional(),
+  visualRefUrls:    z.array(z.string().url().refine(
+    (url) => url.startsWith("http://") || url.startsWith("https://"),
+    { message: "Only http/https URLs are allowed" }
+  )).optional(),
 })
 
 export type GeneratePremiumProposalInput = z.infer<typeof generatePremiumProposalSchema>

@@ -89,6 +89,16 @@ export const legacyMigrationService = {
     const existing = await proposalSectionInstanceRepository.findByProposal(proposal.id, workspaceId)
     if (existing.length > 0) return // another caller already migrated it
 
+    // Atomic gate: only proceed if still in DRAFT state.
+    // Two concurrent PDF requests can both pass the length check above before
+    // either has written any rows — claimForInitialize uses an atomic
+    // updateMany so only one wins and the other returns without duplicating.
+    const claimed = await proposalRepository.claimForInitialize(proposal.id, workspaceId)
+    if (!claimed) {
+      // Another request is already migrating this proposal — return without duplicating.
+      return
+    }
+
     const raw = proposal.generatedProposalJson ?? proposal.generatedText
     if (!raw) return
 
@@ -115,24 +125,29 @@ export const legacyMigrationService = {
     const { data: catalog } = await proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 50, isArchived: false })
     const sectionByKey = new Map(catalog.map((s) => [s.key, s]))
 
-    await Promise.all(
-      fields.map(async (field, index) => {
-        const section = sectionByKey.get(field.sectionKey)
-        if (!section) return // shouldn't happen — seeded alongside the curated catalog
-        await proposalSectionInstanceRepository.create(workspaceId, {
-          proposalId:         proposal.id,
-          sectionId:          section.id,
-          blockId:            null,
-          sortOrder:          index,
-          title:              field.title,
-          content:            field.content,
-          createdFromLibrary: false,
-          isCustomized:       false,
-        })
-      }),
-    )
+    try {
+      await Promise.all(
+        fields.map(async (field, index) => {
+          const section = sectionByKey.get(field.sectionKey)
+          if (!section) return // shouldn't happen — seeded alongside the curated catalog
+          await proposalSectionInstanceRepository.create(workspaceId, {
+            proposalId:         proposal.id,
+            sectionId:          section.id,
+            blockId:            null,
+            sortOrder:          index,
+            title:              field.title,
+            content:            field.content,
+            createdFromLibrary: false,
+            isCustomized:       false,
+          })
+        }),
+      )
 
-    await proposalRepository.update(proposal.id, workspaceId, { builderStatus: "BUILDING" })
+      await proposalRepository.update(proposal.id, workspaceId, { builderStatus: "BUILDING" })
+    } catch (err) {
+      await proposalRepository.update(proposal.id, workspaceId, { builderStatus: "DRAFT" })
+      throw err
+    }
   },
 }
 

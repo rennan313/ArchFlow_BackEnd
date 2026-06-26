@@ -120,18 +120,20 @@ export const proposalSectionInstanceService = {
         if (parsed) {
           const sectionDefs = extractSectionsFromPremiumProposal(parsed)
           if (sectionDefs.length > 0) {
-            for (let i = 0; i < sectionDefs.length; i++) {
-              await proposalSectionInstanceRepository.create(workspaceId, {
-                proposalId,
-                sectionId:          AI_GENERATED_SECTION_ID,
-                blockId:            null,
-                sortOrder:          i,
-                title:              sectionDefs[i].title,
-                content:            sectionDefs[i].content,
-                createdFromLibrary: false,
-                isCustomized:       false,
-              })
-            }
+            await Promise.all(
+              sectionDefs.map((def, i) =>
+                proposalSectionInstanceRepository.create(workspaceId, {
+                  proposalId,
+                  sectionId:          AI_GENERATED_SECTION_ID,
+                  blockId:            null,
+                  sortOrder:          i,
+                  title:              def.title,
+                  content:            def.content,
+                  createdFromLibrary: false,
+                  isCustomized:       false,
+                })
+              )
+            )
             return buildView(proposalId, workspaceId)
           }
           // parsed but all content empty — fall through to advisor

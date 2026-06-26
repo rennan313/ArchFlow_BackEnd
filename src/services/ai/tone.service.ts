@@ -3,8 +3,6 @@ import type { ProposalTone, ProposalGenerationInput } from "@/types/proposal-gen
 const LUXURY_TYPES = new Set(["Residencial de Alto Padrão", "Luxury", "Alto Padrão"])
 const LUXURY_STYLES = new Set(["Neoclássico", "Neoclassico"])
 const COMMERCIAL_TYPES = new Set(["Comercial", "Industrial", "Corporativo", "Urbanismo"])
-const INTERIOR_TYPES = new Set(["Interiores", "Design de Interiores"])
-const LANDSCAPE_TYPES = new Set(["Paisagismo"])
 
 export function resolveTone(input: ProposalGenerationInput): ProposalTone {
   const type = input.projectType.toLowerCase()
@@ -16,8 +14,6 @@ export function resolveTone(input: ProposalGenerationInput): ProposalTone {
   if (type.includes("paisag") || type.includes("landscape")) return "landscape"
   if (COMMERCIAL_TYPES.has(input.projectType)) return "commercial"
   if (type.includes("comercial") || type.includes("industrial") || type.includes("urban")) return "commercial"
-  if (INTERIOR_TYPES.has(input.projectType)) return "interiors"
-  if (LANDSCAPE_TYPES.has(input.projectType)) return "landscape"
 
   return "residential"
 }

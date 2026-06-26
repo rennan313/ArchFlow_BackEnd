@@ -307,6 +307,7 @@ model WorkspaceInvite {
 
   @@index([workspaceId])
   @@index([email])
+  @@index([workspaceId, accepted])
   @@map("workspace_invites")
 }
 
@@ -534,6 +535,7 @@ model FollowUp {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace   Workspace?   @relation(fields: [workspaceId], references: [id])
 
+  @@index([userId])
   @@index([workspaceId])
   @@index([opportunityId])
   @@index([projectId])
@@ -797,6 +799,10 @@ model ProposalSection {
 
   @@index([workspaceId])
   @@index([workspaceId, key])
+  // Workspace sections override platform defaults (workspaceId: null) by key.
+  // The unique constraint prevents duplicate keys per workspace.
+  // NOTE: existing duplicate keys must be resolved before running prisma db push.
+  @@unique([workspaceId, key])
   @@map("proposal_sections")
 }
 
@@ -892,6 +898,8 @@ model ProposalSectionInstance {
   @@index([workspaceId])
   @@index([proposalId])
   @@index([proposalId, sortOrder])
+  @@index([sectionId])
+  @@index([blockId])
   @@map("proposal_section_instances")
 }
 
@@ -958,6 +966,7 @@ model Project {
   @@index([userId, clientId])
   @@index([userId, createdAt])
   @@index([workspaceId, phase])
+  @@index([workspaceId, estimatedEndDate])
   @@index([proposalId])
   @@index([opportunityId])
   @@map("projects")
@@ -1016,6 +1025,8 @@ model Meeting {
   @@index([clientId])
   @@index([userId, status])
   @@index([userId, scheduledAt])
+  @@index([projectId])
+  @@index([proposalId])
   @@map("meetings")
 }
 

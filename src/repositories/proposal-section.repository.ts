@@ -10,7 +10,7 @@ export const proposalSectionRepository = {
   },
 
   async findMany(workspaceId: string, query: ProposalSectionQueryInput) {
-    const { search, isArchived } = query
+    const { search, isArchived, limit } = query
 
     const searchFilter: Prisma.ProposalSectionWhereInput = search
       ? { name: { contains: search, mode: "insensitive" } }
@@ -20,10 +20,12 @@ export const proposalSectionRepository = {
       prisma.proposalSection.findMany({
         where: { workspaceId, isArchived: isArchived ?? false, ...searchFilter },
         orderBy: { order: "asc" },
+        take: limit ?? 100,
       }),
       prisma.proposalSection.findMany({
         where: { workspaceId: null, isArchived: false, ...searchFilter },
         orderBy: { order: "asc" },
+        take: limit ?? 100,
       }),
     ])
 

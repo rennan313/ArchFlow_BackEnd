@@ -14,7 +14,7 @@ export const updateSectionInstanceSchema = z.object({
 })
 
 export const reorderSectionInstancesSchema = z.object({
-  order: z.array(z.string().min(1)).min(1),
+  order: z.array(z.string().min(1)).min(1).max(100),
 })
 
 export type AddSectionInstanceInput     = z.infer<typeof addSectionInstanceSchema>

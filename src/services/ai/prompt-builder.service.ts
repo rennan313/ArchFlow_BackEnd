@@ -32,6 +32,11 @@ function sanitize(text: string | undefined | null, maxLen = 3000): string {
     .replace(/```/g, "'''")           // prevent markdown code-fence breakout
     .replace(/\bignore\b.{0,80}\binstructions?\b/gi, "[filtrado]")
     .replace(/\bsystem\b.{0,20}\bprompt\b/gi, "[filtrado]")
+    .replace(/\bdisregard\b/gi, "[filtrado]")
+    .replace(/\bforget\b.{0,30}\binstructions?\b/gi, "[filtrado]")
+    .replace(/\bpretend\b.{0,30}\byou are\b/gi, "[filtrado]")
+    .replace(/\bact as\b/gi, "[filtrado]")
+    .replace(/\n\n(Human|Assistant|System):/g, "\n\n[filtrado]:")
     .trim()
 }
 
@@ -65,9 +70,12 @@ function buildBrandingContext(b: BrandingContext): string {
 }
 
 export function buildUserPrompt(input: ProposalGenerationInput, tone: ProposalTone): string {
-  const city     = input.city  ?? "não informada"
-  const style    = input.style ?? "Contemporâneo"
-  const location = [input.city, input.state].filter(Boolean).join(", ") || "localização não informada"
+  const clientName     = sanitize(input.clientName, 200)
+  const projectType    = sanitize(input.projectType, 100)
+  const sanitizedCity  = sanitize(input.city ?? "não informada", 100)
+  const sanitizedStyle = sanitize(input.style ?? "Contemporâneo", 100)
+  const sanitizedState = sanitize(input.state ?? "", 100)
+  const location = [sanitizedCity, sanitizedState].filter(Boolean).join(", ") || "localização não informada"
 
   const pricingContext = (() => {
     const parts: string[] = []
@@ -99,13 +107,13 @@ export function buildUserPrompt(input: ProposalGenerationInput, tone: ProposalTo
   "cover": {
     "title": "título formal e sofisticado da proposta",
     "subtitle": "subtítulo descritivo e elegante — 1 frase",
-    "projectType": "${input.projectType}",
-    "city": "${city}",
-    "style": "${style}"
+    "projectType": "${projectType}",
+    "city": "${sanitizedCity}",
+    "style": "${sanitizedStyle}"
   },
   "summary": {
     "title": "título da seção (ex: Visão Geral do Projeto)",
-    "content": "resumo executivo em 3 parágrafos — visão estratégica e emocional do projeto. ${TONE_OPENING_STYLE[tone]}"
+    "content": "resumo executivo em 3 parágrafos — visão estratégica e emocional do projeto"
   },
   "clientUnderstanding": {
     "title": "título da seção (ex: Entendimento das Suas Necessidades)",
@@ -169,11 +177,11 @@ export function buildUserPrompt(input: ProposalGenerationInput, tone: ProposalTo
   return `Gere uma proposta comercial PREMIUM e PERSONALIZADA para o projeto abaixo.
 
 ━━━ DADOS DO PROJETO ━━━
-${line("Cliente",             input.clientName)}
-${line("Tipo de projeto",     input.projectType)}
+${line("Cliente",             clientName)}
+${line("Tipo de projeto",     projectType)}
 ${line("Localização",         location)}
 ${input.squareMeters ? line("Área total", `${input.squareMeters} m²`) : ""}
-${input.style ? line("Estilo arquitetônico", input.style) : ""}
+${input.style ? line("Estilo arquitetônico", sanitizedStyle) : ""}
 ${visualRefsLine}
 
 ${briefing ? `━━━ BRIEFING DO CLIENTE ━━━\n${briefing}` : ""}
@@ -191,7 +199,7 @@ ${TONE_OPENING_STYLE[tone]}
 • Gere entre 4 e 6 diferenciais específicos para este tipo de projeto e estilo
 • Identifique entre 2 e 4 riscos realistas e suas mitigações concretas
 • summary.content deve ter exatamente 3 parágrafos
-• architecturalDirection.content deve mencionar o estilo "${style}" e a cidade "${city}"
+• architecturalDirection.content deve mencionar o estilo "${sanitizedStyle}" e a cidade "${sanitizedCity}"
 
 Retorne APENAS o seguinte JSON, completamente preenchido:
 ${outputSchema}`
