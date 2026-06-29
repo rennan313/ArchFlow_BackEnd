@@ -4,7 +4,7 @@ import { emitEvent } from "@/lib/events"
 import { resolveTone } from "./tone.service"
 import { buildSystemPrompt, buildUserPrompt } from "./prompt-builder.service"
 import { parseAIResponse } from "./proposal-formatter.service"
-import type { ProposalGenerationInput, GenerationResult } from "@/types/proposal-generation"
+import type { ProposalGenerationInput, GenerationResult, LibraryContext } from "@/types/proposal-generation"
 
 const MODEL      = "claude-haiku-4-5-20251001"
 const MAX_TOKENS = 8000
@@ -33,10 +33,11 @@ export const generationService = {
   async generate(
     input:    ProposalGenerationInput,
     branding?: BrandingContext,
+    library?: LibraryContext,
   ): Promise<GenerationResult> {
     const tone         = resolveTone(input)
     const systemPrompt = buildSystemPrompt(tone, branding)
-    const userPrompt   = buildUserPrompt(input, tone)
+    const userPrompt   = buildUserPrompt(input, tone, library)
 
     const message = await getClient().messages.create({
       model:      MODEL,

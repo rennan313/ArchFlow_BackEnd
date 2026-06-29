@@ -1,5 +1,5 @@
 import { RenderError } from "@/types/proposal-render-model"
-import type { ProposalSnapshot, RenderDocument, RenderSection } from "@/types/proposal-render-model"
+import type { ProposalSnapshot, RenderDocument, RenderSection, RenderVisualRef, RenderVisualRefType } from "@/types/proposal-render-model"
 
 // ─── Etapa 3 — pure transformation, zero I/O ───────────────────────────────
 // ProposalSnapshot -> RenderDocument. Given a valid snapshot this function
@@ -26,8 +26,10 @@ function joinContact(email: string | null, phone: string | null): string | null 
   return parts.length ? parts.join(" · ") : null
 }
 
+const VALID_TYPES = new Set<RenderVisualRefType>(["IMAGE", "GIF", "VIDEO", "YOUTUBE", "VIMEO"])
+
 export function mapSnapshotToRenderDocument(snapshot: ProposalSnapshot): RenderDocument {
-  const { proposal, sections: rawSections, branding } = snapshot
+  const { proposal, sections: rawSections, branding, media } = snapshot
 
   if (!proposal.clientName?.trim()) {
     throw new RenderError("CORRUPTED_SNAPSHOT", "Proposal is missing client name")
@@ -41,6 +43,17 @@ export function mapSnapshotToRenderDocument(snapshot: ProposalSnapshot): RenderD
       title:   s.title?.trim() || "(Sem título)",
       content: s.content ?? "",
       isEmpty: !s.content || s.content.trim().length === 0,
+    }))
+
+  const visualRefs: RenderVisualRef[] = (media ?? [])
+    .filter((m) => VALID_TYPES.has(m.type as RenderVisualRefType))
+    .sort((a, b) => a.order - b.order)
+    .map((m) => ({
+      id:        m.id,
+      type:      m.type as RenderVisualRefType,
+      url:       m.url,
+      thumbnail: m.thumbnail,
+      order:     m.order,
     }))
 
   const officeName = branding?.tradeName ?? branding?.officeName ?? null
@@ -67,7 +80,7 @@ export function mapSnapshotToRenderDocument(snapshot: ProposalSnapshot): RenderD
       createdAt:     proposal.createdAt.toISOString(),
     },
     sections,
-    appendix: [], // nothing populates this yet — reserved per the Phase 2 architecture
+    appendix:   [], // reserved per Phase 2 architecture
     footer: {
       officeName,
       contact:             joinContact(branding?.email ?? null, branding?.phone ?? null),
@@ -75,6 +88,7 @@ export function mapSnapshotToRenderDocument(snapshot: ProposalSnapshot): RenderD
       signatureLabelRight: "Contratante",
       code,
     },
+    visualRefs,
   }
 
   return doc

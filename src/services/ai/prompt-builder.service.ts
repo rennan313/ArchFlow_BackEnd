@@ -1,4 +1,4 @@
-import type { ProposalGenerationInput, ProposalTone } from "@/types/proposal-generation"
+import type { ProposalGenerationInput, ProposalTone, LibraryContext } from "@/types/proposal-generation"
 import { TONE_PERSONAS, TONE_OPENING_STYLE } from "./tone.service"
 import type { BrandingContext } from "./generation.service"
 
@@ -69,7 +69,35 @@ function buildBrandingContext(b: BrandingContext): string {
   return lines.join("\n")
 }
 
-export function buildUserPrompt(input: ProposalGenerationInput, tone: ProposalTone): string {
+// Maps the 5 curated library section keys to the corresponding JSON output fields.
+// This lets the AI understand which reference snippet corresponds to which section.
+const SECTION_KEY_TO_OUTPUT_FIELD: Record<string, string> = {
+  "executive-summary": "summary.content",
+  "diagnosis":         "clientUnderstanding.content",
+  "opportunities":     "architecturalDirection.content (oportunidades identificadas)",
+  "strategy":          "architecturalDirection.content (direção estratégica)",
+  "closing":           "finalConsiderations.content",
+}
+
+function buildLibrarySection(library: LibraryContext | undefined): string {
+  if (!library || library.sections.length === 0) return ""
+
+  const lines: string[] = [
+    "\n━━━ BASE DE CONTEÚDO DO ESCRITÓRIO ━━━",
+    "Os trechos abaixo são conteúdo aprovado do escritório, selecionado para este tipo de projeto.",
+    "USE COMO PONTO DE PARTIDA — adapte ao cliente, expanda com o briefing. Não copie literalmente.\n",
+  ]
+
+  for (const s of library.sections) {
+    const outputField = SECTION_KEY_TO_OUTPUT_FIELD[s.sectionKey] ?? s.sectionName
+    lines.push(`${s.sectionName} → campo "${outputField}":`)
+    lines.push(`"${s.content}"\n`)
+  }
+
+  return lines.join("\n")
+}
+
+export function buildUserPrompt(input: ProposalGenerationInput, tone: ProposalTone, library?: LibraryContext): string {
   const clientName     = sanitize(input.clientName, 200)
   const projectType    = sanitize(input.projectType, 100)
   const sanitizedCity  = sanitize(input.city ?? "não informada", 100)
@@ -170,9 +198,12 @@ export function buildUserPrompt(input: ProposalGenerationInput, tone: ProposalTo
   }
 }`
 
-  const visualRefsLine = input.visualRefUrls?.length
-    ? `• Referências visuais: ${input.visualRefUrls.length} imagem(ns)/vídeo(s) fornecido(s) pelo cliente como inspiração — integre essa riqueza visual à narrativa`
+  const totalRefs = (input.visualRefUrls?.length ?? 0) + (input.imageRefs?.length ?? 0)
+  const visualRefsLine = totalRefs > 0
+    ? `• Referências visuais: ${totalRefs} imagem(ns)/vídeo(s) fornecido(s) pelo cliente como inspiração — integre essa riqueza visual à narrativa`
     : ""
+
+  const librarySection = buildLibrarySection(library)
 
   return `Gere uma proposta comercial PREMIUM e PERSONALIZADA para o projeto abaixo.
 
@@ -189,7 +220,7 @@ ${briefing ? `━━━ BRIEFING DO CLIENTE ━━━\n${briefing}` : ""}
 ${input.meetingNotes ? `━━━ NOTAS DA REUNIÃO ━━━\n${sanitize(input.meetingNotes, 3000)}` : ""}
 
 ${pricingContext ? `━━━ PRECIFICAÇÃO ━━━\n${pricingContext}` : ""}
-
+${librarySection}
 ━━━ INSTRUÇÕES DE GERAÇÃO ━━━
 ${TONE_OPENING_STYLE[tone]}
 • Gere entre 4 e 6 objetivos específicos para este projeto

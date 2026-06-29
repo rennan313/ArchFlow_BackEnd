@@ -81,6 +81,35 @@ export const storageService = {
     }
   },
 
+  async uploadVisualRef(workspaceId: string, file: File): Promise<UploadResult> {
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      throw new Error(`UNSUPPORTED_FILE_TYPE:${file.type}`)
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      throw new Error("Image file exceeds 10 MB limit")
+    }
+
+    const supabase    = getClient()
+    const ext         = path.extname(file.name).toLowerCase()
+    const uuid        = randomUUID()
+    const storagePath = `refs/${workspaceId}/${uuid}${ext}`
+    const buffer      = Buffer.from(await file.arrayBuffer())
+
+    const { error } = await supabase.storage
+      .from(BUCKET).upload(storagePath, buffer, { contentType: file.type, upsert: false })
+    if (error) throw new Error(`Storage upload failed: ${error.message}`)
+
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from(BUCKET).createSignedUrl(storagePath, SIGNED_URL_TTL)
+    if (signedError || !signedData) throw new Error(`Failed to create signed URL: ${signedError?.message}`)
+
+    return {
+      url:       signedData.signedUrl,
+      storagePath,
+      thumbnail: signedData.signedUrl,
+    }
+  },
+
   async getSignedUrl(storagePath: string): Promise<string> {
     const { data, error } = await getClient().storage
       .from(BUCKET).createSignedUrl(storagePath, SIGNED_URL_TTL)

@@ -1,7 +1,7 @@
 import React from "react"
 import path from "path"
-import { Document, Page, Text, View, StyleSheet, Font, type DocumentProps } from "@react-pdf/renderer"
-import type { RenderDocument, ThemeTokens } from "@/types/proposal-render-model"
+import { Document, Page, Text, View, StyleSheet, Font, Image, type DocumentProps } from "@react-pdf/renderer"
+import type { RenderDocument, RenderVisualRef, ThemeTokens } from "@/types/proposal-render-model"
 
 // ─── Etapa 4 (Fase 2.0) / Fase 2.1 design pass — the PDF layer ─────────────
 // Consumes ONLY RenderDocument + ThemeTokens. Renders exactly as many
@@ -273,6 +273,61 @@ function SectionBody({ section, dark, styles }: { section: RenderDocument["secti
   )
 }
 
+function VisualRefsPage({
+  refs, styles, footerLabel, pageNum,
+}: {
+  refs:        RenderVisualRef[]
+  styles:      ReturnType<typeof buildStyles>
+  footerLabel: string
+  pageNum:     number
+}) {
+  if (refs.length === 0) return null
+
+  const images = refs.filter((r) => r.type === "IMAGE" || r.type === "GIF")
+  const videos = refs.filter((r) => r.type === "YOUTUBE" || r.type === "VIMEO")
+
+  return (
+    <Page size="A4" style={styles.pageLight}>
+      <Text style={styles.sectionLabel}>—</Text>
+      <Text style={styles.sectionTitleLight}>Referências Visuais</Text>
+      <View style={styles.sectionRule} />
+
+      {images.length > 0 && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: videos.length ? 20 : 0 }}>
+          {images.map((ref) => (
+            <View key={ref.id} style={{ width: images.length === 1 ? "100%" : "48%", marginBottom: 0 }}>
+              <Image
+                src={ref.url}
+                style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 4 }}
+              />
+            </View>
+          ))}
+        </View>
+      )}
+
+      {videos.length > 0 && (
+        <View style={{ gap: 10 }}>
+          {videos.map((ref) => (
+            <View key={ref.id}>
+              {ref.thumbnail && (
+                <Image
+                  src={ref.thumbnail}
+                  style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 4, marginBottom: 4 }}
+                />
+              )}
+              <Text style={{ fontSize: 8, color: "#8C8980", letterSpacing: 0.5 }}>
+                {ref.type} · {ref.url}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <Footer label={footerLabel} page={pageNum} dark={false} styles={styles} />
+    </Page>
+  )
+}
+
 export function RenderDocumentPdf({ doc, theme }: { doc: RenderDocument; theme: ThemeTokens } & DocumentProps) {
   ensureFonts()
   const styles = buildStyles(theme)
@@ -320,6 +375,16 @@ export function RenderDocumentPdf({ doc, theme }: { doc: RenderDocument; theme: 
         )
       })}
 
+      {/* Visual references page — only rendered when media exists */}
+      {doc.visualRefs && doc.visualRefs.length > 0 && (
+        <VisualRefsPage
+          refs={doc.visualRefs}
+          styles={styles}
+          footerLabel={footerLabel}
+          pageNum={allSections.length + 2}
+        />
+      )}
+
       {/* Signature page */}
       <Page size="A4" style={styles.pageLight}>
         <Text style={styles.sectionLabel}>—</Text>
@@ -344,7 +409,7 @@ export function RenderDocumentPdf({ doc, theme }: { doc: RenderDocument; theme: 
             {doc.metadata.code} · Gerado em {fmtDate(doc.cover.createdAt)} · ArchFlow
           </Text>
         </View>
-        <Footer label={footerLabel} page={allSections.length + 2} dark={false} styles={styles} />
+        <Footer label={footerLabel} page={allSections.length + (doc.visualRefs?.length ? 3 : 2)} dark={false} styles={styles} />
       </Page>
     </Document>
   )

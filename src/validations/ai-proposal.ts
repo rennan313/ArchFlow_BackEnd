@@ -27,6 +27,10 @@ export const generatePremiumProposalSchema = z.object({
     (url) => url.startsWith("http://") || url.startsWith("https://"),
     { message: "Only http/https URLs are allowed" }
   )).optional(),
+  imageRefs: z.array(z.object({
+    url:         z.string().url(),
+    storagePath: z.string(),
+  })).optional(),
 })
 
 export type GeneratePremiumProposalInput = z.infer<typeof generatePremiumProposalSchema>

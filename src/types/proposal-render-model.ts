@@ -69,13 +69,24 @@ export interface RenderFooter {
   code: string
 }
 
+export type RenderVisualRefType = "IMAGE" | "GIF" | "VIDEO" | "YOUTUBE" | "VIMEO"
+
+export interface RenderVisualRef {
+  id:        string
+  type:      RenderVisualRefType
+  url:       string
+  thumbnail: string | null
+  order:     number
+}
+
 export interface RenderDocument {
   schemaVersion: 1
-  metadata: RenderMetadata
-  cover: RenderCover
-  sections: RenderSection[]
-  appendix: RenderSection[]
-  footer: RenderFooter
+  metadata:    RenderMetadata
+  cover:       RenderCover
+  sections:    RenderSection[]
+  appendix:    RenderSection[]
+  footer:      RenderFooter
+  visualRefs:  RenderVisualRef[]
 }
 
 // ─── Snapshot layer (SnapshotLoader output, RenderModelMapper input) ──────
@@ -109,6 +120,14 @@ export interface ProposalSnapshot {
     sortOrder: number
   }>
   branding: OfficeBrandingSnapshot | null
+  media: Array<{
+    id:          string
+    type:        string
+    url:         string
+    storagePath: string | null
+    thumbnail:   string | null
+    order:       number
+  }>
 }
 
 // ─── Error handling ─────────────────────────────────────────────────────────

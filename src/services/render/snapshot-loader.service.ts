@@ -1,6 +1,8 @@
 import { proposalRepository } from "@/repositories/proposal.repository"
 import { proposalSectionInstanceRepository } from "@/repositories/proposal-section-instance.repository"
+import { mediaRepository } from "@/repositories/media.repository"
 import { brandingService } from "@/services/branding.service"
+import { storageService } from "@/services/storage/supabase.service"
 import { legacyMigrationService } from "@/services/render/legacy-migration.service"
 import { RenderError } from "@/types/proposal-render-model"
 import type { ProposalSnapshot, ProposalSkinValue } from "@/types/proposal-render-model"
@@ -26,7 +28,21 @@ export const snapshotLoaderService = {
       throw new RenderError("PROPOSAL_EMPTY", "This proposal has no content to render yet")
     }
 
-    const branding = await brandingService.getBrandingContext(workspaceId)
+    const [branding, rawMedia] = await Promise.all([
+      brandingService.getBrandingContext(workspaceId),
+      mediaRepository.findAll(proposalId),
+    ])
+
+    // Refresh signed URLs for Supabase-stored files
+    let media = rawMedia
+    const withStorage = rawMedia.filter((m) => m.storagePath)
+    if (withStorage.length > 0) {
+      const refreshed = await storageService.refreshSignedUrls(
+        withStorage.map((m) => ({ id: m.id, storagePath: m.storagePath, url: m.url })),
+      ).catch(() => [] as { id: string; url: string }[])
+      const urlMap = new Map(refreshed.map((r) => [r.id, r.url]))
+      media = rawMedia.map((m) => ({ ...m, url: urlMap.get(m.id) ?? m.url }))
+    }
 
     return {
       proposal: {
@@ -57,6 +73,14 @@ export const snapshotLoaderService = {
             primaryColor:  branding.primaryColor,
           }
         : null,
+      media: media.map((m) => ({
+        id:          m.id,
+        type:        m.type as string,
+        url:         m.url,
+        storagePath: m.storagePath,
+        thumbnail:   m.thumbnail,
+        order:       m.order,
+      })),
     }
   },
 }

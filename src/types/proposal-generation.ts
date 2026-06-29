@@ -17,7 +17,8 @@ export interface ProposalGenerationInput {
   pricingMethod?:    "HOURLY" | "SQUARE_METER"
   estimatedValue?:   number
   complexity?:       "LOW" | "MEDIUM" | "HIGH" | "PREMIUM"
-  visualRefUrls?:    string[]
+  visualRefUrls?: string[]
+  imageRefs?:     { url: string; storagePath: string }[]
 }
 
 export type ProposalTone = "residential" | "commercial" | "luxury" | "interiors" | "landscape"
@@ -106,4 +107,17 @@ export interface GenerationResult {
   tone:        ProposalTone
   model:       string
   tokensUsed?: number
+}
+
+// ─── Library context (injected into the AI prompt before generation) ──────────
+
+export interface LibrarySectionContext {
+  sectionKey:  string
+  sectionName: string
+  /** The winning block's content, already scored and selected for this project. */
+  content:     string
+}
+
+export interface LibraryContext {
+  sections: LibrarySectionContext[]
 }
