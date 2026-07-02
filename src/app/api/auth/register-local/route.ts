@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server"
+﻿import { type NextRequest } from "next/server"
 import { randomUUID } from "crypto"
 import { z } from "zod"
 import { provisionService } from "@/services/provision.service"
@@ -29,7 +29,7 @@ const registerLocalSchema = z.object({
 export async function POST(req: NextRequest) {
   if (process.env.NODE_ENV === "production") return notFound()
 
-  const limited = authRateLimit(req)
+  const limited = await authRateLimit(req)
   if (limited) return limited
 
   try {

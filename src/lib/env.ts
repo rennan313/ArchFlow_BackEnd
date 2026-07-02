@@ -15,10 +15,7 @@ export const env = {
   // ── JWT ────────────────────────────────────────────────────────────────────
   jwtSecret:                 required("JWT_SECRET"),
   jwtRefreshSecret:          required("JWT_REFRESH_SECRET"),
-  // NOTE: "7d" matches the typical NextAuth session lifetime to prevent
-  // silent 401s. Reduce to "15m" after Supabase migration and proper
-  // token refresh is implemented.
-  jwtExpiresIn:              optional("JWT_EXPIRES_IN",              "7d"),
+  jwtExpiresIn:              optional("JWT_EXPIRES_IN",              "15m"),
   jwtRefreshExpiresIn:       optional("JWT_REFRESH_EXPIRES_IN",      "30d"),
 
   // ── Auth ───────────────────────────────────────────────────────────────────

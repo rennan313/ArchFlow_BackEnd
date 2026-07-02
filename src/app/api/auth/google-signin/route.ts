@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server"
+﻿import { type NextRequest } from "next/server"
 import { z } from "zod"
 import { authService } from "@/services/auth.service"
 import { ok } from "@/lib/response"
@@ -10,7 +10,7 @@ const schema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const limited = authRateLimit(req)
+  const limited = await authRateLimit(req)
   if (limited) return limited
 
   try {

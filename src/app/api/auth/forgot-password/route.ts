@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server"
+﻿import { type NextRequest } from "next/server"
 import { authService } from "@/services/auth.service"
 import { emailService } from "@/services/email/email.service"
 import { forgotPasswordSchema } from "@/validations/auth"
@@ -10,7 +10,7 @@ import { authRateLimit } from "@/middlewares/rateLimiter"
 const GENERIC_RESPONSE = "Se este e-mail estiver cadastrado, você receberá um link de redefinição em breve."
 
 export async function POST(req: NextRequest) {
-  const limited = authRateLimit(req)
+  const limited = await authRateLimit(req)
   if (limited) return limited
 
   try {

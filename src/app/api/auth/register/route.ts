@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server"
+﻿import { type NextRequest } from "next/server"
 import { authService } from "@/services/auth.service"
 import { emailService } from "@/services/email/email.service"
 import { credentialsRegisterSchema } from "@/validations/auth"
@@ -8,7 +8,7 @@ import { logger } from "@/lib/logger"
 import { authRateLimit } from "@/middlewares/rateLimiter"
 
 export async function POST(req: NextRequest) {
-  const limited = authRateLimit(req)
+  const limited = await authRateLimit(req)
   if (limited) return limited
 
   try {

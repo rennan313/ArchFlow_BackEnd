@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server"
+﻿import { type NextRequest } from "next/server"
 import { requireProposalLimit } from "@/middlewares/limits"
 import { aiRateLimit } from "@/middlewares/rateLimiter"
 import { hasPermission } from "@/middlewares/rbac"
@@ -41,7 +41,7 @@ export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params
     return forbidden("Permission denied: create:proposals")
   }
 
-  const limited = aiRateLimit(req)
+  const limited = await aiRateLimit(req)
   if (limited) return limited
 
   try {

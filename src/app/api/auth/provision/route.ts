@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server"
+﻿import { type NextRequest } from "next/server"
 import { z } from "zod"
 import { verifySupabaseJwt, SupabaseJwtError } from "@/lib/supabase-jwt"
 import { provisionService } from "@/services/provision.service"
@@ -41,7 +41,7 @@ const provisionSchema = z.object({
  * • Rate-limited at 10 requests / minute / IP.
  */
 export async function POST(req: NextRequest) {
-  const limited = authRateLimit(req)
+  const limited = await authRateLimit(req)
   if (limited) return limited
 
   // ── 1. Verify Supabase token via admin client ─────────────────────────────

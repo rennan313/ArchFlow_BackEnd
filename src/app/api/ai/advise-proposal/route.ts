@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server"
+﻿import { type NextRequest } from "next/server"
 import { requireWorkspacePermission } from "@/middlewares/rbac"
 import { advisorRateLimit } from "@/middlewares/rateLimiter"
 import { proposalAdvisorService } from "@/services/ai/proposal-advisor.service"
@@ -15,7 +15,7 @@ type Ctx = { params: Promise<Record<string, string>> }
 // it never writes prose, HTML, or a PDF. Gated the same as proposal creation
 // since it's a precursor step in that same workflow.
 export const POST = requireWorkspacePermission("create:proposals")(async (req: NextRequest, _ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
-  const limited = advisorRateLimit(req)
+  const limited = await advisorRateLimit(req)
   if (limited) return limited
 
   try {

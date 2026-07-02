@@ -14,20 +14,35 @@ function resolveType(filename: string) {
   return type
 }
 
+async function refreshVersionUrls<T extends { versions: { storagePath: string; url: string }[] }>(doc: T): Promise<T> {
+  const versions = await Promise.all(
+    doc.versions.map(async (v) => {
+      try {
+        return { ...v, url: await storageService.refreshDocumentUrl(v.storagePath) }
+      } catch {
+        return v
+      }
+    }),
+  )
+  return { ...doc, versions }
+}
+
 export const documentService = {
   async list(workspaceId: string, query: DocumentQueryInput) {
     const { data, total } = await documentRepository.findMany(workspaceId, query)
-    return { data, pagination: buildMeta(total, query.page, query.limit) }
+    const refreshed = await Promise.all(data.map(refreshVersionUrls))
+    return { data: refreshed, pagination: buildMeta(total, query.page, query.limit) }
   },
 
   async listRecent(workspaceId: string, limit: number) {
-    return documentRepository.listRecent(workspaceId, limit)
+    const docs = await documentRepository.listRecent(workspaceId, limit)
+    return Promise.all(docs.map(refreshVersionUrls))
   },
 
   async getById(id: string, workspaceId: string) {
     const document = await documentRepository.findById(id, workspaceId)
     if (!document) throw new AppError(ErrorCode.DOCUMENT_NOT_FOUND)
-    return document
+    return refreshVersionUrls(document)
   },
 
   async create(
