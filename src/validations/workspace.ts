@@ -11,9 +11,10 @@ export const acceptInviteSchema = z.object({
   token: z.string().min(1),
 })
 
+// OWNER cannot be assigned via this endpoint — ownership transfer is a dedicated OWNER-only flow
 export const updateUserRoleSchema = z.object({
   userId: z.string().min(1),
-  role:   WorkspaceRoleEnum,
+  role:   z.enum(["ADMIN", "ARCHITECT", "DESIGNER", "ASSISTANT", "VIEWER"]),
 })
 
 export const removeUserSchema = z.object({

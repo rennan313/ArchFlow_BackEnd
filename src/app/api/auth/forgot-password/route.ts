@@ -5,11 +5,14 @@ import { forgotPasswordSchema } from "@/validations/auth"
 import { ok } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
 import { logger } from "@/lib/logger"
-import { env } from "@/lib/env"
+import { authRateLimit } from "@/middlewares/rateLimiter"
 
 const GENERIC_RESPONSE = "Se este e-mail estiver cadastrado, você receberá um link de redefinição em breve."
 
 export async function POST(req: NextRequest) {
+  const limited = authRateLimit(req)
+  if (limited) return limited
+
   try {
     const body  = await req.json()
     const input = forgotPasswordSchema.parse(body)
@@ -27,13 +30,12 @@ export async function POST(req: NextRequest) {
         .catch((err) => {
           logger.error({ err }, "[forgot-password] email send failed")
         })
+
+      // Log token server-side only for local debugging — never expose in response
+      logger.debug({ userId: result.user.id }, "[forgot-password] reset token issued")
     }
 
     // Always return generic message to prevent email enumeration
-    if (env.isDev && result) {
-      return ok({ message: GENERIC_RESPONSE, debug_token: result.token })
-    }
-
     return ok({ message: GENERIC_RESPONSE })
   } catch (error) {
     return handleServiceError(error)

@@ -11,6 +11,6 @@ export const prisma =
     log: env.isDev ? ["query", "error", "warn"] : ["error"],
   })
 
-if (!env.isDev) {
+if (env.isDev) {
   globalForPrisma.prisma = prisma
 }
