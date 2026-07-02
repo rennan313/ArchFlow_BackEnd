@@ -9,11 +9,19 @@ const CORS_HEADERS = [
   { key: "Access-Control-Max-Age",       value: "86400" },
 ];
 
+const CSP = [
+  "default-src 'none'",
+  "script-src 'none'",
+  "connect-src 'self' https://*.supabase.co",
+  "frame-ancestors 'none'",
+].join("; ")
+
 const SECURITY_HEADERS = [
-  { key: "X-Frame-Options",           value: "DENY" },
-  { key: "X-Content-Type-Options",    value: "nosniff" },
-  { key: "Referrer-Policy",           value: "strict-origin-when-cross-origin" },
-  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  { key: "X-Frame-Options",                     value: "DENY" },
+  { key: "X-Content-Type-Options",              value: "nosniff" },
+  { key: "Referrer-Policy",                     value: "strict-origin-when-cross-origin" },
+  { key: "Strict-Transport-Security",           value: "max-age=63072000; includeSubDomains; preload" },
+  { key: "Content-Security-Policy-Report-Only", value: CSP },
 ];
 
 const nextConfig: NextConfig = {
