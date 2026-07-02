@@ -100,22 +100,37 @@ export const workspaceService = {
   },
 
   async acceptInvite(token: string, userId: string) {
-    const invite = await prisma.workspaceInvite.findUnique({ where: { token } })
+    const [invite, user] = await Promise.all([
+      prisma.workspaceInvite.findUnique({ where: { token } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, workspaceId: true } }),
+    ])
 
+    if (!user)  throw new AppError(ErrorCode.USER_NOT_FOUND)
     if (!invite)           throw new AppError(ErrorCode.NOT_FOUND, "Invite not found")
     if (invite.accepted)   throw new AppError(ErrorCode.NOT_FOUND, "Invite already used")
     if (invite.expiresAt < new Date()) throw new AppError(ErrorCode.NOT_FOUND, "Invite expired")
 
-    // Update user to join workspace
-    await prisma.user.update({
-      where: { id: userId },
-      data:  { workspaceId: invite.workspaceId, workspaceRole: invite.role },
-    })
+    // Token must be bound to the invited email — prevents link-sharing attacks
+    if (invite.email.toLowerCase() !== user.email.toLowerCase()) {
+      throw new AppError(ErrorCode.INVITE_EMAIL_MISMATCH, "This invite was not sent to your email address")
+    }
 
-    await prisma.workspaceInvite.update({
-      where: { id: invite.id },
-      data:  { accepted: true },
-    })
+    // Prevent double workspace membership
+    if (user.workspaceId) {
+      throw new AppError(ErrorCode.ALREADY_IN_WORKSPACE, "You are already a member of a workspace")
+    }
+
+    // Atomic: join workspace + consume invite in a single transaction
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data:  { workspaceId: invite.workspaceId, workspaceRole: invite.role },
+      }),
+      prisma.workspaceInvite.updateMany({
+        where: { id: invite.id, accepted: false },
+        data:  { accepted: true },
+      }),
+    ])
 
     return invite.workspaceId
   },
