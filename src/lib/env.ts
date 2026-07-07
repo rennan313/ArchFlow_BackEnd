@@ -44,6 +44,9 @@ export const env = {
   smtpPass:     optional("SMTP_PASS",   ""),
   smtpFrom:     optional("SMTP_FROM",   "ArchFlow <noreply@archflow.com.br>"),
   emailEnabled: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
+  // Internal inbox that receives "schedule a demo" lead notifications from the
+  // public pricing page. Falls back to SMTP_FROM so nothing breaks if unset.
+  salesEmail:   optional("SALES_EMAIL", optional("SMTP_FROM", "ArchFlow <noreply@archflow.com.br>")),
 
   // ── URLs ───────────────────────────────────────────────────────────────────
   frontendUrl:               optional("FRONTEND_URL",               "http://localhost:3001"),

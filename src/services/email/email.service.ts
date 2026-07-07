@@ -1,6 +1,7 @@
 import { sendMail } from "./mailer"
 import { resetPasswordTemplate } from "./templates/reset-password"
 import { verifyEmailTemplate } from "./templates/verify-email"
+import { demoRequestTemplate } from "./templates/demo-request"
 import { env } from "@/lib/env"
 
 export const emailService = {
@@ -33,6 +34,23 @@ export const emailService = {
     await sendMail({
       to:      params.to,
       subject: "Confirme seu e-mail — ArchFlow",
+      html,
+      text,
+    })
+  },
+
+  async sendDemoRequest(params: {
+    name:     string
+    email:    string
+    company:  string
+    phone?:   string
+    message?: string
+  }): Promise<void> {
+    const { html, text } = demoRequestTemplate(params)
+
+    await sendMail({
+      to:      env.salesEmail,
+      subject: `Nova demonstração solicitada — ${params.company}`,
       html,
       text,
     })
