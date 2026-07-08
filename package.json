@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
+    "postinstall": "prisma generate",
     "build": "next build",
     "start": "next start",
     "lint": "eslint src --ext .ts,.tsx",
@@ -26,6 +27,7 @@
     "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@prisma/client": "^5.22.0",
     "@react-pdf/renderer": "^4.5.1",
+    "@sentry/nextjs": "^10.63.0",
     "@supabase/supabase-js": "^2.106.2",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
