@@ -149,7 +149,7 @@ async function main() {
 
   const stateMap = new Map(
     (await prisma.state.findMany({ select: { id: true, uf: true } }))
-      .map((s) => [s.uf, s.id]),
+      .map((s: { id: string; uf: string }) => [s.uf, s.id]),
   )
   console.log(`  ${stateMap.size} states created.`)
 
