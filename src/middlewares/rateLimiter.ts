@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { tooManyRequests } from "@/lib/response"
+import { env } from "@/lib/env"
 
 // ── Distributed rate limiter (production) ─────────────────────────────────────
 // Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in production to
@@ -18,8 +19,8 @@ function getIp(req: NextRequest): string {
 }
 
 async function initUpstash() {
-  const url   = process.env.UPSTASH_REDIS_REST_URL
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN
+  const url   = env.upstashRedisUrl
+  const token = env.upstashRedisToken
   if (!url || !token) return false
 
   try {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import * as Sentry from "@sentry/nextjs";
 import * as R from "@/lib/response";
 import { AppError, ErrorCode } from "@/lib/errors";
 import { logger } from "@/lib/logger";
@@ -76,5 +77,6 @@ export function handleServiceError(error: unknown): NextResponse {
   }
 
   logger.error({ err: error }, "[Unhandled error]");
+  Sentry.captureException(error);
   return R.internalError();
 }

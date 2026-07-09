@@ -1,3 +1,12 @@
+const isProd = process.env.NODE_ENV === "production"
+// `next build` always runs with NODE_ENV=production — including local/CI
+// builds that never touch real production secrets. NEXT_PHASE distinguishes
+// "compiling the app" from "actually serving it", so strict vars are only
+// enforced at real runtime start (mirrors instrumentation.ts's existing
+// fail-fast-at-boot convention), not during `next build` itself.
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build"
+const enforceStrict = isProd && !isBuildPhase
+
 function required(name: string): string {
   const val = process.env[name]
   if (!val) throw new Error(`[env] Missing required environment variable: ${name}`)
@@ -6,6 +15,34 @@ function required(name: string): string {
 
 function optional(name: string, fallback: string): string {
   return process.env[name] ?? fallback
+}
+
+/**
+ * Required in production — throws at boot if missing. In development, falls
+ * back to `devDefault` so local dev keeps working without every var set. Use
+ * this instead of a bare fallback for anything whose value legitimately
+ * differs between environments — a silent localhost/default surviving into
+ * production turns a boot-time config error into a confusing runtime failure
+ * (CORS rejecting the real frontend, emails linking to localhost, etc).
+ */
+function requiredInProd(name: string, devDefault: string): string {
+  const val = process.env[name]
+  if (val) return val
+  if (!enforceStrict) return devDefault
+  throw new Error(`[env] Missing required environment variable in production: ${name}`)
+}
+
+/**
+ * Same as requiredInProd, but with no dev default at all — for vars that are
+ * legitimately optional in dev (e.g. Upstash Redis, which the rate limiter
+ * only needs to run distributed; a single dev instance falls back to
+ * in-memory on its own). Still fails the boot in production if missing.
+ */
+function requiredInProdOptional(name: string): string | undefined {
+  const val = process.env[name]
+  if (val) return val
+  if (!enforceStrict) return undefined
+  throw new Error(`[env] Missing required environment variable in production: ${name}`)
 }
 
 export const env = {
@@ -49,10 +86,19 @@ export const env = {
   salesEmail:   optional("SALES_EMAIL", optional("SMTP_FROM", "ArchFlow <noreply@archflow.com.br>")),
 
   // ── URLs ───────────────────────────────────────────────────────────────────
-  frontendUrl:               optional("FRONTEND_URL",               "http://localhost:3001"),
-  appUrl:                    optional("NEXT_PUBLIC_APP_URL",         "http://localhost:3000"),
+  frontendUrl:               requiredInProd("FRONTEND_URL",         "http://localhost:3001"),
+  appUrl:                    requiredInProd("NEXT_PUBLIC_APP_URL",  "http://localhost:3000"),
+
+  // ── Rate limiting (Upstash Redis — required in production; a single dev
+  // instance falls back to in-memory on its own, see middlewares/rateLimiter.ts) ──
+  upstashRedisUrl:           requiredInProdOptional("UPSTASH_REDIS_REST_URL"),
+  upstashRedisToken:         requiredInProdOptional("UPSTASH_REDIS_REST_TOKEN"),
+
+  // ── Observability (optional — inert with no DSN) ───────────────────────────
+  sentryDsn:                 process.env.SENTRY_DSN,
+  sentryRelease:             process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.SENTRY_RELEASE,
 
   // ── Runtime ────────────────────────────────────────────────────────────────
   nodeEnv:                   optional("NODE_ENV",                   "development"),
-  isDev:                     optional("NODE_ENV",                   "development") !== "production",
+  isDev:                     !isProd,
 } as const
