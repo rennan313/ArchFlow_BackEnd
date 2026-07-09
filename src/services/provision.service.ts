@@ -168,7 +168,7 @@ export const provisionService = {
   async _handleExisting(existing: User, input: ProvisionInput): Promise<ProvisionResult> {
     // Case A: same supabaseId → already provisioned (or partial failure retry)
     if (existing.supabaseId === input.supabaseId) {
-      return this._completeAndReturn(existing)
+      return this._completeAndReturn(existing, input.password)
     }
 
     // Case B: email exists WITHOUT supabaseId → pre-migration user
@@ -192,8 +192,19 @@ export const provisionService = {
    * Returns an idempotent ProvisionResult for a user that was already created.
    * If the workspace was missing (e.g. workspace creation failed on a previous
    * call), it is completed before returning.
+   *
+   * SELF-HEALING PASSWORD: the email-confirmation callback flow provisions
+   * with no real password (a random, unusable hash — see the `password?`
+   * doc comment on ProvisionInput), because Supabase never hands the
+   * original plaintext back to us. Previously that hash was permanent —
+   * this call ignored `input.password` entirely, so a user who registered
+   * via email link could never log in through the backend's own credentials
+   * flow with the password they actually chose. Now, whenever this
+   * (already-Supabase-authenticated) caller supplies a password, we update
+   * the stored hash to match — the login page's Supabase-fallback retry
+   * calls this exact path to repair it the first time the user signs in.
    */
-  async _completeAndReturn(existing: User): Promise<ProvisionResult> {
+  async _completeAndReturn(existing: User, newPassword?: string): Promise<ProvisionResult> {
     let user = existing
 
     if (!existing.workspaceId) {
@@ -202,6 +213,15 @@ export const provisionService = {
       )
       await workspaceService.createForUser(existing.id, existing.name)
       user = await prisma.user.findUniqueOrThrow({ where: { id: existing.id } })
+    }
+
+    if (newPassword) {
+      const hashedPassword = await hashPassword(newPassword)
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data:  { password: hashedPassword },
+      })
+      logger.info(`[provision] Password repaired for userId=${user.id}`)
     }
 
     logger.info(
