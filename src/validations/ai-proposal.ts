@@ -3,6 +3,7 @@ import { PricingMethodEnum, ComplexityEnum } from "./pricing"
 
 export const generatePremiumProposalSchema = z.object({
   // Required
+  clientId:         z.string().optional(),
   clientName:       z.string().min(2).max(100),
   projectType:      z.string().min(2).max(100),
   // Project context

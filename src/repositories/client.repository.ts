@@ -2,11 +2,24 @@ import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import type { ClientQueryInput } from "@/validations/client"
 
+// Accepts either the global `prisma` singleton or a transaction client
+// (`prisma.$transaction(async (tx) => ...)`), so find-or-create logic can
+// run either standalone or as part of a larger atomic transaction.
+type Db = typeof prisma | Prisma.TransactionClient
+
 export const clientRepository = {
-  findById(id: string, workspaceId: string) {
-    return prisma.client.findFirst({
+  findById(id: string, workspaceId: string, db: Db = prisma) {
+    return db.client.findFirst({
       where: { id, workspaceId },
       include: { _count: { select: { proposals: true, meetings: true } } },
+    })
+  },
+
+  /** Case-insensitive exact name match within a workspace — used to reuse an
+   *  existing client instead of creating a duplicate. */
+  findByExactName(workspaceId: string, name: string, db: Db = prisma) {
+    return db.client.findFirst({
+      where: { workspaceId, name: { equals: name, mode: "insensitive" } },
     })
   },
 
@@ -45,8 +58,9 @@ export const clientRepository = {
     workspaceId: string,
     userId: string,
     data: Omit<Prisma.ClientUncheckedCreateInput, "id" | "userId" | "workspaceId" | "createdAt" | "updatedAt">,
+    db: Db = prisma,
   ) {
-    return prisma.client.create({
+    return db.client.create({
       data: { ...data, userId, workspaceId },
       include: { _count: { select: { proposals: true, meetings: true } } },
     })

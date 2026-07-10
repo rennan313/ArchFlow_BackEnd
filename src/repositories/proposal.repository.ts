@@ -2,6 +2,10 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type { ProposalQueryInput } from "@/validations/proposal";
 
+// Accepts either the global `prisma` singleton or a transaction client, so
+// creation can run standalone or as part of a larger atomic transaction.
+type Db = typeof prisma | Prisma.TransactionClient;
+
 export const proposalRepository = {
   findById(id: string, workspaceId: string) {
     return prisma.proposal.findFirst({ where: { id, workspaceId } });
@@ -37,8 +41,8 @@ export const proposalRepository = {
     return { data, total };
   },
 
-  create(data: Prisma.ProposalCreateInput) {
-    return prisma.proposal.create({ data });
+  create(data: Prisma.ProposalCreateInput, db: Db = prisma) {
+    return db.proposal.create({ data });
   },
 
   update(id: string, workspaceId: string, data: Prisma.ProposalUpdateInput) {

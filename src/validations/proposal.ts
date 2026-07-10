@@ -3,6 +3,7 @@ import { PricingMethodEnum, ComplexityEnum } from "./pricing";
 
 export const createProposalSchema = z.object({
   // Core
+  clientId:     z.string().optional(),
   clientName:   z.string().min(2, "Client name must be at least 2 characters").max(100),
   projectType:  z.string().min(2).max(100),
   squareMeters:    z.number().positive("Square meters must be a positive number"),

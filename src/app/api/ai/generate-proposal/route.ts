@@ -6,7 +6,6 @@ import { generationService } from "@/services/ai/generation.service"
 import { libraryContextService } from "@/services/ai/library-context.service"
 import { proposalService } from "@/services/proposal.service"
 import { brandingService } from "@/services/branding.service"
-import { clientService } from "@/services/client.service"
 import { projectService } from "@/services/project.service"
 import { mediaRepository } from "@/repositories/media.repository"
 import { getYouTubeEmbedUrl, getYouTubeThumbnail, getVimeoEmbedUrl } from "@/validations/media"
@@ -58,8 +57,10 @@ export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params
     // 3. Generate premium structured proposal via AI
     const result = await generationService.generate(input, branding ?? undefined, library)
 
-    // 4. Persist proposal
+    // 4. Persist proposal (resolves/creates the Client atomically — see
+    //    proposalService.create)
     const saved = await proposalService.create(workspaceId, user.sub, {
+      clientId:      input.clientId,
       clientName:    input.clientName,
       projectType:   input.projectType,
       squareMeters:  input.squareMeters ?? 1,
@@ -122,21 +123,13 @@ export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params
       })
     }
 
-    // Proposals from this flow never had a linked Client/Project — harmless
-    // on its own, but the Proposal Builder's initialize step requires a
-    // Project to run the advisor against, so every generated proposal needs
-    // one to be builder-ready. Create a minimal Client (this flow never
-    // collects a real one) + Project linked back to the proposal. Proposal.
-    // clientId is intentionally left unset — Project.clientId is the only
-    // link the builder/advisor actually needs, and `clientId` isn't part of
-    // UpdateProposalInput's validated surface.
-    const client = await clientService.create(workspaceId, user.sub, {
-      name:          input.clientName,
-      status:        "LEAD",
-      meetingStatus: "NOT_SCHEDULED",
-    })
+    // The Proposal Builder's initialize step requires a Project to run the
+    // advisor against, so every generated proposal needs one to be
+    // builder-ready. Reuses the Client that proposalService.create already
+    // resolved (existing client reused by id/name, or created minimally) —
+    // never creates a second, duplicate Client here.
     await projectService.create(workspaceId, user.sub, {
-      clientId:     client.id,
+      clientId:     saved!.clientId!,
       proposalId:   saved!.id,
       name:         `Projeto ${input.clientName}`,
       type:         inferProjectType(input.projectType),
