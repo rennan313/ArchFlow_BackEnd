@@ -43,7 +43,30 @@ async function initUpstash() {
 
 // ── In-memory fallback (dev / single-instance) ────────────────────────────────
 interface RateEntry { count: number; resetAt: number }
-const store = new Map<string, RateEntry>()
+
+// Reuses the same Map (and starts the cleanup interval at most once) across
+// Next.js dev-mode module re-evaluations — same pattern as the Prisma
+// singleton in lib/prisma.ts. Without this, every file save that touches
+// this module (or something importing it) during a dev session would leave
+// the previous setInterval running forever against a now-orphaned store
+// while a fresh interval + store pair is created alongside it.
+const globalForRateLimiter = globalThis as unknown as {
+  rateLimiterStore?: Map<string, RateEntry>
+}
+const store = globalForRateLimiter.rateLimiterStore ?? new Map<string, RateEntry>()
+
+if (!globalForRateLimiter.rateLimiterStore) {
+  globalForRateLimiter.rateLimiterStore = store
+
+  if (typeof setInterval !== "undefined") {
+    setInterval(() => {
+      const now = Date.now()
+      for (const [key, entry] of store.entries()) {
+        if (now > entry.resetAt) store.delete(key)
+      }
+    }, 5 * 60 * 1000)
+  }
+}
 
 function checkMemory(req: NextRequest, suffix: string, limit: number, windowMs: number): { allowed: boolean; resetAt: number } {
   const key   = `${getIp(req)}:${suffix}`
@@ -57,15 +80,6 @@ function checkMemory(req: NextRequest, suffix: string, limit: number, windowMs: 
   if (entry.count >= limit) return { allowed: false, resetAt: entry.resetAt }
   entry.count++
   return { allowed: true, resetAt: entry.resetAt }
-}
-
-if (typeof setInterval !== "undefined") {
-  setInterval(() => {
-    const now = Date.now()
-    for (const [key, entry] of store.entries()) {
-      if (now > entry.resetAt) store.delete(key)
-    }
-  }, 5 * 60 * 1000)
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
