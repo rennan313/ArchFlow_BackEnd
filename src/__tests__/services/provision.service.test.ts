@@ -23,9 +23,7 @@ const supabaseUser = { supabaseId: "supa-abc", email: "user@example.com", name: 
 const provisioned = {
   id: "user-1", supabaseId: "supa-abc", email: "user@example.com", name: "Test User",
   role: "USER", workspaceId: "ws-1", workspaceRole: "OWNER",
-  onboardingCompleted: false, onboardingStep: 1,
   password: "$2b$12$hash", provider: "supabase", googleId: null, image: null,
-  workspaceType: null, teamSize: null, primaryGoal: null,
   lastLogin: new Date(), createdAt: new Date(), updatedAt: new Date(),
 }
 

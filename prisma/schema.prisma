@@ -152,28 +152,6 @@ enum Complexity {
   PREMIUM
 }
 
-enum WorkspaceType {
-  INDIVIDUAL
-  SMALL_OFFICE
-  GROWING_OFFICE
-  LARGE_OFFICE
-}
-
-enum TeamSize {
-  SOLO
-  TWO_TO_FIVE
-  FIVE_TO_FIFTEEN
-  FIFTEEN_PLUS
-}
-
-enum PrimaryGoal {
-  PROPOSAL_GENERATION
-  CLIENT_PRESENTATION
-  BRIEFING_ORGANIZATION
-  PRICING_WORKFLOW
-  VISUAL_REFERENCES
-}
-
 enum DocumentType {
   PDF
   JPG
@@ -327,13 +305,6 @@ model User {
   workspaceId   String?       @db.ObjectId
   workspaceRole WorkspaceRole @default(OWNER)
   lastLogin     DateTime?
-
-  // Onboarding
-  workspaceType       WorkspaceType?
-  teamSize            TeamSize?
-  primaryGoal         PrimaryGoal?
-  onboardingCompleted Boolean        @default(false)
-  onboardingStep      Int            @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

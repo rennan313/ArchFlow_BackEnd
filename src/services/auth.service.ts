@@ -92,20 +92,15 @@ export const authService = {
     const user = await userRepository.findById(userId)
     if (!user) throw new AppError(ErrorCode.USER_NOT_FOUND)
     return {
-      id:                  user.id,
-      name:                user.name,
-      email:               user.email,
-      image:               user.image,
-      role:                user.role,
-      provider:            user.provider,
-      onboardingCompleted: user.onboardingCompleted,
-      onboardingStep:      user.onboardingStep,
-      workspaceType:       user.workspaceType,
-      teamSize:            user.teamSize,
-      primaryGoal:         user.primaryGoal,
-      lastLogin:           user.lastLogin,
-      createdAt:           user.createdAt,
-      updatedAt:           user.updatedAt,
+      id:        user.id,
+      name:      user.name,
+      email:     user.email,
+      image:     user.image,
+      role:      user.role,
+      provider:  user.provider,
+      lastLogin: user.lastLogin,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     }
   },
 
@@ -137,13 +132,11 @@ export const authService = {
       accessToken,
       refreshToken,
       user: {
-        id:                  user.id,
-        name:                user.name,
-        email:               user.email,
-        image:               user.image,
-        role:                user.role,
-        onboardingCompleted: user.onboardingCompleted,
-        onboardingStep:      user.onboardingStep,
+        id:    user.id,
+        name:  user.name,
+        email: user.email,
+        image: user.image,
+        role:  user.role,
       },
     }
   },
@@ -270,15 +263,13 @@ export const authService = {
     const accessToken = signAccessToken(buildPayload(user))
     return {
       user: {
-        id:                  user.id,
-        name:                user.name,
-        email:               user.email,
-        image:               user.image,
-        role:                user.role,
-        workspaceId:         user.workspaceId,
-        workspaceRole:       user.workspaceRole,
-        onboardingCompleted: user.onboardingCompleted,
-        onboardingStep:      user.onboardingStep,
+        id:            user.id,
+        name:          user.name,
+        email:         user.email,
+        image:         user.image,
+        role:          user.role,
+        workspaceId:   user.workspaceId,
+        workspaceRole: user.workspaceRole,
       },
       accessToken,
     }
@@ -298,14 +289,11 @@ export const authService = {
     const hashed = await hashPassword(input.password)
     const user   = await prisma.user.create({
       data: {
-        name:          input.name,
-        email:         input.email,
-        password:      hashed,
-        provider:      "credentials",
-        workspaceType: input.workspaceType,
-        teamSize:      input.teamSize,
-        primaryGoal:   input.primaryGoal,
-        lastLogin:     new Date(),
+        name:      input.name,
+        email:     input.email,
+        password:  hashed,
+        provider:  "credentials",
+        lastLogin: new Date(),
       },
     })
 
@@ -320,15 +308,13 @@ export const authService = {
       accessToken,
       refreshToken,
       user: {
-        id:                  provisioned.id,
-        name:                provisioned.name,
-        email:               provisioned.email,
-        image:               provisioned.image,
-        role:                provisioned.role,
-        workspaceId:         provisioned.workspaceId,
-        workspaceRole:       provisioned.workspaceRole,
-        onboardingCompleted: provisioned.onboardingCompleted,
-        onboardingStep:      provisioned.onboardingStep,
+        id:            provisioned.id,
+        name:          provisioned.name,
+        email:         provisioned.email,
+        image:         provisioned.image,
+        role:          provisioned.role,
+        workspaceId:   provisioned.workspaceId,
+        workspaceRole: provisioned.workspaceRole,
       },
     }
   },

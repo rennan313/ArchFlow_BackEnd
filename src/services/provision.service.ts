@@ -39,15 +39,13 @@ export interface ProvisionInput {
 
 export interface ProvisionResult {
   user: {
-    id:                  string
-    supabaseId:          string
-    email:               string
-    name:                string
-    role:                string
-    workspaceId:         string | null
-    workspaceRole:       string
-    onboardingCompleted: boolean
-    onboardingStep:      number
+    id:            string
+    supabaseId:    string
+    email:         string
+    name:          string
+    role:          string
+    workspaceId:   string | null
+    workspaceRole: string
   }
   /** Backend JWT — used by the NextAuth credentials flow (/api/auth/login) */
   accessToken:        string
@@ -240,14 +238,12 @@ export const provisionService = {
 
 function mapUser(u: User): ProvisionResult["user"] {
   return {
-    id:                  u.id,
-    supabaseId:          u.supabaseId ?? "",
-    email:               u.email,
-    name:                u.name,
-    role:                u.role,
-    workspaceId:         u.workspaceId ?? null,
-    workspaceRole:       u.workspaceRole,
-    onboardingCompleted: u.onboardingCompleted,
-    onboardingStep:      u.onboardingStep,
+    id:            u.id,
+    supabaseId:    u.supabaseId ?? "",
+    email:         u.email,
+    name:          u.name,
+    role:          u.role,
+    workspaceId:   u.workspaceId ?? null,
+    workspaceRole: u.workspaceRole,
   }
 }

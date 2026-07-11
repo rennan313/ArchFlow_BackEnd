@@ -2,15 +2,13 @@ import jwt from "jsonwebtoken"
 import { env } from "@/lib/env"
 
 export interface JwtPayload {
-  sub:                  string
-  email:                string
-  role:                 string
-  workspaceId?:         string | null
-  workspaceRole?:       string
-  workspaceType?:       string | null
-  onboardingCompleted?: boolean
+  sub:            string
+  email:          string
+  role:           string
+  workspaceId?:   string | null
+  workspaceRole?: string
   /** JWT ID — present in refresh tokens for DB-backed replay protection */
-  jti?:                 string
+  jti?:           string
 }
 
 export function signAccessToken(payload: JwtPayload): string {
@@ -30,21 +28,17 @@ export function verifyRefreshToken(token: string): JwtPayload {
 }
 
 export function buildPayload(user: {
-  id:                   string
-  email:                string
-  role:                 string
-  workspaceId?:         string | null
-  workspaceRole?:       string
-  workspaceType?:       string | null
-  onboardingCompleted?: boolean
+  id:             string
+  email:          string
+  role:           string
+  workspaceId?:   string | null
+  workspaceRole?: string
 }): JwtPayload {
   return {
-    sub:                 user.id,
-    email:               user.email,
-    role:                user.role,
-    workspaceId:         user.workspaceId ?? null,
-    workspaceRole:       user.workspaceRole ?? "OWNER",
-    workspaceType:       user.workspaceType ?? null,
-    onboardingCompleted: user.onboardingCompleted ?? false,
+    sub:           user.id,
+    email:         user.email,
+    role:          user.role,
+    workspaceId:   user.workspaceId ?? null,
+    workspaceRole: user.workspaceRole ?? "OWNER",
   }
 }

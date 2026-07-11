@@ -7,13 +7,11 @@ import {
 import type { JwtPayload } from "@/lib/jwt"
 
 const mockUser = {
-  id:                  "user-123",
-  email:               "test@example.com",
-  role:                "USER",
-  workspaceId:         "ws-123",
-  workspaceRole:       "OWNER",
-  workspaceType:       null,
-  onboardingCompleted: true,
+  id:            "user-123",
+  email:         "test@example.com",
+  role:          "USER",
+  workspaceId:   "ws-123",
+  workspaceRole: "OWNER",
 }
 
 describe("buildPayload", () => {
@@ -24,7 +22,6 @@ describe("buildPayload", () => {
     expect(payload.email).toBe(mockUser.email)
     expect(payload.role).toBe(mockUser.role)
     expect(payload.workspaceId).toBe(mockUser.workspaceId)
-    expect(payload.onboardingCompleted).toBe(true)
   })
 
   it("defaults workspaceRole to OWNER when omitted", () => {

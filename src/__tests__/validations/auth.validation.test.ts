@@ -46,24 +46,6 @@ describe("credentialsRegisterSchema", () => {
     expect(result.success).toBe(false)
     expect(result.error?.issues[0].path).toContain("name")
   })
-
-  it("accepts optional workspace fields when provided", () => {
-    const result = credentialsRegisterSchema.safeParse({
-      ...valid,
-      workspaceType: "INDIVIDUAL",
-      teamSize:      "SOLO",
-      primaryGoal:   "PROPOSAL_GENERATION",
-    })
-    expect(result.success).toBe(true)
-  })
-
-  it("rejects invalid workspaceType enum", () => {
-    const result = credentialsRegisterSchema.safeParse({
-      ...valid,
-      workspaceType: "STARTUP", // not in enum
-    })
-    expect(result.success).toBe(false)
-  })
 })
 
 // ── credentialsSigninSchema ───────────────────────────────────────────────────

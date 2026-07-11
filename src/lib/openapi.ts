@@ -7,8 +7,6 @@ import { createOpportunitySchema, updateOpportunitySchema } from "@/validations/
 import { upsertBriefingSchema } from "@/validations/briefing"
 import { createFollowUpSchema, updateFollowUpSchema } from "@/validations/followup"
 import { updateBrandingSchema } from "@/validations/branding"
-import { WorkspaceTypeEnum, TeamSizeEnum, PrimaryGoalEnum } from "@/validations/onboarding"
-import { updateWorkspaceSettingsSchema } from "@/validations/settings"
 import { calculatePricingSchema } from "@/validations/pricing"
 
 // ─── Helper: Zod → OpenAPI Schema Object ─────────────────────────────────────
@@ -29,8 +27,7 @@ const schemas = {
 
   User: { type:"object", properties:{
     id:IdStr, name:{type:"string"}, email:{type:"string"}, image:NullStr, role:{type:"string"},
-    onboardingCompleted:{type:"boolean"}, onboardingStep:{type:"integer"},
-    workspaceType:NullStr, teamSize:NullStr, primaryGoal:NullStr, createdAt:DateStr,
+    createdAt:DateStr,
   }},
 
   Client: { type:"object", properties:{
@@ -112,12 +109,6 @@ const paths: Record<string, unknown> = {
   "/api/auth/login":                { post: { tags:["Auth"], summary:"Sign in (email/password)",          requestBody:jsonBody(z.object({email:z.string().email(),password:z.string()})),  responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}}),...e.r400,...e.r401} } },
   "/api/auth/register":             { post: { tags:["Auth"], summary:"Register (email/password)",          requestBody:jsonBody(z.object({name:z.string(),email:z.string().email(),password:z.string().min(8)})),  responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}}),...e.r400,...e.r409} } },
   "/api/auth/google-signin":        { post: { tags:["Auth"], summary:"Create/update user via Google",      requestBody:jsonBody(z.object({email:z.string().email(),name:z.string(),googleId:z.string(),image:z.string().nullable().optional()})), responses:{...okInline({type:"object",properties:{user:{"$ref":"#/components/schemas/User"},accessToken:{type:"string"}}})} } },
-
-  "/api/users/onboarding":          { get:  { tags:["Onboarding"], security:auth, summary:"Get onboarding status",   responses:{...ok("User"),...e.r401} },
-                                      patch: { tags:["Onboarding"], security:auth, summary:"Update onboarding",      requestBody:jsonBody(updateWorkspaceSettingsSchema), responses:{...ok("User"),...e.r400,...e.r401} } },
-
-  "/api/settings/workspace":        { get:  { tags:["Settings"], security:auth, summary:"Get workspace preferences", responses:{...ok("User"),...e.r401} },
-                                      patch: { tags:["Settings"], security:auth, summary:"Update workspace prefs",   requestBody:jsonBody(updateWorkspaceSettingsSchema), responses:{...ok("User"),...e.r400,...e.r401} } },
 
   "/api/settings/branding":            { get:  { tags:["Branding"], security:auth, summary:"Get office branding",    responses:{...ok("OfficeBranding"),...e.r401} },
                                          patch: { tags:["Branding"], security:auth, summary:"Update branding fields", requestBody:jsonBody(updateBrandingSchema), responses:{...ok("OfficeBranding"),...e.r400,...e.r401} } },
