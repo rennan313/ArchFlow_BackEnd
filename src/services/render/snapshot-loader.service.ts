@@ -24,6 +24,11 @@ export const snapshotLoaderService = {
       instances = await proposalSectionInstanceRepository.findByProposal(proposalId, workspaceId)
     }
 
+    // Fase B — hidden sections never export. Filtered AFTER the migration
+    // check (which counts raw instances) but before the empty check, so a
+    // proposal whose every section is hidden correctly reports as empty.
+    instances = instances.filter((i) => !i.isHidden)
+
     if (instances.length === 0) {
       throw new RenderError("PROPOSAL_EMPTY", "This proposal has no content to render yet")
     }

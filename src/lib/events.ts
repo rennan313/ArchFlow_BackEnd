@@ -37,6 +37,7 @@ type ProposalEvent =
   | "proposal.status_changed"
   | "proposal.ai_generated"
   | "proposal.premium_narrative_generated"
+  | "proposal.premium_section_regenerated"
   | "proposal.pdf_generated"
 
 type AllEvents = AuthEvent | WorkspaceEvent | ProposalEvent

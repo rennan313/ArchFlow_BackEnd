@@ -866,6 +866,10 @@ model ProposalSectionInstance {
 
   createdFromLibrary Boolean @default(false)
   isCustomized        Boolean @default(false)
+  // Fase B — hidden sections stay in the Builder's structure column
+  // (toggleable) but are excluded from the preview, the detail view and
+  // the exported PDF. Never deleted: content is preserved.
+  isHidden            Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

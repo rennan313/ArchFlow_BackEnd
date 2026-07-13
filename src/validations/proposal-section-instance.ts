@@ -14,6 +14,7 @@ export const updateSectionInstanceSchema = z.object({
   title:    z.string().min(1).max(200).optional(),
   content:  z.string().max(20000).optional(),
   metadata: z.string().max(20000).optional(),
+  isHidden: z.boolean().optional(),
 })
 
 export const reorderSectionInstancesSchema = z.object({

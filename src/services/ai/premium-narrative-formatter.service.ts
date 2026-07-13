@@ -2,31 +2,33 @@
 // philosophy as proposal-formatter.service.ts: a partially malformed Haiku
 // response degrades to safe fallbacks, never throws past the initial
 // "no JSON at all" case.
+//
+// Fase B: normalization is decomposed per-section so the single-section
+// regeneration flow reuses the exact same coercion rules as full generation.
 import {
   PREMIUM_NARRATIVE_SCHEMA_VERSION,
   PROCESS_STEP_NAMES,
   NEXT_STEP_NAMES,
   DELIVERABLE_LABELS,
   type PremiumNarrativeAiOutput,
+  type PremiumNarrativeKind,
   type ClientUnderstandingFact,
 } from "@/types/proposal-premium-narrative"
 
-export function parsePremiumNarrativeResponse(raw: string): PremiumNarrativeAiOutput {
+function extractJson(raw: string): Record<string, unknown> {
   let text = raw.trim()
-
-  // Strip markdown code fences if present
   text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "")
-
-  let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    return JSON.parse(text) as Record<string, unknown>
   } catch {
     const match = text.match(/\{[\s\S]*\}/)
     if (!match) throw new Error("AI returned no valid JSON object")
-    parsed = JSON.parse(match[0])
+    return JSON.parse(match[0]) as Record<string, unknown>
   }
+}
 
-  return normalizeOutput(parsed as Record<string, unknown>)
+export function parsePremiumNarrativeResponse(raw: string): PremiumNarrativeAiOutput {
+  return normalizeOutput(extractJson(raw))
 }
 
 // ─── Helpers (same conventions as proposal-formatter.service.ts) ─────────────
@@ -50,117 +52,171 @@ function rec(v: unknown): Record<string, unknown> {
 
 const FACT_LABELS = new Set(["objectives", "needs", "preferences", "constraints", "budget", "timeline"])
 
-// ─── Normalizer ──────────────────────────────────────────────────────────────
+// ─── Per-section normalizers ──────────────────────────────────────────────────
 
-function normalizeOutput(p: Record<string, unknown>): PremiumNarrativeAiOutput {
-  const welcome  = rec(p.welcome)
-  const cu       = rec(p.clientUnderstanding)
-  const solution = rec(p.solution)
-  const scope    = rec(p.scope)
-  const schedule = rec(p.schedule)
-  const inv      = rec(p.investment)
-  const excl     = rec(p.exclusions)
-  const closing  = rec(p.closing)
+function normalizeWelcome(v: unknown): PremiumNarrativeAiOutput["welcome"] {
+  const o = rec(v)
+  return { title: str(o.title, "Bem-vindo"), message: str(o.message) }
+}
 
-  // process / nextSteps: keyed maps against the fixed skeletons. Only accept
-  // the known step names; anything the model invented is dropped, and any
-  // step it skipped falls back to "" (the payload mapper fills a placeholder).
-  const processRaw = rec(p.process)
+function normalizeClientUnderstanding(v: unknown): PremiumNarrativeAiOutput["clientUnderstanding"] {
+  const o = rec(v)
+  return {
+    title:     str(o.title, "O Que Entendemos do Seu Projeto"),
+    narrative: str(o.narrative),
+    facts: arr<ClientUnderstandingFact>(o.facts, (item) => {
+      const f     = rec(item)
+      const label = str(f.label)
+      const value = str(f.value)
+      if (!FACT_LABELS.has(label) || !value) return null
+      return { label: label as ClientUnderstandingFact["label"], value }
+    }),
+  }
+}
+
+function normalizeSolution(v: unknown): PremiumNarrativeAiOutput["solution"] {
+  const o = rec(v)
+  return { title: str(o.title, "Nossa Solução"), narrative: str(o.narrative) }
+}
+
+function normalizeScope(v: unknown): PremiumNarrativeAiOutput["scope"] {
+  const o = rec(v)
+  return {
+    title: str(o.title, "Escopo de Serviços"),
+    items: arr(o.items, (item) => {
+      const s    = rec(item)
+      const name = str(s.name)
+      if (!name) return null
+      return { name, description: str(s.description), benefit: str(s.benefit) }
+    }),
+  }
+}
+
+function normalizeProcess(v: unknown): PremiumNarrativeAiOutput["process"] {
+  const o = rec(v)
   const process: Record<string, string> = {}
-  for (const name of PROCESS_STEP_NAMES) process[name] = str(processRaw[name])
+  for (const name of PROCESS_STEP_NAMES) process[name] = str(o[name])
+  return process
+}
 
-  const nextStepsRaw = rec(p.nextSteps)
-  const nextSteps: Record<string, string> = {}
-  for (const name of NEXT_STEP_NAMES) nextSteps[name] = str(nextStepsRaw[name])
+function normalizeSchedule(v: unknown): PremiumNarrativeAiOutput["schedule"] {
+  const o = rec(v)
+  return {
+    title:         str(o.title, "Cronograma"),
+    totalDuration: optStr(o.totalDuration),
+    items: arr(o.items, (item) => {
+      const t     = rec(item)
+      const phase = str(t.phase)
+      if (!phase) return null
+      return {
+        phase,
+        duration:         str(t.duration),
+        description:      str(t.description),
+        revisions:        optStr(t.revisions),
+        expectedDelivery: optStr(t.expectedDelivery),
+      }
+    }),
+  }
+}
 
-  const deliverablesRaw = rec(p.deliverables)
+function normalizeDeliverables(v: unknown): PremiumNarrativeAiOutput["deliverables"] {
+  const o = rec(v)
   const deliverables: Record<string, { included: boolean; note?: string }> = {}
   for (const label of DELIVERABLE_LABELS) {
-    const d = rec(deliverablesRaw[label])
+    const d = rec(o[label])
     deliverables[label] = {
       included: typeof d.included === "boolean" ? d.included : true,
       note:     optStr(d.note),
     }
   }
+  return deliverables
+}
 
+function normalizeInvestment(v: unknown): PremiumNarrativeAiOutput["investment"] {
+  const o = rec(v)
   return {
-    schemaVersion: PREMIUM_NARRATIVE_SCHEMA_VERSION,
+    title:                  str(o.title, "Investimento"),
+    value:                  str(o.value, "A confirmar"),
+    downPayment:            optStr(o.downPayment),
+    installments: arr(o.installments, (x) =>
+      typeof x === "string" && x.trim() ? x.trim() : null,
+    ) as string[],
+    valueJustificationText: str(o.valueJustificationText),
+  }
+}
 
-    welcome: {
-      title:   str(welcome.title, "Bem-vindo"),
-      message: str(welcome.message),
-    },
+function normalizeExclusions(v: unknown): PremiumNarrativeAiOutput["exclusions"] {
+  const o = rec(v)
+  return {
+    title: str(o.title, "O Que Não Está Incluído"),
+    items: arr(o.items, (x) =>
+      typeof x === "string" && x.trim() ? x.trim() : null,
+    ) as string[],
+  }
+}
 
-    clientUnderstanding: {
-      title:     str(cu.title, "O Que Entendemos do Seu Projeto"),
-      narrative: str(cu.narrative),
-      facts: arr<ClientUnderstandingFact>(cu.facts, (item) => {
-        const f     = rec(item)
-        const label = str(f.label)
-        const value = str(f.value)
-        if (!FACT_LABELS.has(label) || !value) return null
-        return { label: label as ClientUnderstandingFact["label"], value }
-      }),
-    },
+function normalizeNextSteps(v: unknown): PremiumNarrativeAiOutput["nextSteps"] {
+  const o = rec(v)
+  const nextSteps: Record<string, string> = {}
+  for (const name of NEXT_STEP_NAMES) nextSteps[name] = str(o[name])
+  return nextSteps
+}
 
-    solution: {
-      title:     str(solution.title, "Nossa Solução"),
-      narrative: str(solution.narrative),
-    },
+function normalizeClosing(v: unknown): PremiumNarrativeAiOutput["closing"] {
+  const o = rec(v)
+  return { title: str(o.title, "Vamos Começar?"), message: str(o.message) }
+}
 
-    scope: {
-      title: str(scope.title, "Escopo de Serviços"),
-      items: arr(scope.items, (item) => {
-        const s    = rec(item)
-        const name = str(s.name)
-        if (!name) return null
-        return { name, description: str(s.description), benefit: str(s.benefit) }
-      }),
-    },
+// ─── Full-output normalizer (Fase A flow) ─────────────────────────────────────
 
-    process,
+function normalizeOutput(p: Record<string, unknown>): PremiumNarrativeAiOutput {
+  return {
+    schemaVersion:       PREMIUM_NARRATIVE_SCHEMA_VERSION,
+    welcome:             normalizeWelcome(p.welcome),
+    clientUnderstanding: normalizeClientUnderstanding(p.clientUnderstanding),
+    solution:            normalizeSolution(p.solution),
+    scope:               normalizeScope(p.scope),
+    process:             normalizeProcess(p.process),
+    schedule:            normalizeSchedule(p.schedule),
+    deliverables:        normalizeDeliverables(p.deliverables),
+    investment:          normalizeInvestment(p.investment),
+    exclusions:          normalizeExclusions(p.exclusions),
+    nextSteps:           normalizeNextSteps(p.nextSteps),
+    closing:             normalizeClosing(p.closing),
+  }
+}
 
-    schedule: {
-      title:         str(schedule.title, "Cronograma"),
-      totalDuration: optStr(schedule.totalDuration),
-      items: arr(schedule.items, (item) => {
-        const t     = rec(item)
-        const phase = str(t.phase)
-        if (!phase) return null
-        return {
-          phase,
-          duration:         str(t.duration),
-          description:      str(t.description),
-          revisions:        optStr(t.revisions),
-          expectedDelivery: optStr(t.expectedDelivery),
-        }
-      }),
-    },
+// ─── Single-section parsing (Fase B regeneration) ─────────────────────────────
 
-    deliverables,
+export type PremiumSectionAiResult =
+  | { kind: "welcome";              data: PremiumNarrativeAiOutput["welcome"] }
+  | { kind: "client-understanding"; data: PremiumNarrativeAiOutput["clientUnderstanding"] }
+  | { kind: "solution";             data: PremiumNarrativeAiOutput["solution"] }
+  | { kind: "scope";                data: PremiumNarrativeAiOutput["scope"] }
+  | { kind: "process";              data: PremiumNarrativeAiOutput["process"] }
+  | { kind: "schedule";             data: PremiumNarrativeAiOutput["schedule"] }
+  | { kind: "deliverables";         data: PremiumNarrativeAiOutput["deliverables"] }
+  | { kind: "investment";           data: PremiumNarrativeAiOutput["investment"] }
+  | { kind: "exclusions";           data: PremiumNarrativeAiOutput["exclusions"] }
+  | { kind: "next-steps";           data: PremiumNarrativeAiOutput["nextSteps"] }
+  | { kind: "closing";              data: PremiumNarrativeAiOutput["closing"] }
 
-    investment: {
-      title:                  str(inv.title, "Investimento"),
-      value:                  str(inv.value, "A confirmar"),
-      downPayment:            optStr(inv.downPayment),
-      installments: arr(inv.installments, (x) =>
-        typeof x === "string" && x.trim() ? x.trim() : null,
-      ) as string[],
-      valueJustificationText: str(inv.valueJustificationText),
-    },
-
-    exclusions: {
-      title: str(excl.title, "O Que Não Está Incluído"),
-      items: arr(excl.items, (x) =>
-        typeof x === "string" && x.trim() ? x.trim() : null,
-      ) as string[],
-    },
-
-    nextSteps,
-
-    closing: {
-      title:   str(closing.title, "Vamos Começar?"),
-      message: str(closing.message),
-    },
+export function parsePremiumSectionResponse(
+  kind: Exclude<PremiumNarrativeKind, "cover">,
+  raw:  string,
+): PremiumSectionAiResult {
+  const parsed = extractJson(raw)
+  switch (kind) {
+    case "welcome":              return { kind, data: normalizeWelcome(parsed) }
+    case "client-understanding": return { kind, data: normalizeClientUnderstanding(parsed) }
+    case "solution":             return { kind, data: normalizeSolution(parsed) }
+    case "scope":                return { kind, data: normalizeScope(parsed) }
+    case "process":              return { kind, data: normalizeProcess(parsed) }
+    case "schedule":             return { kind, data: normalizeSchedule(parsed) }
+    case "deliverables":         return { kind, data: normalizeDeliverables(parsed) }
+    case "investment":           return { kind, data: normalizeInvestment(parsed) }
+    case "exclusions":           return { kind, data: normalizeExclusions(parsed) }
+    case "next-steps":           return { kind, data: normalizeNextSteps(parsed) }
+    case "closing":              return { kind, data: normalizeClosing(parsed) }
   }
 }

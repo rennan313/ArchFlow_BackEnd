@@ -7,14 +7,17 @@ import { projectRepository } from "@/repositories/project.repository"
 import { mediaRepository } from "@/repositories/media.repository"
 import { proposalAdvisorService } from "@/services/ai/proposal-advisor.service"
 import { classifyProject, recommendSkin } from "@/services/ai/proposal-advisor-classifier"
+import { premiumSectionRegenerationService } from "@/services/ai/premium-section-regeneration.service"
 import { brandingService } from "@/services/branding.service"
 import { synthesizeCover, mapAiOutputToPayloads, payloadTitle, plainTextSummaryFor } from "@/services/premium-narrative-mapper.service"
 import { AppError, ErrorCode } from "@/lib/errors"
 import type { AddSectionInstanceInput, UpdateSectionInstanceInput } from "@/validations/proposal-section-instance"
-import type { PremiumProposal } from "@/types/proposal-generation"
+import type { ProposalGenerationInput, PremiumProposal } from "@/types/proposal-generation"
 import {
   PREMIUM_NARRATIVE_SECTION_KEYS,
+  parsePremiumNarrativePayload,
   tryParsePremiumNarrativeOutput,
+  type PremiumNarrativeKind,
 } from "@/types/proposal-premium-narrative"
 
 // Stable placeholder for AI-generated sections — not a real library entry.
@@ -295,7 +298,13 @@ export const proposalSectionInstanceService = {
     const existing = await proposalSectionInstanceRepository.findById(id, workspaceId)
     if (!existing || existing.proposalId !== proposalId) throw new AppError(ErrorCode.SECTION_INSTANCE_NOT_FOUND)
 
-    await proposalSectionInstanceRepository.update(id, workspaceId, { ...input, isCustomized: true })
+    // isCustomized marks CONTENT divergence from the library/AI original —
+    // a visibility toggle (isHidden-only patch, Fase B) is not customization.
+    const touchesContent = input.title !== undefined || input.content !== undefined || input.metadata !== undefined
+    await proposalSectionInstanceRepository.update(id, workspaceId, {
+      ...input,
+      ...(touchesContent && { isCustomized: true }),
+    })
     return proposalSectionInstanceRepository.findById(id, workspaceId)
   },
 
@@ -303,6 +312,62 @@ export const proposalSectionInstanceService = {
     const existing = await proposalSectionInstanceRepository.findById(id, workspaceId)
     if (!existing || existing.proposalId !== proposalId) throw new AppError(ErrorCode.SECTION_INSTANCE_NOT_FOUND)
     await proposalSectionInstanceRepository.delete(id, workspaceId)
+  },
+
+  // Fase B — regenerates ONE typed section's AI content in place. Only
+  // premium-narrative sections (parsed metadata) other than the cover are
+  // regenerable; the request context is rebuilt from the proposal's own
+  // briefing fields, exactly like full generation.
+  async regenerateSection(id: string, proposalId: string, workspaceId: string) {
+    const [proposal, existing] = await Promise.all([
+      requireProposal(proposalId, workspaceId),
+      proposalSectionInstanceRepository.findById(id, workspaceId),
+    ])
+    if (!existing || existing.proposalId !== proposalId) throw new AppError(ErrorCode.SECTION_INSTANCE_NOT_FOUND)
+
+    const payload = parsePremiumNarrativePayload(existing.metadata)
+    if (!payload) {
+      throw new Error("VALIDATION:only premium-narrative sections can be regenerated")
+    }
+    if (payload.kind === "cover") {
+      throw new Error("VALIDATION:the cover is synthesized from project data — edit it directly instead")
+    }
+
+    const input: ProposalGenerationInput = {
+      clientName:       proposal.clientName,
+      city:             proposal.city ?? undefined,
+      state:            proposal.state ?? undefined,
+      projectType:      proposal.projectType,
+      squareMeters:     proposal.squareMeters ?? undefined,
+      style:            proposal.style ?? undefined,
+      projectObjective: proposal.projectObjective ?? undefined,
+      spaceUsage:       proposal.spaceUsage ?? undefined,
+      currentProblems:  proposal.currentProblems ?? undefined,
+      priorities:       proposal.priorities ?? undefined,
+      budget:           proposal.budget ?? undefined,
+      timeline:         proposal.timeline ?? undefined,
+      meetingNotes:     proposal.meetingNotes ?? undefined,
+      pricingMethod:    (proposal.pricingMethod as ProposalGenerationInput["pricingMethod"]) ?? undefined,
+      estimatedValue:   proposal.estimatedTotal ?? undefined,
+      complexity:       (proposal.complexity as ProposalGenerationInput["complexity"]) ?? undefined,
+    }
+
+    const branding = await brandingService.getBrandingContext(workspaceId)
+    const { payload: regenerated } = await premiumSectionRegenerationService.regenerate(
+      input,
+      payload.kind as Exclude<PremiumNarrativeKind, "cover">,
+      branding ?? undefined,
+    )
+
+    // Fresh AI content is no longer "customized" — the badge resets to the
+    // library/AI origin state, same as right after initialize().
+    await proposalSectionInstanceRepository.update(id, workspaceId, {
+      title:        payloadTitle(regenerated),
+      content:      plainTextSummaryFor(regenerated),
+      metadata:     JSON.stringify(regenerated),
+      isCustomized: false,
+    })
+    return proposalSectionInstanceRepository.findById(id, workspaceId)
   },
 
   async reorder(proposalId: string, workspaceId: string, order: string[]) {

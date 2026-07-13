@@ -10,6 +10,7 @@ import {
   type PremiumNarrativeCover,
   type PremiumNarrativeSectionPayload,
 } from "@/types/proposal-premium-narrative"
+import type { PremiumSectionAiResult } from "@/services/ai/premium-narrative-formatter.service"
 
 interface CoverSourceProposal {
   clientName: string
@@ -99,6 +100,53 @@ export function mapAiOutputToPayloads(
     },
     { kind: "closing", ...output.closing },
   ]
+}
+
+/** Single-section AI result → full payload (Fase B regeneration). Applies
+ *  the same fixed-skeleton merging as mapAiOutputToPayloads for process/
+ *  next-steps/deliverables so a regenerated section can never drift from the
+ *  mandated step names/order. */
+export function mapSectionResultToPayload(result: PremiumSectionAiResult): PremiumNarrativeSectionPayload {
+  switch (result.kind) {
+    case "welcome":              return { kind: "welcome", ...result.data }
+    case "client-understanding": return { kind: "client-understanding", ...result.data }
+    case "solution":             return { kind: "solution", ...result.data }
+    case "scope":                return { kind: "scope", ...result.data }
+    case "schedule":             return { kind: "schedule", ...result.data }
+    case "investment":           return { kind: "investment", ...result.data }
+    case "exclusions":           return { kind: "exclusions", ...result.data }
+    case "closing":              return { kind: "closing", ...result.data }
+    case "process":
+      return {
+        kind:  "process",
+        title: "Como Funciona Nosso Processo",
+        steps: PROCESS_STEP_NAMES.map((name, i) => ({
+          order:       i + 1,
+          name,
+          description: result.data[name] || "Etapa detalhada em reunião de alinhamento.",
+        })),
+      }
+    case "deliverables":
+      return {
+        kind:  "deliverables",
+        title: "Entregáveis",
+        items: DELIVERABLE_LABELS.map((label) => ({
+          label,
+          included: result.data[label]?.included ?? true,
+          note:     result.data[label]?.note,
+        })),
+      }
+    case "next-steps":
+      return {
+        kind:  "next-steps",
+        title: "Próximos Passos",
+        steps: NEXT_STEP_NAMES.map((name, i) => ({
+          order:       i + 1,
+          name,
+          description: result.data[name] || undefined,
+        })),
+      }
+  }
 }
 
 export function payloadTitle(payload: PremiumNarrativeSectionPayload): string {
