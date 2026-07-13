@@ -51,6 +51,12 @@ export interface RenderCover {
   architectName: string | null
   cauNumber: string | null
   createdAt: string
+  /** Office logo — sourced fresh from branding at render time (Fase A). */
+  logoUrl: string | null
+  /** Cover hero image URL — resolved from the premium cover payload's
+   *  heroMediaId against the signed-URL-refreshed media list. Null when the
+   *  proposal has no premium cover or no hero image. */
+  heroImageUrl: string | null
 }
 
 export interface RenderSection {
@@ -59,6 +65,11 @@ export interface RenderSection {
   title: string
   content: string
   isEmpty: boolean
+  /** Parsed premium-narrative payload (Fase A) — null for pre-premium
+   *  instances or on any parse failure, which routes the section to the
+   *  generic renderer exactly as before. Parsed ONCE here at the mapper
+   *  boundary, never re-parsed downstream. */
+  metadata: import("@/types/proposal-premium-narrative").PremiumNarrativeSectionPayload | null
 }
 
 export interface RenderFooter {
@@ -118,6 +129,8 @@ export interface ProposalSnapshot {
     title: string
     content: string
     sortOrder: number
+    /** Raw JSON string from ProposalSectionInstance.metadata — parsed by the mapper. */
+    metadata: string | null
   }>
   branding: OfficeBrandingSnapshot | null
   media: Array<{

@@ -45,6 +45,28 @@ const MIGRATION_ONLY_SECTIONS = [
   { key: "risks",                  name: "Pontos de Atenção",             order: 12 },
 ]
 
+// Proposal Experience v2 (Fase A): the fixed 12-page premium sales narrative.
+// Keys are prefixed "premium-" because "closing"/"client-understanding"/
+// "scope"/"investment" already exist above as curated/migration-only rows —
+// the @@unique([workspaceId, key]) constraint would otherwise silently point
+// the new flow at the wrong catalog rows. isPremiumFlowOnly keeps them out of
+// the advisor and the manual "Adicionar seção" picker — only the premium
+// initialize() path creates instances against them, always all 12 at once.
+const PREMIUM_NARRATIVE_SECTIONS = [
+  { key: "premium-cover",                name: "Capa",                            order: 20 },
+  { key: "premium-welcome",              name: "Mensagem de Boas-Vindas",         order: 21 },
+  { key: "premium-client-understanding", name: "O Que Entendemos do Seu Projeto", order: 22 },
+  { key: "premium-solution",             name: "Nossa Solução",                   order: 23 },
+  { key: "premium-scope",                name: "Escopo de Serviços",              order: 24 },
+  { key: "premium-process",              name: "Como Funciona Nosso Processo",    order: 25 },
+  { key: "premium-schedule",             name: "Cronograma",                      order: 26 },
+  { key: "premium-deliverables",         name: "Entregáveis",                     order: 27 },
+  { key: "premium-investment",           name: "Investimento",                    order: 28 },
+  { key: "premium-exclusions",           name: "O Que Não Está Incluído",         order: 29 },
+  { key: "premium-next-steps",           name: "Próximos Passos",                 order: 30 },
+  { key: "premium-closing",              name: "Encerramento",                    order: 31 },
+]
+
 interface SeedBlock {
   sectionKey: string
   name: string
@@ -344,6 +366,15 @@ async function main() {
     await prisma.proposalSection.create({ data: { ...section, userId: systemUser.id, workspaceId: null, isMigrationOnly: true } })
     sectionsCreated++
   }
+  for (const section of PREMIUM_NARRATIVE_SECTIONS) {
+    const existing = await prisma.proposalSection.findFirst({ where: { workspaceId: null, key: section.key } })
+    if (existing) {
+      if (!existing.isPremiumFlowOnly) await prisma.proposalSection.update({ where: { id: existing.id }, data: { isPremiumFlowOnly: true } })
+      continue
+    }
+    await prisma.proposalSection.create({ data: { ...section, userId: systemUser.id, workspaceId: null, isPremiumFlowOnly: true } })
+    sectionsCreated++
+  }
 
   let blocksCreated = 0
   let blocksUpdated = 0
@@ -406,7 +437,29 @@ async function main() {
     narrativesCreated++
   }
 
-  console.log(`Sections created:   ${sectionsCreated}/${SECTIONS.length + MIGRATION_ONLY_SECTIONS.length}`)
+  // Documentational only — the premium initialize() path hardcodes the fixed
+  // 12-section order in code (types/proposal-premium-narrative.ts); editing
+  // this row does NOT change generation. It exists so the catalog is
+  // self-documenting and a future template picker has something to point at.
+  const premiumNarrativeName = "Premium Narrativo (12 páginas)"
+  const existingPremiumNarrative = await prisma.proposalNarrative.findFirst({
+    where: { workspaceId: null, name: premiumNarrativeName },
+  })
+  if (!existingPremiumNarrative) {
+    await prisma.proposalNarrative.create({
+      data: {
+        name:        premiumNarrativeName,
+        description: "Fluxo fixo de 12 páginas — sempre completo, sem seleção manual de seções.",
+        toneKey:     "residential",
+        sectionFlow: PREMIUM_NARRATIVE_SECTIONS.map((s) => s.key),
+        userId:      systemUser.id,
+        workspaceId: null,
+      },
+    })
+    narrativesCreated++
+  }
+
+  console.log(`Sections created:   ${sectionsCreated}/${SECTIONS.length + MIGRATION_ONLY_SECTIONS.length + PREMIUM_NARRATIVE_SECTIONS.length}`)
   console.log(`Blocks created:     ${blocksCreated}, updated: ${blocksUpdated} (of ${BLOCKS.length})`)
   console.log(`Templates created:  ${templatesCreated}/${TEMPLATES.length}`)
   console.log(`Narratives created: ${narrativesCreated}/${NARRATIVES.length}`)

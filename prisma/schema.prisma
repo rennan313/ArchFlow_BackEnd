@@ -761,6 +761,12 @@ model ProposalSection {
   // manual "Adicionar seção" picker for new proposals — the legacy migrator
   // is the only caller allowed to use them.
   isMigrationOnly Boolean @default(false)
+  // Proposal Experience v2 (Fase A): true for the 12 fixed premium-narrative
+  // catalog rows (premium-cover … premium-closing). Excluded from the advisor
+  // and the manual picker like isMigrationOnly, but semantically distinct:
+  // these are real, always-all-present flow sections created only by the
+  // premium initialize() path, never picked à la carte.
+  isPremiumFlowOnly Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

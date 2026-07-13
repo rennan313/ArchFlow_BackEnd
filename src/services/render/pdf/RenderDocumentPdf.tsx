@@ -1,7 +1,8 @@
 import React from "react"
-import path from "path"
-import { Document, Page, Text, View, StyleSheet, Font, Image, type DocumentProps } from "@react-pdf/renderer"
+import { Document, Page, Text, View, Image, type DocumentProps } from "@react-pdf/renderer"
 import type { RenderDocument, RenderVisualRef, ThemeTokens } from "@/types/proposal-render-model"
+import { ensureFonts, buildStyles, fmtDate, Footer, type TypedSectionPageContext } from "./pdf-shared"
+import { renderTypedSectionPage } from "./sections"
 
 // ─── Etapa 4 (Fase 2.0) / Fase 2.1 design pass — the PDF layer ─────────────
 // Consumes ONLY RenderDocument + ThemeTokens. Renders exactly as many
@@ -24,107 +25,9 @@ import type { RenderDocument, RenderVisualRef, ThemeTokens } from "@/types/propo
 //      section (works for migrated legacy "Investimento"/"Riscos" content
 //      and any future list-like content alike).
 
-const FONTS_DIR = path.join(process.cwd(), "src/assets/fonts/inter")
-let fontsRegistered = false
-function ensureFonts() {
-  if (fontsRegistered) return
-  Font.register({
-    family: "Inter",
-    fonts: [
-      { src: path.join(FONTS_DIR, "Inter-Regular.ttf"),  fontWeight: 400 },
-      { src: path.join(FONTS_DIR, "Inter-SemiBold.ttf"), fontWeight: 600 },
-      { src: path.join(FONTS_DIR, "Inter-Bold.ttf"),     fontWeight: 700 },
-      { src: path.join(FONTS_DIR, "Inter-Black.ttf"),    fontWeight: 900 },
-    ],
-  })
-  // Fix #2 — never break a word across lines (default hyphenation produced
-  // "An-\ndrade" for "Andrade"). Treat every word as a single unbreakable unit.
-  Font.registerHyphenationCallback((word) => [word])
-  fontsRegistered = true
-}
-
-function buildStyles(theme: ThemeTokens) {
-  const { colors, typography, spacing } = theme
-  return StyleSheet.create({
-    pageLight: { fontFamily: typography.fontFamily, backgroundColor: colors.background, padding: spacing.pageMargin, paddingBottom: 84 },
-    pageDark:  { fontFamily: typography.fontFamily, backgroundColor: colors.backgroundAlt, padding: spacing.pageMargin, paddingBottom: 84 },
-    // Cover pages render full-bleed — the cover components manage their own
-    // internal padding. Reusing pageLight/pageDark here (as an earlier pass
-    // did) framed the cover in an unintended margin "card" effect, most
-    // visible on the SPLIT layout. Background is set per-layout since the
-    // cover may be a different color than either body-page background.
-    pageCover: { fontFamily: typography.fontFamily, padding: 0 },
-
-    // Cover — shared
-    coverTitle:    { fontSize: typography.coverTitleSize, fontWeight: 700, lineHeight: 1.25, marginBottom: 14, maxWidth: 480 },
-    coverSubtitle: { fontSize: 12, lineHeight: 1.7, maxWidth: 420, marginBottom: 36 },
-    coverEyebrow:  { fontSize: 8, fontWeight: 600, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 18 },
-    coverRule:     { width: 36, height: 1, marginBottom: 18 },
-
-    // Cover — DARK_FULL_BLEED / dark-cover skins
-    coverDark:        { flex: 1, padding: spacing.pageMargin, justifyContent: "space-between", backgroundColor: colors.backgroundAlt },
-    coverDarkTitle:   { color: "#F5F3EE" },
-    coverDarkSubtitle: { color: "#A8A39A" },
-    coverDarkEyebrow: { color: colors.accent },
-    coverDarkOffice:  { fontSize: 11, fontWeight: 600, color: "#F5F3EE" },
-    coverDarkMuted:   { fontSize: 8, color: "#7A766C" },
-
-    // Cover — LIGHT_MINIMAL
-    coverLight:        { flex: 1, padding: spacing.pageMargin, justifyContent: "space-between", backgroundColor: colors.background },
-    coverLightTitle:   { color: colors.text },
-    coverLightSubtitle: { color: colors.textMuted },
-    coverLightEyebrow: { color: colors.accent },
-    coverLightOffice:  { fontSize: 11, fontWeight: 600, color: colors.text },
-    coverLightMuted:   { fontSize: 8, color: colors.textMuted },
-    coverLightTopRule: { borderTopWidth: 1, borderTopColor: "#E3DFD6" },
-
-    // Cover — SPLIT (two columns: dark identity panel + light content panel)
-    coverSplit:       { flex: 1, flexDirection: "row" },
-    // Always a dark identity panel, regardless of what backgroundAlt means
-    // for this skin's body-section alternation — SPLIT's panel is a
-    // deliberate contrast device, not derived from the alternation color
-    // (fixed a real bug: CORPORATE/CORPORATE_EXECUTIVE's backgroundAlt is a
-    // light warm tone, which made the white-on-panel text unreadable).
-    coverSplitPanel:  { width: "34%", backgroundColor: "#1C1B19", padding: 32, justifyContent: "space-between" },
-    coverSplitMain:   { flex: 1, padding: spacing.pageMargin, justifyContent: "center", backgroundColor: colors.background },
-    coverSplitPanelLabel: { fontSize: 7, color: "#A8A39A", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 },
-    coverSplitPanelValue: { fontSize: 10, color: "#F5F3EE", fontWeight: 600, marginBottom: 16 },
-
-    // Meta row — fix #1: explicit fixed-width columns with real gutters
-    metaRow:   { flexDirection: "row", marginTop: 28, paddingTop: 20 },
-    metaCol:   { width: "25%", paddingRight: 12 },
-    metaLabel: { fontSize: 7, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 5 },
-    metaValue: { fontSize: 10, fontWeight: 600 },
-
-    // Section pages
-    sectionLabel:      { fontSize: 7, fontWeight: 600, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 14, color: colors.textMuted },
-    sectionTitleLight: { fontSize: typography.sectionTitleSize, fontWeight: 700, lineHeight: 1.3, marginBottom: 8, color: colors.text },
-    sectionTitleDark:  { fontSize: typography.sectionTitleSize, fontWeight: 700, lineHeight: 1.3, marginBottom: 8, color: "#F5F3EE" },
-    sectionRule:       { width: 28, height: 1, backgroundColor: colors.accent, marginBottom: spacing.sectionGap },
-    bodyTextLight: { fontSize: typography.bodySize, color: colors.textMuted, lineHeight: 1.9, marginBottom: 13 },
-    bodyTextDark:  { fontSize: typography.bodySize, color: "#A8A39A", lineHeight: 1.9, marginBottom: 13 },
-    emptyHint:     { fontSize: typography.bodySize, color: colors.textMuted, fontStyle: "italic" },
-
-    // Content-aware list/ledger rendering (fix #4)
-    listRow:      { flexDirection: "row", paddingVertical: 9, borderBottomWidth: 1 },
-    listRowLight: { borderBottomColor: "#E3DFD6" },
-    listRowDark:  { borderBottomColor: "#2A2924" },
-    listMarker:   { width: 16, fontSize: typography.bodySize, color: colors.accent, fontWeight: 600 },
-    listText:     { flex: 1, fontSize: typography.bodySize, lineHeight: 1.6 },
-
-    footer: { position: "absolute", bottom: 28, left: spacing.pageMargin, right: spacing.pageMargin, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-    footerLine: { borderTopWidth: 1, borderTopColor: "#2A2924", marginBottom: 10 },
-    footerLineLight: { borderTopWidth: 1, borderTopColor: "#E3DFD6", marginBottom: 10 },
-    footerText: { fontSize: 7, letterSpacing: 0.5 },
-
-    signatureBlock: { flex: 1, borderBottomWidth: 1, borderBottomColor: "#C9C4B8", paddingBottom: 10 },
-    signatureLabel: { fontSize: 7, color: colors.textMuted, flex: 1, textAlign: "center", letterSpacing: 1, textTransform: "uppercase" },
-  })
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
-}
+// ensureFonts/buildStyles/fmtDate/Footer live in pdf-shared.tsx (Fase A
+// extraction) so the typed premium-narrative section components under
+// ./sections reuse the exact same fonts, styles and footer.
 
 // Detects "list-like" content (bullets, dashes, numbered lines) saved by
 // the legacy migrator or typed manually, and splits it into discrete rows
@@ -135,20 +38,6 @@ function parseListLines(content: string): string[] | null {
   const listLike = lines.filter((l) => /^([-•✓✔]|\d+[.)])\s+/.test(l))
   if (listLike.length < lines.length * 0.6) return null // not predominantly list-shaped
   return lines.map((l) => l.replace(/^([-•✓✔]|\d+[.)])\s+/, ""))
-}
-
-function Footer({ label, page, dark, styles }: { label: string; page: number; dark: boolean; styles: ReturnType<typeof buildStyles> }) {
-  return (
-    <View style={styles.footer}>
-      <View style={{ flex: 1 }}>
-        <View style={dark ? styles.footerLine : styles.footerLineLight} />
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <Text style={[styles.footerText, { color: dark ? "#6B675E" : "#A39E92" }]}>{label}</Text>
-          <Text style={[styles.footerText, { color: dark ? "#6B675E" : "#A39E92" }]}>{page}</Text>
-        </View>
-      </View>
-    </View>
-  )
 }
 
 function MetaRow({ doc, styles, dark }: { doc: RenderDocument; styles: ReturnType<typeof buildStyles>; dark: boolean }) {
@@ -172,14 +61,35 @@ function MetaRow({ doc, styles, dark }: { doc: RenderDocument; styles: ReturnTyp
   )
 }
 
+// Cover hero/logo (Fase A): heroImageUrl/logoUrl come from RenderCover —
+// resolved fresh at snapshot/mapper time (never baked stale URLs). All three
+// layouts render them additively; layout selection stays with coverLayout.
+function CoverLogo({ url, height = 28 }: { url: string | null; height?: number }) {
+  if (!url) return null
+  return <Image src={url} style={{ height, width: 90, objectFit: "contain", objectPositionX: 0 }} />
+}
+
+function CoverHero({ url }: { url: string | null }) {
+  if (!url) return null
+  return (
+    <Image
+      src={url}
+      style={{ width: "100%", height: 150, objectFit: "cover", borderRadius: 4, marginBottom: 24 }}
+    />
+  )
+}
+
 function CoverDark({ doc, styles }: { doc: RenderDocument; styles: ReturnType<typeof buildStyles> }) {
   return (
     <View style={styles.coverDark}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={styles.coverDarkOffice}>{doc.footer.officeName ?? "—"}</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        {doc.cover.logoUrl
+          ? <CoverLogo url={doc.cover.logoUrl} />
+          : <Text style={styles.coverDarkOffice}>{doc.footer.officeName ?? "—"}</Text>}
         <Text style={styles.coverDarkMuted}>{doc.metadata.code}</Text>
       </View>
       <View style={{ flex: 1, justifyContent: "center" }}>
+        <CoverHero url={doc.cover.heroImageUrl} />
         <Text style={[styles.coverEyebrow, styles.coverDarkEyebrow]}>{doc.cover.projectType} · {doc.cover.location}</Text>
         <Text style={[styles.coverTitle, styles.coverDarkTitle]}>{doc.cover.title}</Text>
         <Text style={[styles.coverSubtitle, styles.coverDarkSubtitle]}>{doc.cover.subtitle}</Text>
@@ -199,11 +109,14 @@ function CoverDark({ doc, styles }: { doc: RenderDocument; styles: ReturnType<ty
 function CoverLight({ doc, styles }: { doc: RenderDocument; styles: ReturnType<typeof buildStyles> }) {
   return (
     <View style={styles.coverLight}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={styles.coverLightOffice}>{doc.footer.officeName ?? "—"}</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        {doc.cover.logoUrl
+          ? <CoverLogo url={doc.cover.logoUrl} />
+          : <Text style={styles.coverLightOffice}>{doc.footer.officeName ?? "—"}</Text>}
         <Text style={styles.coverLightMuted}>{doc.metadata.code}</Text>
       </View>
       <View style={{ flex: 1, justifyContent: "center" }}>
+        <CoverHero url={doc.cover.heroImageUrl} />
         <Text style={[styles.coverEyebrow, styles.coverLightEyebrow]}>{doc.cover.projectType} · {doc.cover.location}</Text>
         <Text style={[styles.coverTitle, styles.coverLightTitle]}>{doc.cover.title}</Text>
         <Text style={[styles.coverSubtitle, styles.coverLightSubtitle]}>{doc.cover.subtitle}</Text>
@@ -225,7 +138,9 @@ function CoverSplit({ doc, styles }: { doc: RenderDocument; styles: ReturnType<t
   return (
     <View style={styles.coverSplit}>
       <View style={styles.coverSplitPanel}>
-        <Text style={[styles.coverEyebrow, { color: "#A8A39A", marginBottom: 8 }]}>{doc.footer.officeName ?? "—"}</Text>
+        {doc.cover.logoUrl
+          ? <CoverLogo url={doc.cover.logoUrl} height={22} />
+          : <Text style={[styles.coverEyebrow, { color: "#A8A39A", marginBottom: 8 }]}>{doc.footer.officeName ?? "—"}</Text>}
         <View>
           <Text style={styles.coverSplitPanelLabel}>Cliente</Text>
           <Text style={styles.coverSplitPanelValue}>{doc.cover.clientName}</Text>
@@ -237,6 +152,7 @@ function CoverSplit({ doc, styles }: { doc: RenderDocument; styles: ReturnType<t
         <Text style={{ fontSize: 7, color: "#7A766C" }}>{doc.metadata.code}</Text>
       </View>
       <View style={styles.coverSplitMain}>
+        <CoverHero url={doc.cover.heroImageUrl} />
         <Text style={[styles.coverEyebrow, styles.coverLightEyebrow]}>{doc.cover.projectType}</Text>
         <Text style={[styles.coverTitle, styles.coverLightTitle]}>{doc.cover.title}</Text>
         <Text style={[styles.coverSubtitle, styles.coverLightSubtitle]}>{doc.cover.subtitle}</Text>
@@ -332,7 +248,10 @@ export function RenderDocumentPdf({ doc, theme }: { doc: RenderDocument; theme: 
   ensureFonts()
   const styles = buildStyles(theme)
   const footerLabel = `${doc.footer.officeName ?? "ArchFlow"} · ${doc.footer.code}`
-  const allSections = [...doc.sections, ...doc.appendix]
+  // Premium cover-kind sections enrich page 1 (hero/logo, resolved by the
+  // mapper into doc.cover) instead of rendering as a body page — exclude
+  // them from the body loop so the cover never appears twice.
+  const allSections = [...doc.sections, ...doc.appendix].filter((s) => s.metadata?.kind !== "cover")
 
   return (
     <Document
@@ -360,12 +279,21 @@ export function RenderDocumentPdf({ doc, theme }: { doc: RenderDocument; theme: 
         const usesDarkAlternation = theme.coverLayout === "DARK_FULL_BLEED"
         const dark = usesDarkAlternation && index % 2 === 1
         const pageNum = index + 2 // page 1 is the cover
+
+        // Premium-narrative sections (parsed metadata) get their dedicated
+        // typed page; anything else — legacy instances, custom sections,
+        // corrupted metadata — keeps the generic template below, unchanged.
+        const sectionLabel = theme.sectionSeparator === "NONE"
+          ? null
+          : theme.sectionSeparator === "NUMBERED" ? String(index + 1).padStart(2, "0") : "—"
+        const ctx: TypedSectionPageContext = { theme, styles, dark, sectionLabel, pageNum, footerLabel }
+        const typedPage = renderTypedSectionPage(section, doc, ctx)
+        if (typedPage) return <React.Fragment key={section.id}>{typedPage}</React.Fragment>
+
         return (
           <Page key={section.id} size="A4" style={dark ? styles.pageDark : styles.pageLight}>
-            {theme.sectionSeparator !== "NONE" && (
-              <Text style={styles.sectionLabel}>
-                {theme.sectionSeparator === "NUMBERED" ? String(index + 1).padStart(2, "0") : "—"}
-              </Text>
+            {sectionLabel !== null && (
+              <Text style={styles.sectionLabel}>{sectionLabel}</Text>
             )}
             <Text style={dark ? styles.sectionTitleDark : styles.sectionTitleLight}>{section.title}</Text>
             <View style={styles.sectionRule} />

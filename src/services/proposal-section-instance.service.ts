@@ -4,10 +4,18 @@ import { proposalSectionRepository } from "@/repositories/proposal-section.repos
 import { proposalBlockRepository } from "@/repositories/proposal-block.repository"
 import { proposalTemplateRepository } from "@/repositories/proposal-template.repository"
 import { projectRepository } from "@/repositories/project.repository"
+import { mediaRepository } from "@/repositories/media.repository"
 import { proposalAdvisorService } from "@/services/ai/proposal-advisor.service"
+import { classifyProject, recommendSkin } from "@/services/ai/proposal-advisor-classifier"
+import { brandingService } from "@/services/branding.service"
+import { synthesizeCover, mapAiOutputToPayloads, payloadTitle, plainTextSummaryFor } from "@/services/premium-narrative-mapper.service"
 import { AppError, ErrorCode } from "@/lib/errors"
 import type { AddSectionInstanceInput, UpdateSectionInstanceInput } from "@/validations/proposal-section-instance"
 import type { PremiumProposal } from "@/types/proposal-generation"
+import {
+  PREMIUM_NARRATIVE_SECTION_KEYS,
+  tryParsePremiumNarrativeOutput,
+} from "@/types/proposal-premium-narrative"
 
 // Stable placeholder for AI-generated sections — not a real library entry.
 // Must be a valid 24-char hex ObjectId (Prisma @db.ObjectId enforces format),
@@ -109,6 +117,72 @@ export const proposalSectionInstanceService = {
     if (!claimed) return buildView(proposalId, workspaceId)
 
     try {
+      // ── Premium-narrative path (Fase A) ────────────────────────────────
+      // generatedText written by /api/ai/generate-premium-narrative carries a
+      // schemaVersion marker; both legacy PremiumProposal and this shape are
+      // valid JSON objects, so the marker (not structural sniffing) is what
+      // tells them apart.
+      const premiumOutput = tryParsePremiumNarrativeOutput(proposal.generatedText)
+      if (premiumOutput) {
+        // The 12 fixed catalog rows — real ObjectIds, unlike the legacy
+        // flattener's zero-ObjectId placeholder.
+        const { data: allSections } = await proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 100, isArchived: false })
+        const sectionByKey = new Map(allSections.map((s) => [s.key, s]))
+        const missing = PREMIUM_NARRATIVE_SECTION_KEYS.filter((k) => !sectionByKey.has(k))
+        if (missing.length > 0) {
+          throw new AppError(ErrorCode.PROPOSAL_SECTION_NOT_FOUND, `Premium catalog incomplete — missing: ${missing.join(", ")} (run seed-proposal-library)`)
+        }
+
+        const [project, branding, media] = await Promise.all([
+          projectRepository.findByProposalId(proposalId, workspaceId),
+          brandingService.getBrandingContext(workspaceId),
+          mediaRepository.findAll(proposalId),
+        ])
+
+        const cover    = synthesizeCover(proposal, project, branding, media)
+        const payloads = mapAiOutputToPayloads(premiumOutput, cover)
+
+        await Promise.all(
+          payloads.map((payload, i) =>
+            proposalSectionInstanceRepository.create(workspaceId, {
+              proposalId,
+              sectionId:          sectionByKey.get(PREMIUM_NARRATIVE_SECTION_KEYS[i])!.id,
+              blockId:            null,
+              sortOrder:          i,
+              title:              payloadTitle(payload),
+              content:            plainTextSummaryFor(payload),
+              metadata:           JSON.stringify(payload),
+              createdFromLibrary: false,
+              isCustomized:       false,
+            })
+          )
+        )
+
+        // Skin/narrative via the pure classifier functions directly — the
+        // full advise() round-trip (block scoring) is meaningless for a
+        // fixed 12-page flow with no library blocks.
+        const signalText = [
+          proposal.projectObjective, proposal.spaceUsage, proposal.currentProblems,
+          proposal.priorities, proposal.budget, proposal.timeline, proposal.meetingNotes, proposal.style,
+        ].filter((p): p is string => Boolean(p && p.trim())).join(" \n ").toLowerCase()
+
+        const classification = classifyProject({
+          projectType:   project?.type ?? "RESIDENTIAL",
+          squareMeters:  proposal.squareMeters ?? null,
+          complexity:    proposal.complexity ?? null,
+          contractValue: proposal.estimatedTotal ?? null,
+          signalText,
+        })
+        const skin = recommendSkin(classification.narrativeProfile, classification.projectTypeCategory, classification.investmentTier)
+
+        await proposalRepository.update(proposalId, workspaceId, {
+          builderNarrativeProfile: classification.narrativeProfile,
+          builderSkin:             skin,
+        })
+
+        return buildView(proposalId, workspaceId)
+      }
+
       if (proposal.generatedText) {
         // Fast path: use AI-generated content directly — no advisor round-trip needed
         let parsed: PremiumProposal | null = null
@@ -211,6 +285,7 @@ export const proposalSectionInstanceService = {
       sortOrder:          nextOrder,
       title:              input.title ?? section?.name ?? "",
       content:            input.content ?? block?.content ?? "",
+      metadata:           input.metadata ?? null,
       createdFromLibrary: Boolean(block),
       isCustomized:       !block || input.title !== undefined || input.content !== undefined,
     })

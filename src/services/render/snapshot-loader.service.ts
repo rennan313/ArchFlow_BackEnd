@@ -28,8 +28,10 @@ export const snapshotLoaderService = {
       throw new RenderError("PROPOSAL_EMPTY", "This proposal has no content to render yet")
     }
 
+    // brandingService.get() (not getBrandingContext) — it refreshes signed
+    // asset URLs, which matters now that the PDF cover renders the logo.
     const [branding, rawMedia] = await Promise.all([
-      brandingService.getBrandingContext(workspaceId),
+      brandingService.get(workspaceId),
       mediaRepository.findAll(proposalId),
     ])
 
@@ -60,6 +62,7 @@ export const snapshotLoaderService = {
         title:     i.title,
         content:   i.content,
         sortOrder: i.sortOrder,
+        metadata:  i.metadata,
       })),
       branding: branding
         ? {

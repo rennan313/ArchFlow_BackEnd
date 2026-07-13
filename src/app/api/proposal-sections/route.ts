@@ -15,8 +15,10 @@ export const GET = withWorkspace(async (req: NextRequest, _ctx: Ctx, _user: JwtP
     const result = await proposalSectionService.list(workspaceId, query)
     // Migration-only sections (Investimento, Riscos, etc.) are not valid
     // choices for the manual "Adicionar seção" picker on new proposals —
-    // they exist solely for legacy-migration.service.ts to target.
-    const data = result.data.filter((s) => !s.isMigrationOnly)
+    // they exist solely for legacy-migration.service.ts to target. Premium-
+    // flow-only sections are likewise excluded: the premium initialize()
+    // path is the only caller allowed to create instances against them.
+    const data = result.data.filter((s) => !s.isMigrationOnly && !s.isPremiumFlowOnly)
     return ok(data, undefined, result.pagination)
   } catch (error) { return handleServiceError(error) }
 })

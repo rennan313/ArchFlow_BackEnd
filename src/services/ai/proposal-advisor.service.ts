@@ -41,8 +41,10 @@ export const proposalAdvisorService = {
     ])
     // Migration-only sections (Investimento, Riscos, etc.) exist solely for
     // legacy-migration.service.ts to snapshot old proposals into — the
-    // advisor must never recommend them for a brand-new proposal.
-    const sections = allSections.filter((s) => !s.isMigrationOnly)
+    // advisor must never recommend them for a brand-new proposal. Same for
+    // the premium-flow-only sections: those are created only by the premium
+    // initialize() path, always all 12 at once, never picked à la carte.
+    const sections = allSections.filter((s) => !s.isMigrationOnly && !s.isPremiumFlowOnly)
 
     const recommendedSections: string[] = []
     const recommendedBlocks: Record<string, RecommendedBlock> = {}

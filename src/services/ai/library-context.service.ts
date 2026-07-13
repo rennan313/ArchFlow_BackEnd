@@ -23,7 +23,9 @@ export const libraryContextService = {
 
       // Migration-only sections exist only for legacy snapshots — never use them
       // as generation reference material (same guard as the advisor service).
-      const sections = allSections.filter((s) => !s.isMigrationOnly)
+      // Premium-flow-only sections have no blocks and belong to the fixed
+      // 12-page flow, not the library-reference system.
+      const sections = allSections.filter((s) => !s.isMigrationOnly && !s.isPremiumFlowOnly)
       if (sections.length === 0) return { sections: [] }
 
       const signalText = [

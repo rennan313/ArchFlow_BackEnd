@@ -1,4 +1,5 @@
 import { RenderError } from "@/types/proposal-render-model"
+import { parsePremiumNarrativePayload } from "@/types/proposal-premium-narrative"
 import type { ProposalSnapshot, RenderDocument, RenderSection, RenderVisualRef, RenderVisualRefType } from "@/types/proposal-render-model"
 
 // ─── Etapa 3 — pure transformation, zero I/O ───────────────────────────────
@@ -37,13 +38,20 @@ export function mapSnapshotToRenderDocument(snapshot: ProposalSnapshot): RenderD
 
   const sections: RenderSection[] = [...rawSections]
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((s) => ({
-      id:      s.id,
-      order:   s.sortOrder,
-      title:   s.title?.trim() || "(Sem título)",
-      content: s.content ?? "",
-      isEmpty: !s.content || s.content.trim().length === 0,
-    }))
+    .map((s) => {
+      // Lenient by design: corrupted/unknown metadata degrades to null,
+      // routing the section through the generic renderer instead of crashing
+      // PDF generation.
+      const metadata = parsePremiumNarrativePayload(s.metadata)
+      return {
+        id:      s.id,
+        order:   s.sortOrder,
+        title:   s.title?.trim() || "(Sem título)",
+        content: s.content ?? "",
+        isEmpty: (!s.content || s.content.trim().length === 0) && metadata === null,
+        metadata,
+      }
+    })
 
   const visualRefs: RenderVisualRef[] = (media ?? [])
     .filter((m) => VALID_TYPES.has(m.type as RenderVisualRefType))
@@ -58,6 +66,15 @@ export function mapSnapshotToRenderDocument(snapshot: ProposalSnapshot): RenderD
 
   const officeName = branding?.tradeName ?? branding?.officeName ?? null
   const code = proposalCode(proposal.id)
+
+  // Premium cover enrichment: the cover-kind section payload carries a
+  // heroMediaId reference (never a baked URL) — resolve it against the
+  // signed-URL-refreshed media list here so the PDF always gets a live URL.
+  const coverPayload = sections.find((s) => s.metadata?.kind === "cover")?.metadata
+  const heroImageUrl = (() => {
+    if (!coverPayload || coverPayload.kind !== "cover" || !coverPayload.heroMediaId) return null
+    return visualRefs.find((r) => r.id === coverPayload.heroMediaId)?.url ?? null
+  })()
 
   const doc: RenderDocument = {
     schemaVersion: 1,
@@ -78,6 +95,8 @@ export function mapSnapshotToRenderDocument(snapshot: ProposalSnapshot): RenderD
       architectName: branding?.architectName ?? null,
       cauNumber:     branding?.cauNumber ?? null,
       createdAt:     proposal.createdAt.toISOString(),
+      logoUrl:       branding?.logoUrl ?? null,
+      heroImageUrl,
     },
     sections,
     appendix:   [], // reserved per Phase 2 architecture
