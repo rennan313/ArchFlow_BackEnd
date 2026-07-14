@@ -93,6 +93,18 @@ export const env = {
   allowedOrigins:            optional("ALLOWED_ORIGINS",            ""),
   appUrl:                    requiredInProd("NEXT_PUBLIC_APP_URL",  "http://localhost:3000"),
 
+  // ── Mercado Pago (billing gateway — Sprint 09 / Phase 2) ─────────────────────
+  // Optional at boot on purpose: the app must start and serve read/trial flows
+  // even before billing is configured. The billing module degrades gracefully
+  // (checkout/webhook routes 503 if the token is absent), mirroring how SMTP
+  // absence only disables emails. Never required-in-prod so a missing token is
+  // a feature-disabled state, not a crash.
+  mpAccessToken:   optional("MERCADO_PAGO_ACCESS_TOKEN",  ""),
+  mpPublicKey:     optional("MERCADO_PAGO_PUBLIC_KEY",    ""),
+  mpWebhookSecret: optional("MERCADO_PAGO_WEBHOOK_SECRET", ""),
+  mpEnvironment:   optional("MERCADO_PAGO_ENVIRONMENT",   "sandbox"),
+  billingEnabled:  !!process.env.MERCADO_PAGO_ACCESS_TOKEN,
+
   // ── Rate limiting (Upstash Redis — required in production; a single dev
   // instance falls back to in-memory on its own, see middlewares/rateLimiter.ts) ──
   upstashRedisUrl:           requiredInProdOptional("UPSTASH_REDIS_REST_URL"),

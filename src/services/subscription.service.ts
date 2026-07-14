@@ -12,6 +12,14 @@ export interface LimitCheckResult {
   plan:       PlanName
 }
 
+// UI-facing access tier, derived from SubscriptionStatus (Story 8). `full` =
+// read+write; `limited` = PAUSED (gateway pause — resumable, distinct messaging);
+// `readonly` = PAST_DUE/CANCELED/EXPIRED (writes blocked, reactivation CTA).
+// Writes are actually gated by canWrite() below — this is only for the frontend
+// to show the right banner/CTA. Kept in sync with canWrite by construction:
+// only `full` is writable.
+export type AccessLevel = "full" | "limited" | "readonly"
+
 const TRIAL_DURATION_DAYS = 30
 
 export const subscriptionService = {
@@ -174,11 +182,15 @@ export const subscriptionService = {
         apiAccess:      limits.canApiAccess,
       },
       subscription: sub ? {
-        status:         sub.status,
-        trialStartedAt: sub.trialStartedAt,
-        trialEndsAt:    sub.trialEndsAt,
-        daysLeft:       this.daysLeftInTrial(sub),
-        isReadOnly:     !(sub.status === "ACTIVE" || sub.status === "TRIAL"),
+        status:            sub.status,
+        accessLevel:       this.getAccessLevel(sub),
+        billingCycle:      sub.billingCycle,
+        trialStartedAt:    sub.trialStartedAt,
+        trialEndsAt:       sub.trialEndsAt,
+        currentPeriodEnd:  sub.currentPeriodEnd,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+        daysLeft:          this.daysLeftInTrial(sub),
+        isReadOnly:        !(sub.status === "ACTIVE" || sub.status === "TRIAL"),
       } : null,
     }
   },
@@ -299,13 +311,21 @@ export const subscriptionService = {
   },
 
   /** Single fast check used by withWorkspace on every write request. ACTIVE
-   *  and a not-yet-expired TRIAL are writable; EXPIRED/CANCELED/PAST_DUE are
-   *  read-only. Goes through expireTrialIfNeeded so a trial whose date has
+   *  and a not-yet-expired TRIAL are writable; EXPIRED/CANCELED/PAST_DUE/PAUSED
+   *  are read-only. Goes through expireTrialIfNeeded so a trial whose date has
    *  passed is already reported as EXPIRED here, even before this exact
    *  request, by being the first to notice. */
   async canWrite(workspaceId: string): Promise<boolean> {
     const sub = await this.expireTrialIfNeeded(workspaceId)
     return sub.status === "ACTIVE" || sub.status === "TRIAL"
+  },
+
+  /** Pure — maps a status to the UI access tier (Story 8). Only "full" is
+   *  writable, so this can never disagree with canWrite(). */
+  getAccessLevel(subscription: Subscription): AccessLevel {
+    if (subscription.status === "ACTIVE" || subscription.status === "TRIAL") return "full"
+    if (subscription.status === "PAUSED") return "limited"
+    return "readonly" // PAST_DUE | CANCELED | EXPIRED
   },
 
   /** Pure — days remaining in an active trial, rounded up so "less than a

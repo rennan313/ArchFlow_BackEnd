@@ -52,6 +52,11 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   // Billing
   [ErrorCode.SUBSCRIPTION_NOT_FOUND]:        () => R.notFound("Subscription not found"),
   [ErrorCode.SUBSCRIPTION_ALREADY_EXISTS]:   () => R.conflict("Subscription already exists for this workspace"),
+  [ErrorCode.BILLING_NOT_CONFIGURED]:        () => R.internalError("Billing is not configured on this server. Contact support."),
+  [ErrorCode.BILLING_PLAN_NOT_FOUND]:        () => R.notFound("Plan not found"),
+  [ErrorCode.BILLING_PLAN_NOT_SELLABLE]:     () => R.badRequest("This plan cannot be subscribed to online. Contact sales."),
+  [ErrorCode.BILLING_PROVIDER_ERROR]:        () => R.internalError("Payment provider is temporarily unavailable. Please try again."),
+  [ErrorCode.WEBHOOK_SIGNATURE_INVALID]:     () => R.unauthorized("Invalid webhook signature"),
   // Legacy string aliases kept for backward compat during migration
   INVALID_TOKEN:     () => R.badRequest("Invalid reset token"),
   TOKEN_ALREADY_USED: () => R.badRequest("Reset token has already been used"),
