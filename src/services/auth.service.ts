@@ -16,6 +16,12 @@ import type { ResetPasswordInput, LoginInput, CredentialsRegisterInput, VerifyEm
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+// Grace window during which a just-rotated (revoked) refresh token is still
+// accepted, to tolerate legitimate concurrent refreshes (see refreshTokens).
+// Long enough to cover a burst of parallel requests + retries, short enough
+// that a genuinely leaked token replayed later is still rejected.
+const REFRESH_REUSE_GRACE_MS = 60 * 1000
+
 /** Parse "30d" / "7d" / "1h" → milliseconds */
 function parseExpiryMs(expiry: string): number {
   const match = expiry.match(/^(\d+)([smhd])$/)
@@ -400,14 +406,37 @@ export const authService = {
       throw new AppError(ErrorCode.INVALID_REFRESH_TOKEN)
     }
 
-    // 3. DB check for replay protection
+    // 3. DB check for replay protection — with a reuse-grace window.
+    //
+    //   Single-use rotation is fundamentally incompatible with concurrent
+    //   refreshers: the frontend legitimately issues several near-simultaneous
+    //   refreshes with the SAME token (the NextAuth jwt callback runs per
+    //   auth() call, and a Server Component can't persist the rotated token
+    //   back to the cookie, so a middleware refresh and the ensuing SC refresh
+    //   both replay it). Rejecting the replay outright is what broke sessions
+    //   after the access token entered its refresh window ("depois de algum
+    //   tempo"). We therefore tolerate replay of a token that was revoked very
+    //   recently (within REFRESH_REUSE_GRACE_MS) — the legitimate concurrent-
+    //   refresh burst — while still rejecting a token that is genuinely old/
+    //   revoked long ago (real replay attack) or expired.
     const stored = await refreshTokenRepository.findByJti(decoded.jti)
-    if (!stored || stored.revoked || stored.expiresAt < new Date()) {
+    if (!stored || stored.expiresAt < new Date()) {
       throw new AppError(ErrorCode.INVALID_REFRESH_TOKEN)
     }
-
-    // 4. Rotate: revoke the consumed token immediately
-    await refreshTokenRepository.revoke(stored.id)
+    if (stored.revoked) {
+      const revokedMsAgo = stored.revokedAt ? Date.now() - stored.revokedAt.getTime() : Infinity
+      if (revokedMsAgo > REFRESH_REUSE_GRACE_MS) {
+        throw new AppError(ErrorCode.INVALID_REFRESH_TOKEN)
+      }
+      // Within the grace window: a legitimate concurrent refresh. Fall through
+      // and issue a fresh pair WITHOUT re-revoking (already revoked). Each
+      // concurrent caller thus receives a distinct, valid, unrevoked pair —
+      // whichever one the client persists last is usable, so no caller is
+      // left holding a dead token.
+    } else {
+      // 4. First use — rotate: revoke the consumed token immediately.
+      await refreshTokenRepository.revoke(stored.id)
+    }
 
     // 5. Fetch up-to-date user (role / workspace may have changed)
     const user = await userRepository.findById(decoded.sub)
