@@ -173,7 +173,7 @@ export const openApiSpec = {
   },
   servers: [
     { url: "http://localhost:3000",       description: "Development" },
-    { url: "https://api.archflow.com.br", description: "Production"  },
+    { url: "https://api.archflowstudio.com", description: "Production"  },
   ],
   tags: [
     { name:"Auth",          description:"Authentication — email/password + Google OAuth" },
