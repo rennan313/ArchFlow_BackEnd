@@ -87,6 +87,10 @@ export const env = {
 
   // ── URLs ───────────────────────────────────────────────────────────────────
   frontendUrl:               requiredInProd("FRONTEND_URL",         "http://localhost:3001"),
+  // Extra browser origins allowed by CORS besides FRONTEND_URL (comma-
+  // separated) — used during the domain migration so old + new + www all
+  // work. Consumed by src/middleware.ts (which reads process.env directly).
+  allowedOrigins:            optional("ALLOWED_ORIGINS",            ""),
   appUrl:                    requiredInProd("NEXT_PUBLIC_APP_URL",  "http://localhost:3000"),
 
   // ── Rate limiting (Upstash Redis — required in production; a single dev
