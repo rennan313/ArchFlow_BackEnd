@@ -20,6 +20,8 @@ export interface RecordInvoiceInput {
   description:    string
   paidAt?:        Date
   mpPaymentId?:   string
+  receiptUrl?:    string
+  rawPayload?:    string
 }
 
 export const billingService = {
@@ -75,6 +77,8 @@ export const billingService = {
       description:    input.description,
       paidAt:         input.paidAt,
       mpPaymentId:    input.mpPaymentId,
+      receiptUrl:     input.receiptUrl,
+      rawPayload:     input.rawPayload,
     })
   },
 

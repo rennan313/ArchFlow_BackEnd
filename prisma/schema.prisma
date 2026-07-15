@@ -220,6 +220,10 @@ enum SubscriptionStatus {
   TRIAL
   ACTIVE
   PAST_DUE
+  // Sprint 09: gateway-driven pause (Mercado Pago preapproval "paused"). Access
+  // is limited (read-only writes) but the subscription is not terminated — a
+  // resumed preapproval flips it back to ACTIVE without a new checkout.
+  PAUSED
   CANCELED
   EXPIRED
 }
@@ -1152,12 +1156,57 @@ model BillingHistory {
   paidAt      DateTime?
   description String
 
+  // Sprint 09 — completes the brief's "Payment" entity: the gateway receipt
+  // link surfaced in the financial-history UI, and the full payment payload
+  // kept for audit/reconciliation (same string-JSON convention as
+  // PaymentEvent.rawPayload).
+  receiptUrl String?
+  rawPayload String?
+
   createdAt DateTime @default(now())
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   @@index([subscriptionId])
   @@map("billing_history")
+}
+
+// Sprint 09 — persisted, sellable plan definition: the canonical source for
+// pricing and display (Story 3 — "planos não podem ficar hardcoded"). The
+// enforcement limits still live in config/plans.ts (PLAN_LIMITS, the hot path);
+// this table is SEEDED from it (prisma/seed-billing-plans.ts) so the two never
+// diverge, while adding the pricing + Mercado Pago plan mapping the code config
+// never held. Keyed by the Plan enum so a Workspace.plan resolves directly to
+// its sellable definition.
+model BillingPlan {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  key         Plan    @unique
+  name        String
+  description String?
+
+  priceMonthly Float
+  priceAnnual  Float
+
+  // Mirrored from config/plans.ts for display only (-1 = unlimited). Never read
+  // by the enforcement path — see the model comment above.
+  limitProjects  Int
+  limitUsers     Int
+  limitAiMonthly Int
+  limitUploadsMb Int
+
+  active Boolean @default(true)
+  order  Int     @default(0)
+
+  // Mercado Pago preapproval_plan ids per cycle — populated once the plans are
+  // created in the MP dashboard. No @unique (Prisma @unique on Mongo is never
+  // sparse); uniqueness enforced by the sparse index in docs/indexes.md.
+  mpPreapprovalPlanIdMonthly String?
+  mpPreapprovalPlanIdAnnual  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("billing_plans")
 }
 
 // ─── Location & Pricing ───────────────────────────────────────────────────────

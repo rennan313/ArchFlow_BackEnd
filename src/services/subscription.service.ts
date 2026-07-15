@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma"
 import { PLAN_LIMITS, unlimited, type PlanName } from "@/config/plans"
 import { subscriptionRepository } from "@/repositories/subscription.repository"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { logger } from "@/lib/logger"
+import { emailService } from "@/services/email/email.service"
+import { resolveOwnerContact } from "@/utils/workspaceOwner"
 import type { Subscription } from "@prisma/client"
 
 export interface LimitCheckResult {
@@ -11,6 +14,14 @@ export interface LimitCheckResult {
   current?:   number
   plan:       PlanName
 }
+
+// UI-facing access tier, derived from SubscriptionStatus (Story 8). `full` =
+// read+write; `limited` = PAUSED (gateway pause — resumable, distinct messaging);
+// `readonly` = PAST_DUE/CANCELED/EXPIRED (writes blocked, reactivation CTA).
+// Writes are actually gated by canWrite() below — this is only for the frontend
+// to show the right banner/CTA. Kept in sync with canWrite by construction:
+// only `full` is writable.
+export type AccessLevel = "full" | "limited" | "readonly"
 
 const TRIAL_DURATION_DAYS = 30
 
@@ -174,11 +185,15 @@ export const subscriptionService = {
         apiAccess:      limits.canApiAccess,
       },
       subscription: sub ? {
-        status:         sub.status,
-        trialStartedAt: sub.trialStartedAt,
-        trialEndsAt:    sub.trialEndsAt,
-        daysLeft:       this.daysLeftInTrial(sub),
-        isReadOnly:     !(sub.status === "ACTIVE" || sub.status === "TRIAL"),
+        status:            sub.status,
+        accessLevel:       this.getAccessLevel(sub),
+        billingCycle:      sub.billingCycle,
+        trialStartedAt:    sub.trialStartedAt,
+        trialEndsAt:       sub.trialEndsAt,
+        currentPeriodEnd:  sub.currentPeriodEnd,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+        daysLeft:          this.daysLeftInTrial(sub),
+        isReadOnly:        !(sub.status === "ACTIVE" || sub.status === "TRIAL"),
       } : null,
     }
   },
@@ -295,17 +310,33 @@ export const subscriptionService = {
     const existing = await subscriptionRepository.findByWorkspace(workspaceId)
     if (!existing) return this.createTrialSubscription(workspaceId)
     if (!this.isTrialExpired(existing)) return existing
-    return subscriptionRepository.update(workspaceId, { status: "EXPIRED" })
+
+    const updated = await subscriptionRepository.update(workspaceId, { status: "EXPIRED" })
+    // Fires exactly once — the flip only happens while status is still TRIAL.
+    // Fire-and-forget: expireTrialIfNeeded is on the hot write-gate path, so the
+    // email must never block it or throw into it (Story 11).
+    void resolveOwnerContact(workspaceId)
+      .then((c) => (c ? emailService.sendTrialExpired({ to: c.email, name: c.name }) : undefined))
+      .catch((err) => logger.error({ workspaceId, err: String(err) }, "[billing] trial-expired email failed (non-fatal)"))
+    return updated
   },
 
   /** Single fast check used by withWorkspace on every write request. ACTIVE
-   *  and a not-yet-expired TRIAL are writable; EXPIRED/CANCELED/PAST_DUE are
-   *  read-only. Goes through expireTrialIfNeeded so a trial whose date has
+   *  and a not-yet-expired TRIAL are writable; EXPIRED/CANCELED/PAST_DUE/PAUSED
+   *  are read-only. Goes through expireTrialIfNeeded so a trial whose date has
    *  passed is already reported as EXPIRED here, even before this exact
    *  request, by being the first to notice. */
   async canWrite(workspaceId: string): Promise<boolean> {
     const sub = await this.expireTrialIfNeeded(workspaceId)
     return sub.status === "ACTIVE" || sub.status === "TRIAL"
+  },
+
+  /** Pure — maps a status to the UI access tier (Story 8). Only "full" is
+   *  writable, so this can never disagree with canWrite(). */
+  getAccessLevel(subscription: Subscription): AccessLevel {
+    if (subscription.status === "ACTIVE" || subscription.status === "TRIAL") return "full"
+    if (subscription.status === "PAUSED") return "limited"
+    return "readonly" // PAST_DUE | CANCELED | EXPIRED
   },
 
   /** Pure — days remaining in an active trial, rounded up so "less than a
