@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma"
 import { PLAN_LIMITS, unlimited, type PlanName } from "@/config/plans"
 import { subscriptionRepository } from "@/repositories/subscription.repository"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { logger } from "@/lib/logger"
+import { emailService } from "@/services/email/email.service"
+import { resolveOwnerContact } from "@/utils/workspaceOwner"
 import type { Subscription } from "@prisma/client"
 
 export interface LimitCheckResult {
@@ -307,7 +310,15 @@ export const subscriptionService = {
     const existing = await subscriptionRepository.findByWorkspace(workspaceId)
     if (!existing) return this.createTrialSubscription(workspaceId)
     if (!this.isTrialExpired(existing)) return existing
-    return subscriptionRepository.update(workspaceId, { status: "EXPIRED" })
+
+    const updated = await subscriptionRepository.update(workspaceId, { status: "EXPIRED" })
+    // Fires exactly once — the flip only happens while status is still TRIAL.
+    // Fire-and-forget: expireTrialIfNeeded is on the hot write-gate path, so the
+    // email must never block it or throw into it (Story 11).
+    void resolveOwnerContact(workspaceId)
+      .then((c) => (c ? emailService.sendTrialExpired({ to: c.email, name: c.name }) : undefined))
+      .catch((err) => logger.error({ workspaceId, err: String(err) }, "[billing] trial-expired email failed (non-fatal)"))
+    return updated
   },
 
   /** Single fast check used by withWorkspace on every write request. ACTIVE

@@ -2,11 +2,32 @@ import { logger } from "@/lib/logger"
 import { billingService } from "@/services/billing.service"
 import { subscriptionService } from "@/services/subscription.service"
 import { subscriptionRepository } from "@/repositories/subscription.repository"
+import { billingPlanRepository } from "@/repositories/billingPlan.repository"
+import { emailService } from "@/services/email/email.service"
+import { resolveOwnerContact, type OwnerContact } from "@/utils/workspaceOwner"
+import { PLAN_LABELS, type PlanName } from "@/config/plans"
 import { getBillingProvider } from "../providers"
 import type { BillingGatewayProvider, GatewayEventRef, GatewaySubscription, GatewayPayment } from "../providers/gateway.interface"
 import type { MpPayment } from "../providers/mercadoPago/mp.types"
-import type { PlanName } from "@/config/plans"
 import type { Subscription } from "@prisma/client"
+
+// Fire-and-forget owner notification. Email delivery must NEVER break the
+// webhook state machine (SMTP down, no owner, template error) — every failure
+// is swallowed and logged. Resolves the recipient lazily so no-op events don't
+// query for a contact they won't use.
+async function notifyOwner(workspaceId: string, send: (c: OwnerContact) => Promise<void>): Promise<void> {
+  try {
+    const contact = await resolveOwnerContact(workspaceId)
+    if (!contact) { logger.warn({ workspaceId }, "[billing] no owner contact — skipping email"); return }
+    await send(contact)
+  } catch (err) {
+    logger.error({ workspaceId, err: String(err) }, "[billing] notification email failed (non-fatal)")
+  }
+}
+
+function planLabel(plan: string): string {
+  return PLAN_LABELS[plan as PlanName] ?? plan
+}
 
 type Resolved = { subscription: Subscription; remote: GatewaySubscription | GatewayPayment }
 
@@ -85,25 +106,38 @@ async function applySubscription(sub: Subscription, remote: GatewaySubscription)
         canceledAt:         null,
       })
       logger.info({ workspaceId: sub.workspaceId, plan: sub.plan }, "[billing] subscription authorized → ACTIVE")
-      // TODO(Fase C): emailService.sendSubscriptionCreated(...)
+      await notifyOwner(sub.workspaceId, async (c) => {
+        const plan   = await billingPlanRepository.findByKey(sub.plan)
+        const amount = plan ? (sub.billingCycle === "ANNUAL" ? plan.priceAnnual : plan.priceMonthly) : 0
+        await emailService.sendSubscriptionCreated({
+          to: c.email, name: c.name, planName: planLabel(sub.plan),
+          cycle: sub.billingCycle, amount, nextBilling: remote.nextPaymentDate ?? null,
+        })
+      })
       break
     case "paused":
       await subscriptionRepository.update(sub.workspaceId, { status: "PAUSED" })
       logger.info({ workspaceId: sub.workspaceId }, "[billing] subscription paused")
       // TODO(Fase C): emailService.sendSubscriptionPaused(...)
       break
-    case "cancelled":
-      if (sub.cancelAtPeriodEnd && sub.currentPeriodEnd && sub.currentPeriodEnd.getTime() > Date.now()) {
+    case "cancelled": {
+      const keepUntil = sub.cancelAtPeriodEnd && sub.currentPeriodEnd && sub.currentPeriodEnd.getTime() > Date.now()
+        ? sub.currentPeriodEnd
+        : null
+      if (keepUntil) {
         // User-initiated cancel-at-period-end: gateway renewal is stopped, but
         // keep local access until the paid period ends. A reconciliation job
         // (next sprint) flips this to CANCELED at currentPeriodEnd.
-        logger.info({ workspaceId: sub.workspaceId, until: sub.currentPeriodEnd }, "[billing] cancel scheduled at period end — access retained")
+        logger.info({ workspaceId: sub.workspaceId, until: keepUntil }, "[billing] cancel scheduled at period end — access retained")
       } else {
         await subscriptionRepository.update(sub.workspaceId, { status: "CANCELED", canceledAt: new Date() })
         logger.info({ workspaceId: sub.workspaceId }, "[billing] subscription cancelled")
       }
-      // TODO(Fase C): emailService.sendSubscriptionCanceled(...)
+      await notifyOwner(sub.workspaceId, (c) => emailService.sendSubscriptionCanceled({
+        to: c.email, name: c.name, planName: planLabel(sub.plan), accessUntil: keepUntil,
+      }))
       break
+    }
     case "pending":
     default:
       // Awaiting first authorization — no access change.
@@ -115,6 +149,10 @@ async function applyPayment(provider: BillingGatewayProvider, sub: Subscription,
   const description = `Assinatura ArchFlow — ${sub.plan}`
 
   if (remote.status === "approved") {
+    // Pre-event status distinguishes the very first payment (activation) from a
+    // recurring charge (renewal) — drives which email goes out.
+    const wasActive = sub.status === "ACTIVE"
+
     await billingService.recordInvoice({
       subscriptionId: sub.id,
       amount:         remote.amount,
@@ -129,14 +167,18 @@ async function applyPayment(provider: BillingGatewayProvider, sub: Subscription,
     // Ensure ACTIVE + plan synced (covers first payment AND renewals).
     await subscriptionService.changePlan(sub.workspaceId, sub.plan as PlanName, sub.billingCycle)
     // Refresh the period end from the preapproval's next payment date, if known.
+    let nextBilling: Date | null = null
     if (sub.mpSubscriptionId) {
       const remoteSub = await provider.getSubscription(sub.mpSubscriptionId).catch(() => null)
       if (remoteSub?.nextPaymentDate) {
+        nextBilling = remoteSub.nextPaymentDate
         await subscriptionRepository.update(sub.workspaceId, { currentPeriodEnd: remoteSub.nextPaymentDate })
       }
     }
-    logger.info({ workspaceId: sub.workspaceId, mpPaymentId: remote.providerPaymentId }, "[billing] payment approved")
-    // TODO(Fase C): emailService.sendPaymentApproved(...) / sendRenewal(...)
+    logger.info({ workspaceId: sub.workspaceId, mpPaymentId: remote.providerPaymentId, renewal: wasActive }, "[billing] payment approved")
+    await notifyOwner(sub.workspaceId, (c) => wasActive
+      ? emailService.sendSubscriptionRenewed({ to: c.email, name: c.name, planName: planLabel(sub.plan), amount: remote.amount, nextBilling, receiptUrl: remote.receiptUrl })
+      : emailService.sendPaymentApproved({ to: c.email, name: c.name, planName: planLabel(sub.plan), amount: remote.amount, receiptUrl: remote.receiptUrl }))
     return
   }
 
@@ -147,7 +189,9 @@ async function applyPayment(provider: BillingGatewayProvider, sub: Subscription,
     })
     await subscriptionRepository.update(sub.workspaceId, { status: "PAST_DUE" })
     logger.info({ workspaceId: sub.workspaceId }, "[billing] payment rejected → PAST_DUE")
-    // TODO(Fase C): emailService.sendPaymentRejected(...)
+    await notifyOwner(sub.workspaceId, (c) => emailService.sendPaymentRejected({
+      to: c.email, name: c.name, planName: planLabel(sub.plan),
+    }))
     return
   }
 
