@@ -311,6 +311,7 @@ model Workspace {
   financialCategories FinancialCategory[]
   costCenters         CostCenter[]
   financialDocuments  FinancialDocument[]
+  purchaseOrders      PurchaseOrder[]
 
   @@map("workspaces")
 }
@@ -373,6 +374,7 @@ model User {
 
   financialDocumentsCreated FinancialDocument[]
   paymentsCreated           Payment[]
+  purchaseOrdersCreated     PurchaseOrder[]
 
   @@index([workspaceId])
   @@map("users")
@@ -991,6 +993,7 @@ model Project {
   tasks           Task[]
 
   financialDocuments FinancialDocument[]
+  purchaseOrders     PurchaseOrder[]
 
   @@index([userId])
   @@index([workspaceId])
@@ -1177,6 +1180,7 @@ model Supplier {
   workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   category           SupplierCategory?   @relation(fields: [categoryId], references: [id])
   financialDocuments FinancialDocument[]
+  purchaseOrders     PurchaseOrder[]
 
   @@index([workspaceId])
   @@index([workspaceId, isActive])
@@ -1227,13 +1231,14 @@ model FinancialCategory {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Self-relations on the Mongo connector must disable referential actions —
   // there is no FK to cascade against, and Prisma requires this explicit for
   // self-relations rather than inferring a default.
-  parent    FinancialCategory?  @relation("FinancialCategoryTree", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  children  FinancialCategory[] @relation("FinancialCategoryTree")
-  documents FinancialDocument[]
+  parent         FinancialCategory?  @relation("FinancialCategoryTree", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children       FinancialCategory[] @relation("FinancialCategoryTree")
+  documents      FinancialDocument[]
+  purchaseOrders PurchaseOrder[]
 
   @@index([workspaceId])
   @@index([workspaceId, direction])
@@ -1251,8 +1256,9 @@ model CostCenter {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  documents FinancialDocument[]
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  documents      FinancialDocument[]
+  purchaseOrders PurchaseOrder[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -1401,6 +1407,100 @@ model Payment {
   @@index([installmentId])
   @@index([bankAccountId])
   @@map("payments")
+}
+
+// ─── Compras (Purchasing) ──────────────────────────────────────────────────────
+// Fase 1 (Fundação) — docs/COMPRAS_ARCHITECTURE_DECISIONS.md. Depends on Finance
+// (Supplier, FinancialCategory, CostCenter) in one direction only — Finance
+// never references PurchaseOrder (DOMAIN_GUIDE.md §6).
+
+enum PurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+
+  supplierId   String  @db.ObjectId
+  projectId    String? @db.ObjectId
+  categoryId   String  @db.ObjectId // service validates category.direction === PAYABLE
+  costCenterId String? @db.ObjectId
+
+  description String
+  dueDate     DateTime // Date-Only (ADR-005) — becomes the single Installment's dueDate on approve()
+  notes       String?
+
+  status PurchaseOrderStatus @default(DRAFT)
+
+  // Server-computed sum of items.totalCents, never trusted from the client —
+  // same invariant as FinancialDocument.totalAmountCents.
+  totalAmountCents BigInt
+
+  // One-directional link, set only on approve() — FinancialDocument never
+  // references back to PurchaseOrder (ADR-016/ARCHITECTURE_ROADMAP.md §1).
+  // NOT @unique here — same reason as User.supabaseId/Subscription.
+  // mpSubscriptionId (docs/indexes.md): Prisma's @unique on Mongo is never
+  // sparse, so every DRAFT order (financialDocumentId: null) would collide
+  // against every other DRAFT order on the same null value. Caught for real
+  // by scripts/rc-compras-approve-check.ts's second concurrent DRAFT order,
+  // not by any mocked test. Uniqueness-once-approved is enforced by a
+  // manually-created sparse unique index (docs/indexes.md).
+  financialDocumentId String? @db.ObjectId
+
+  // ADR-017 — client-generated, checked as the first statement inside the
+  // create() transaction on every attempt (including retries), same pattern
+  // as Payment.idempotencyKey.
+  idempotencyKey String @unique
+
+  // ADR-017 — optimistic-concurrency counter bumped by the CAS updateMany in
+  // approve()/cancel(). Its value is never read by application logic; its
+  // only job is to give approve()-vs-approve()/cancel() something real to
+  // race over via the status precondition in the same updateMany.
+  version Int @default(0)
+
+  createdByUserId String @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  project    Project?            @relation(fields: [projectId], references: [id])
+  category   FinancialCategory   @relation(fields: [categoryId], references: [id])
+  costCenter CostCenter?         @relation(fields: [costCenterId], references: [id])
+  createdBy  User                @relation(fields: [createdByUserId], references: [id])
+  items      PurchaseOrderItem[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, supplierId])
+  @@index([workspaceId, projectId])
+  @@map("purchase_orders")
+}
+
+// Own collection, not a Prisma composite/embedded type — mirrors
+// Installment's shape exactly (ADR-016). Always created together with its
+// parent inside the same transaction; never queried independently of a
+// PurchaseOrder.
+model PurchaseOrderItem {
+  id              String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId     String @db.ObjectId
+  purchaseOrderId String @db.ObjectId
+
+  description String
+  quantity    Float // not money — can be fractional (e.g. m³ of material)
+  unitCents   BigInt
+  totalCents  BigInt // = round(quantity * unitCents), computed server-side
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, purchaseOrderId])
+  @@map("purchase_order_items")
 }
 
 // ─── Billing ──────────────────────────────────────────────────────────────────

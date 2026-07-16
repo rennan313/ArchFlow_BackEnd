@@ -19,6 +19,7 @@ ArchFlow é um único banco MongoDB compartilhado (não há schema-per-context),
 | **Automações** | `Automation`, `AutomationRun` | `src/services/automation.service.ts` |
 | **Documentos** | `Document`, `DocumentVersion`, `DocumentFolder` | `src/services/document.service.ts` |
 | **Financeiro** (AP/AR do escritório) | `SupplierCategory`, `Supplier`, `BankAccount`, `FinancialCategory`, `CostCenter`, `FinancialDocument`, `Installment`, `Payment` | `src/modules/financial/` — **contexto de referência desta Release** |
+| **Compras** (Fase 1 — Fundação) | `PurchaseOrder`, `PurchaseOrderItem` | `src/modules/purchasing/` — depende de Financeiro numa via só (`Supplier`/`FinancialCategory`/`CostCenter` lidos na criação; gera `FinancialDocument` via `approve()`), ver `COMPRAS_ARCHITECTURE_DECISIONS.md` |
 | **Billing** (SaaS do ArchFlow cobrando o escritório) | `Subscription`, `PaymentEvent`, `BillingHistory`, `BillingPlan` | `src/modules/billing/` |
 | **Localização & Precificação** | `State`, `City`, `RegionalPricing` | `src/services/{location,pricing}.service.ts` — dado de referência público, sem `workspaceId` |
 | **Autenticação (tokens)** | `ResetPasswordToken`, `EmailVerificationToken`, `RefreshToken` | `src/services/auth.service.ts` |
@@ -56,6 +57,19 @@ Raiz é qualquer nó sem `parentId`; `direction` é fixado por galho (herdado im
 ### 2.4 SupplierCategory → Supplier
 
 Aggregate simples: uma categoria pode ter N fornecedores; arquivar a categoria nunca invalida fornecedores já vinculados (referência solta, não `@relation` com cascade).
+
+### 2.5 PurchaseOrder → PurchaseOrderItem (Compras, Fase 1)
+
+```
+PurchaseOrder (raiz do aggregate)
+  └─ PurchaseOrderItem[]  (1:N, sempre criados junto com o pedido)
+```
+
+- **Raiz**: `PurchaseOrder`. Mesma forma do aggregate financeiro (raiz + filhos 1:N, coleção própria — ver `COMPRAS_ARCHITECTURE_DECISIONS.md` ADR-016), deliberadamente mais simples: sem um terceiro nível (`PurchaseOrderItem` não tem filhos, ao contrário de `Installment` → `Payment`).
+- **Invariante 1**: `PurchaseOrder.totalAmountCents` == soma de `PurchaseOrderItem.totalCents` — garantido na criação, nunca aceito do cliente (mesmo padrão de `FinancialDocument.totalAmountCents`).
+- **Invariante 2**: transições de `status` só saem de `DRAFT` — `APPROVED`/`CANCELLED` são terminais, garantido por CAS (`ADR-017`).
+- **Invariante 3**: `financialDocumentId` só é preenchido atomicamente junto com a transição para `APPROVED` — nunca um `PurchaseOrder` aprovado sem o `FinancialDocument` correspondente, e vice-versa (mesma transação, `ADR-017`).
+- **Sem raça entre agregados diferentes** (ao contrário do ADR-004 do Financeiro): `approve()`/`cancel()` competem pelo MESMO documento `PurchaseOrder`, então o CAS de status já é suficiente — não precisou do padrão "escrever no documento compartilhado" porque aqui já é o documento compartilhado.
 
 ---
 
@@ -104,6 +118,12 @@ Client ──► Project[], Opportunity[], Proposal[], Meeting[]
 Supplier ──► FinancialDocument[] (direction: PAYABLE, supplierId)
              (Fornecedor↔Projeto é *derivado* de FinancialDocument.supplierId+projectId,
               nunca uma tabela de junção própria — ver supplier.repository.ts#findProjects)
+
+PurchaseOrder ──(aprovado)──► FinancialDocument (direction: PAYABLE, gerado por approve())
+              ──► PurchaseOrderItem[]
+              (link de mão única: PurchaseOrder.financialDocumentId aponta para o
+               documento gerado; FinancialDocument nunca referencia o PurchaseOrder
+               de volta — Compras depende de Financeiro, nunca o inverso, DOMAIN_GUIDE.md §6)
 
 Workspace ──► (todo modelo de domínio, workspaceId direto — ADR-006)
 

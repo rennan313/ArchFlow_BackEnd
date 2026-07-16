@@ -71,11 +71,21 @@ export const financialDocumentRepository = {
   // between a document's totalAmountCents and the sum of its installments,
   // a crash between the two creates would otherwise leave an orphaned or
   // mismatched document.
-  createWithInstallments(input: CreateWithInstallmentsInput, correlationId = newCorrelationId()) {
+  //
+  // `db` (optional, trailing) lets a caller that's already inside its own
+  // transaction compose this write atomically with its own — same idiom as
+  // clientRepository's `Db` param (client.repository.ts). When passed, this
+  // function runs directly against that transaction client and returns
+  // without its own retry/timed wrapper, since the caller's own
+  // withTransactionRetry already covers the whole outer transaction (a
+  // nested $transaction/retry here would be redundant and Mongo doesn't
+  // support nesting transactions anyway). Compras' purchaseOrder.repository
+  // #approve is the first consumer of this — see COMPRAS_ARCHITECTURE_DECISIONS.md ADR-017.
+  createWithInstallments(input: CreateWithInstallmentsInput, correlationId = newCorrelationId(), db?: Prisma.TransactionClient) {
     const totalAmountCents = add(...input.installments.map((i) => i.amountCents))
     const base = { correlationId, workspaceId: input.workspaceId, userId: input.createdByUserId, entity: "FinancialDocument", op: "createWithInstallments" }
 
-    return timed("financial.createWithInstallments", () => withTransactionRetry(() => prisma.$transaction(async (tx) => {
+    const core = async (tx: Prisma.TransactionClient) => {
       const doc = await tx.financialDocument.create({
         data: {
           workspaceId:      input.workspaceId,
@@ -105,7 +115,10 @@ export const financialDocumentRepository = {
 
       auditLog({ ...base, event: "document_created", entityId: doc.id, total: formatCentsBRL(totalAmountCents), installmentCount: input.installments.length })
       return tx.financialDocument.findFirstOrThrow({ where: { id: doc.id }, include: DOCUMENT_INCLUDE })
-    }), { context: base }))
+    }
+
+    if (db) return core(db)
+    return timed("financial.createWithInstallments", () => withTransactionRetry(() => prisma.$transaction(core), { context: base }))
   },
 
   update(id: string, workspaceId: string, data: Prisma.FinancialDocumentUpdateInput) {

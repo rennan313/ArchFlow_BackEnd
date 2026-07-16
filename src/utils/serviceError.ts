@@ -80,6 +80,11 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.CLIENT_HAS_FINANCIAL_HISTORY]:  () => R.conflict("This client has financial documents linked to it and cannot be deleted. Archive it instead (set status to Inativo), or cancel/reassign its financial history first."),
   [ErrorCode.OPPORTUNITY_HAS_PROJECT]: () => R.conflict("This opportunity already converted to a project and cannot be deleted. Delete or reassign the project first if you need to remove this record."),
   [ErrorCode.PROPOSAL_HAS_PROJECT]:    () => R.conflict("This proposal already converted to a project and cannot be deleted. Delete or reassign the project first if you need to remove this record."),
+  // Compras
+  [ErrorCode.PURCHASE_ORDER_NOT_FOUND]: () => R.notFound("Purchase order not found"),
+  [ErrorCode.PURCHASE_ORDER_NOT_DRAFT]: () => R.badRequest("This purchase order is no longer a draft and can't be edited or cancelled"),
+  [ErrorCode.PURCHASE_ORDER_ALREADY_DECIDED]: () => R.conflict("This purchase order was already cancelled by someone else"),
+  [ErrorCode.PURCHASE_ORDER_CATEGORY_DIRECTION_MISMATCH]: () => R.badRequest("The financial category for a purchase order must be a Despesa (payable) category"),
   // Legacy string aliases kept for backward compat during migration
   INVALID_TOKEN:     () => R.badRequest("Invalid reset token"),
   TOKEN_ALREADY_USED: () => R.badRequest("Reset token has already been used"),

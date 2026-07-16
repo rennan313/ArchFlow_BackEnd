@@ -59,6 +59,11 @@ const PERMISSIONS: Record<string, string[]> = {
     "approve:financial-documents", // reserved — no approval workflow exists yet this sprint
     "view:financial-dashboard",
     "manage:financial-settings", // suppliers, supplier categories, bank accounts, financial categories, cost centers
+    // Compras (COMPRAS_ARCHITECTURE_DECISIONS.md ADR-018) — same tier as
+    // financial-documents above, plus the first module to actually gate a
+    // route with an approve permission (approve:financial-documents is
+    // reserved but unwired).
+    "view:purchase-orders", "create:purchase-orders", "update:purchase-orders", "delete:purchase-orders", "approve:purchase-orders",
   ],
 
   ARCHITECT: [
@@ -82,6 +87,8 @@ const PERMISSIONS: Record<string, string[]> = {
     // No approve:financial-documents, no manage:financial-settings — chart of
     // accounts/bank accounts/approvals stay ADMIN/OWNER tier, same reasoning
     // as update:branding/manage:automations above.
+    // Compras (ADR-018) — same tier as financial-documents: full CRUD, no approve.
+    "view:purchase-orders", "create:purchase-orders", "update:purchase-orders", "delete:purchase-orders",
   ],
 
   DESIGNER: [
@@ -115,6 +122,8 @@ const PERMISSIONS: Record<string, string[]> = {
     // Data-entry access only (registering invoices/bills is administrative
     // assistant work) — no delete, no dashboard-level aggregate visibility
     // (office margin/profit), no settings.
+    // Compras (ADR-018) — same tier as financial-documents: view/create/update, no delete/approve.
+    "view:purchase-orders", "create:purchase-orders", "update:purchase-orders",
   ],
 
   VIEWER: ["read:*"],

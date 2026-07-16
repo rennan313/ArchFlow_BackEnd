@@ -93,4 +93,40 @@ db.billing_history.getIndexes()
   (`scripts/backfill-subscriptions.ts`)
 - Staging/Production: as part of the Phase 2 (Mercado Pago) deployment runbook
   — must exist **before** the first real checkout, not after
+
+## Compras — purchase_orders.financialDocumentId Sparse Unique Index
+
+### Why
+
+Same root cause as `supabaseId` above — `financialDocumentId` is null for
+every `DRAFT`/`CANCELLED` `PurchaseOrder` and only gets set once, on
+`approve()`. Caught for real (not by a mocked test) by
+`scripts/rc-compras-approve-check.ts`'s second scenario, which failed with
+`Unique constraint failed on the constraint: purchase_orders_financialDocumentId_key`
+the moment a second DRAFT order existed in the same workspace — this was the
+reason `financialDocumentId` was demoted from `@unique` in the Prisma schema
+to a manually-created sparse index instead.
+
+### How to create it
+
+```js
+use ArchFlowDb
+
+db.purchase_orders.createIndex(
+  { financialDocumentId: 1 },
+  { unique: true, sparse: true, name: "purchase_orders_financialDocumentId_sparse_unique" }
+)
 ```
+
+### Verification
+
+```js
+db.purchase_orders.getIndexes()
+// Should show { unique: true, sparse: true } on financialDocumentId
+```
+
+### When to run
+
+- Local development: once, after `prisma db push` for the Compras Fase 1 schema
+- Staging/Production: as part of the Compras Fase 1 deployment runbook —
+  must exist before the first real `approve()` in that environment

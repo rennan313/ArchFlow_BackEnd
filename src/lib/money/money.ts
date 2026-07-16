@@ -27,6 +27,17 @@ export function subtract(a: Cents, b: Cents): Cents {
   return a - b
 }
 
+// Money × scalar quantity (e.g. unitCents × 2.5 m³ of material) — a
+// multiplication BigInt can't do directly against a fractional factor.
+// Same float-boundary safety as reaisToCents: converts to Number only at
+// this single point, rounds immediately, never chains float ops. Compras
+// (PurchaseOrderItem.totalCents) is the first caller — see
+// docs/COMPRAS_ARCHITECTURE_DECISIONS.md.
+export function scale(cents: Cents, factor: number): Cents {
+  if (!Number.isFinite(factor)) throw new RangeError(`scale: not a finite factor (${factor})`)
+  return BigInt(Math.round(Number(cents) * factor))
+}
+
 export function isPositive(v: Cents): boolean {
   return v > 0n
 }

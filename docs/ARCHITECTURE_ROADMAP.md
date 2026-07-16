@@ -7,6 +7,12 @@
 
 ## 1. Compras
 
+**Status**: Fase 1 (Fundação) implementada em 2026-07-16 — ver `COMPRAS_ARCHITECTURE_DECISIONS.md`. Escopo entregue: `PurchaseOrder` único (sem `Quotation` separado — `status: DRAFT` cobre a fase de cotação), um fornecedor por pedido, itens em texto livre (sem catálogo reutilizável), aprovação gera `FinancialDocument` atomicamente, sem cancelamento de pedido já `APPROVED`. Deliberadamente fora desta fase, YAGNI até haver demanda real:
+
+- Entidade `Quotation` separada para comparar múltiplos fornecedores lado a lado no mesmo fluxo (hoje: criar um `PurchaseOrder` DRAFT por fornecedor e cancelar os não escolhidos).
+- Catálogo de Item/Material reutilizável entre pedidos.
+- Cancelamento de um `PurchaseOrder` já `APPROVED` (exigiria coordenar com o cancelamento do `FinancialDocument` gerado, que tem sua própria regra de bloqueio por pagamento).
+
 **O que é**: pedidos de compra e cotações do escritório junto a fornecedores — o próximo passo natural depois do Financeiro, e o motivo declarado desta Release ser um congelamento antes de começar.
 
 **Dependências**: `Supplier`/`SupplierCategory` (Financeiro, já existem e já são configuráveis por workspace). Gera `FinancialDocument` (`direction: PAYABLE`) quando um pedido é aprovado.
