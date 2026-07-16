@@ -3,6 +3,8 @@ import { PLAN_LIMITS, unlimited, type PlanName } from "@/config/plans"
 import { subscriptionRepository } from "@/repositories/subscription.repository"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { logger } from "@/lib/logger"
+import { auditLog } from "@/lib/auditLog"
+import { withTransactionRetry } from "@/lib/transactionRetry"
 import { emailService } from "@/services/email/email.service"
 import { resolveOwnerContact } from "@/utils/workspaceOwner"
 import type { Subscription } from "@prisma/client"
@@ -241,23 +243,48 @@ export const subscriptionService = {
    *  sync in one transaction. Phase 1 has no payment gateway, so this is
    *  intentionally synchronous/unconditional — Phase 2 moves the actual
    *  activation into the Mercado Pago webhook handler, with this method (or
-   *  one shaped like it) called only after a payment is confirmed. */
+   *  one shaped like it) called only after a payment is confirmed.
+   *
+   *  CORE-1 (Sprint 0) — this is the highest-priority finding from Release
+   *  1.0's cross-module review: a 2-collection write (`workspace` +
+   *  `subscription`) triggered directly by a real payment webhook
+   *  (`billingWebhookService.process`, on `authorized`/renewal), with no
+   *  retry protection against MongoDB's WriteConflict/TransientTransactionError
+   *  under concurrent writes to the same Workspace or Subscription document
+   *  (e.g. a user changing plans in the UI at the same instant a webhook
+   *  lands) — exactly the class of risk ADR-003 exists for. Fixed by
+   *  switching from array-form `$transaction([...])` (no retry hook
+   *  available) to callback-form `$transaction(tx => ...)` wrapped in
+   *  `withTransactionRetry()`, same as every financial write.
+   *
+   *  Idempotency: no `idempotencyKey` needed here, unlike Payment (ADR-002).
+   *  `changePlan` is an idempotent *assignment* (set plan/status to X), not
+   *  an append-only creation — calling it twice with the same arguments
+   *  converges to the same state, it doesn't accumulate. It's also already
+   *  deduplicated one layer up: `billingWebhookService.process` persists the
+   *  `PaymentEvent` by `externalId` (unique) BEFORE calling this, and skips
+   *  reprocessing if `processedAt` is already set — so under normal webhook
+   *  retry/redelivery, this function is only reached once per real event.
+   *  The retry added here protects the narrower window of a genuine
+   *  concurrent write conflict, not duplicate webhook delivery. */
   async changePlan(workspaceId: string, plan: PlanName, billingCycle?: "MONTHLY" | "ANNUAL"): Promise<Subscription> {
     const existing = await subscriptionRepository.findByWorkspace(workspaceId)
     if (!existing) throw new AppError(ErrorCode.SUBSCRIPTION_NOT_FOUND)
 
-    const [, updated] = await prisma.$transaction([
-      prisma.workspace.update({ where: { id: workspaceId }, data: { plan } }),
-      prisma.subscription.update({
+    const base = { workspaceId, entity: "Subscription", entityId: existing.id, op: "changePlan" }
+    const updated = await withTransactionRetry(() => prisma.$transaction(async (tx) => {
+      await tx.workspace.update({ where: { id: workspaceId }, data: { plan } })
+      return tx.subscription.update({
         where: { workspaceId },
         data: {
           plan,
           status:       "ACTIVE",
           billingCycle: billingCycle ?? existing.billingCycle,
         },
-      }),
-    ])
+      })
+    }), { context: base })
 
+    auditLog({ ...base, event: "subscription_plan_changed", fromPlan: existing.plan, toPlan: plan })
     return updated
   },
 

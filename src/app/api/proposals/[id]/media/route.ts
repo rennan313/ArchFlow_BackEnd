@@ -15,7 +15,7 @@ export const GET = withWorkspace(async (_req: NextRequest, ctx: Ctx, _user: JwtP
     // Verify proposal belongs to this workspace
     await proposalService.getById(id, workspaceId)
 
-    const media = await mediaService.list(id)
+    const media = await mediaService.list(id, workspaceId)
     return ok(media)
   } catch (error) {
     return handleServiceError(error)

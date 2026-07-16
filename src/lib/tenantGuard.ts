@@ -3,9 +3,16 @@ import { projectRepository } from "@/repositories/project.repository"
 import { proposalRepository } from "@/repositories/proposal.repository"
 import { opportunityRepository } from "@/repositories/opportunity.repository"
 import { documentRepository } from "@/repositories/document.repository"
+import { supplierRepository } from "@/repositories/supplier.repository"
+import { supplierCategoryRepository } from "@/repositories/supplierCategory.repository"
+import { bankAccountRepository } from "@/repositories/bankAccount.repository"
+import { financialCategoryRepository } from "@/repositories/financialCategory.repository"
+import { costCenterRepository } from "@/repositories/costCenter.repository"
 import { AppError, ErrorCode } from "@/lib/errors"
 
-type ReferenceField = "clientId" | "projectId" | "proposalId" | "opportunityId" | "folderId"
+type ReferenceField =
+  | "clientId" | "projectId" | "proposalId" | "opportunityId" | "folderId"
+  | "supplierId" | "supplierCategoryId" | "bankAccountId" | "financialCategoryId" | "costCenterId"
 
 /**
  * Single source of truth for "does this foreign-key-shaped input belong to
@@ -22,6 +29,11 @@ const RESOLVERS: Record<ReferenceField, (id: string, workspaceId: string) => Pro
   proposalId:    (id, workspaceId) => proposalRepository.findById(id, workspaceId),
   opportunityId: (id, workspaceId) => opportunityRepository.findById(id, workspaceId),
   folderId:      (id, workspaceId) => documentRepository.findFolderById(id, workspaceId),
+  supplierId:         (id, workspaceId) => supplierRepository.findById(id, workspaceId),
+  supplierCategoryId: (id, workspaceId) => supplierCategoryRepository.findById(id, workspaceId),
+  bankAccountId:      (id, workspaceId) => bankAccountRepository.findById(id, workspaceId),
+  financialCategoryId: (id, workspaceId) => financialCategoryRepository.findById(id, workspaceId),
+  costCenterId:       (id, workspaceId) => costCenterRepository.findById(id, workspaceId),
 }
 
 export type TenantReferences = Partial<Record<ReferenceField, string | null | undefined>>

@@ -183,7 +183,7 @@ export const provisionService = {
       `[provision] supabaseId conflict: email=${input.email} ` +
       `existing.supabaseId=${existing.supabaseId} incoming=${input.supabaseId}`,
     )
-    throw new Error("EMAIL_TAKEN")
+    throw new AppError(ErrorCode.EMAIL_TAKEN)
   },
 
   /**

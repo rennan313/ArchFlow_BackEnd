@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server"
 import { requireAnyWorkspacePermission } from "@/middlewares/rbac"
 import { storageService } from "@/services/storage/supabase.service"
 import { ok, badRequest } from "@/lib/response"
-import { handleServiceError } from "@/utils/serviceError"
+import { handleServiceError, parseUnsupportedFileType } from "@/utils/serviceError"
 import type { JwtPayload } from "@/lib/jwt"
 
 export const POST = requireAnyWorkspacePermission("create:proposals")(async (
@@ -27,10 +27,8 @@ export const POST = requireAnyWorkspacePermission("create:proposals")(async (
     const result = await storageService.uploadVisualRef(workspaceId, file)
     return ok({ url: result.url, storagePath: result.storagePath }, "Visual ref uploaded")
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith("UNSUPPORTED_FILE_TYPE")) {
-      const type = error.message.split(":")[1] ?? "unknown"
-      return badRequest(`Unsupported file type: ${type}. Allowed: JPEG, PNG, WebP, GIF`)
-    }
+    const unsupportedType = parseUnsupportedFileType(error)
+    if (unsupportedType) return badRequest(`Unsupported file type: ${unsupportedType}. Allowed: JPEG, PNG, WebP, GIF`)
     return handleServiceError(error)
   }
 })

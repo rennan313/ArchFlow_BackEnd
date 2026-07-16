@@ -1,6 +1,7 @@
 import { stateRepository } from '@/repositories/state.repository'
 import { cityRepository } from '@/repositories/city.repository'
 import { buildMeta } from '@/lib/pagination'
+import { AppError, ErrorCode } from '@/lib/errors'
 
 export const locationService = {
   async listStates() {
@@ -9,7 +10,7 @@ export const locationService = {
 
   async listCities(stateUf: string, q: string, page: number, limit: number) {
     const state = await stateRepository.findByUf(stateUf)
-    if (!state) throw new Error('STATE_NOT_FOUND')
+    if (!state) throw new AppError(ErrorCode.STATE_NOT_FOUND)
 
     const [data, total] = await cityRepository.searchByState(stateUf, q, page, limit)
     const pagination    = buildMeta(total, page, limit)

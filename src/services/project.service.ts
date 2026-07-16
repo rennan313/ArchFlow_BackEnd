@@ -6,6 +6,7 @@ import { AppError, ErrorCode } from "@/lib/errors"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
 import { automationService } from "@/services/automation.service"
 import { taskService } from "@/services/task.service"
+import { financialDocumentService } from "@/modules/financial/financial.module"
 import type { CreateProjectInput, UpdateProjectInput, ProjectQueryInput, ProjectPhase } from "@/validations/project"
 import type { AutomationKey } from "@prisma/client"
 
@@ -121,8 +122,19 @@ export const projectService = {
     }
   },
 
+  // RC-2.3 — a project with linked FinancialDocuments can never be hard
+  // deleted: Mongo has no FK to cascade or block on, so a plain deleteMany
+  // here would silently orphan every financial record's projectId (still
+  // correct in aggregates, but unresolvable to a name in the UI —
+  // exactly the gap the RC-1 audit flagged). There is no "archive" state
+  // for Project to fall back to instead; the caller must cancel/reassign
+  // the financial history first, or simply not delete a project with a
+  // real financial footprint.
   async delete(id: string, workspaceId: string) {
     await this.getById(id, workspaceId)
+    if (await financialDocumentService.hasDocumentsForProject(id, workspaceId)) {
+      throw new AppError(ErrorCode.PROJECT_HAS_FINANCIAL_HISTORY)
+    }
     await projectRepository.delete(id, workspaceId)
   },
 

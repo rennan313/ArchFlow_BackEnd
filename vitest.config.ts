@@ -8,7 +8,12 @@ export default defineConfig({
     coverage: {
       provider:  "v8",
       reporter:  ["text", "json", "html"],
-      include:   ["src/services/**", "src/lib/**", "src/utils/**"],
+      // RC-2.6: added repositories/** and modules/** — the financial engine's
+      // transactional core (registerPayment, createWithInstallments) lives in
+      // repositories, and its business logic in modules/financial/services;
+      // neither was tracked before this sprint, so "backend coverage %" was
+      // silently blind to exactly the code this sprint most needed measured.
+      include:   ["src/services/**", "src/lib/**", "src/utils/**", "src/repositories/**", "src/modules/**"],
       exclude:   ["src/lib/prisma.ts", "src/lib/logger.ts"],
       // Phase 5.9 baseline — do not regress below these numbers
       // Target: +5pp per sprint as services are covered

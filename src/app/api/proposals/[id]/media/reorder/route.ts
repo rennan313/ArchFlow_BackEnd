@@ -18,7 +18,7 @@ export const PUT = requireAnyWorkspacePermission("upload:media", "update:proposa
     const body  = await req.json()
     const input = reorderMediaSchema.parse(body)
 
-    const media = await mediaService.reorder(id, input)
+    const media = await mediaService.reorder(id, workspaceId, input)
     return ok(media, "Media reordered successfully")
   } catch (error) {
     return handleServiceError(error)

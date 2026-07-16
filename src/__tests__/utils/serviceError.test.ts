@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { ZodError, z } from "zod"
-import { handleServiceError } from "@/utils/serviceError"
+import { handleServiceError, parseUnsupportedFileType } from "@/utils/serviceError"
 import { AppError, ErrorCode } from "@/lib/errors"
 
 // ── ZodError ─────────────────────────────────────────────────────────────────
@@ -220,6 +220,64 @@ describe("handleServiceError — INVALID_TRANSITION", () => {
     const body = await res.json()
     expect(body.message).toContain("APPROVED")
     expect(body.message).toContain("DRAFT")
+  })
+})
+
+// ── CORE-2 (Sprint 0): Opportunity/Proposal → Project referential guards ──────
+
+describe("handleServiceError — CORE-2 referential guards", () => {
+  it("maps OPPORTUNITY_HAS_PROJECT to 409", async () => {
+    const res = handleServiceError(new AppError(ErrorCode.OPPORTUNITY_HAS_PROJECT))
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.message).toMatch(/project/i)
+  })
+
+  it("maps PROPOSAL_HAS_PROJECT to 409", async () => {
+    const res = handleServiceError(new AppError(ErrorCode.PROPOSAL_HAS_PROJECT))
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.message).toMatch(/project/i)
+  })
+})
+
+// ── CORE-5 (Sprint 0): centralized VALIDATION: prefix ──────────────────────────
+// Previously duplicated as an identical `error.message.startsWith("VALIDATION:")`
+// block across 3 route files (documents/route.ts, documents/[id]/versions/
+// route.ts, the section-regenerate route) — now handled once, here.
+
+describe("handleServiceError — VALIDATION: prefix (centralized, CORE-5)", () => {
+  it("returns 400 with the detail after the prefix", async () => {
+    const res = handleServiceError(new Error("VALIDATION:clientId or projectId is required"))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.message).toBe("clientId or projectId is required")
+  })
+
+  it("does not match a message that merely contains, but doesn't start with, VALIDATION:", async () => {
+    const res = handleServiceError(new Error("something VALIDATION: not at the start"))
+    expect(res.status).toBe(500)
+  })
+})
+
+// ── CORE-5 (Sprint 0): parseUnsupportedFileType helper ─────────────────────────
+// Centralizes the PARSING half of UNSUPPORTED_FILE_TYPE: (routes still own
+// their own "Allowed: ..." message, since allowed types differ per upload
+// context) — previously each of 4 routes re-implemented this same parse.
+
+describe("parseUnsupportedFileType", () => {
+  it("extracts the file type from a well-formed sentinel error", () => {
+    expect(parseUnsupportedFileType(new Error("UNSUPPORTED_FILE_TYPE:application/x-msdownload"))).toBe("application/x-msdownload")
+  })
+
+  it("falls back to 'unknown' when no type follows the prefix", () => {
+    expect(parseUnsupportedFileType(new Error("UNSUPPORTED_FILE_TYPE:"))).toBe("unknown")
+  })
+
+  it("returns null for an unrelated error", () => {
+    expect(parseUnsupportedFileType(new Error("some other error"))).toBeNull()
+    expect(parseUnsupportedFileType(new AppError(ErrorCode.NOT_FOUND))).toBeNull()
+    expect(parseUnsupportedFileType("not an Error instance")).toBeNull()
   })
 })
 

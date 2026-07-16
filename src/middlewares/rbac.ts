@@ -24,6 +24,16 @@ const ROLE_RANK: Record<string, number> = {
 // permission — it's enforced via requirePermissionOrOwner() at the route
 // level, scoped to Project.userId, because permission strings alone can't
 // express per-resource ownership.
+//
+// Financial permissions deliberately use the verb "view" instead of "read".
+// hasPermission()'s wildcard match is verb-scoped (`${verb}:*`), and every
+// role below carries "read:*" as a blanket read grant for the rest of the
+// domain (clients, projects, proposals...). Financial data is the one
+// exception to "anyone in the workspace can see anything" — an office owner
+// does not want every DESIGNER/ASSISTANT seeing office margins — so it is
+// granted explicitly per role via "view:financial-*" rather than falling
+// under the universal "read:*". This reuses hasPermission()/
+// requireWorkspacePermission() as-is; no new permission mechanism.
 
 const PERMISSIONS: Record<string, string[]> = {
   OWNER: ["*"],
@@ -45,6 +55,10 @@ const PERMISSIONS: Record<string, string[]> = {
     "create:proposal-blocks", "update:proposal-blocks", "delete:proposal-blocks", "share:proposal-blocks",
     "create:proposal-narratives", "update:proposal-narratives", "delete:proposal-narratives",
     // NOT billing:manage — billing stays OWNER-only.
+    "view:financial-documents", "create:financial-documents", "update:financial-documents", "delete:financial-documents",
+    "approve:financial-documents", // reserved — no approval workflow exists yet this sprint
+    "view:financial-dashboard",
+    "manage:financial-settings", // suppliers, supplier categories, bank accounts, financial categories, cost centers
   ],
 
   ARCHITECT: [
@@ -63,6 +77,11 @@ const PERMISSIONS: Record<string, string[]> = {
     "create:proposal-narratives", "update:proposal-narratives", "delete:proposal-narratives",
     // No workspace/branding/billing administration, no manage:automations
     // (toggling automations on/off is OWNER/ADMIN-only, same tier as billing).
+    "view:financial-documents", "create:financial-documents", "update:financial-documents", "delete:financial-documents",
+    "view:financial-dashboard",
+    // No approve:financial-documents, no manage:financial-settings — chart of
+    // accounts/bank accounts/approvals stay ADMIN/OWNER tier, same reasoning
+    // as update:branding/manage:automations above.
   ],
 
   DESIGNER: [
@@ -78,6 +97,8 @@ const PERMISSIONS: Record<string, string[]> = {
     // projects they created, enforced via requirePermissionOrOwner(). Same
     // reasoning applies to documents: no delete:documents for DESIGNER.
     // No delete:proposal-* either, same tier as documents.
+    // No financial permissions at all — design staff has no default
+    // visibility into office money, same reasoning as the block comment above.
   ],
 
   ASSISTANT: [
@@ -90,9 +111,14 @@ const PERMISSIONS: Record<string, string[]> = {
     "create:documents", "update:documents",
     "update:tasks",
     // No delete, no approve, no admin, no billing.
+    "view:financial-documents", "create:financial-documents", "update:financial-documents",
+    // Data-entry access only (registering invoices/bills is administrative
+    // assistant work) — no delete, no dashboard-level aggregate visibility
+    // (office margin/profit), no settings.
   ],
 
   VIEWER: ["read:*"],
+  // No financial permissions — see block comment above.
 }
 
 export function hasPermission(role: string, permission: string): boolean {

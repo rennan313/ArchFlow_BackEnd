@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server"
 import { requireWorkspacePermission } from "@/middlewares/rbac"
 import { aiRateLimit } from "@/middlewares/rateLimiter"
 import { proposalSectionInstanceService } from "@/services/proposal-section-instance.service"
-import { ok, internalError, badRequest } from "@/lib/response"
+import { ok, internalError } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
 import { logger } from "@/lib/logger"
 import type { JwtPayload } from "@/lib/jwt"
@@ -22,9 +22,6 @@ export const POST = requireWorkspacePermission("update:proposals")(async (req: N
     const updated = await proposalSectionInstanceService.regenerateSection(sectionInstanceId, id, workspaceId)
     return ok(updated, "Section regenerated")
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith("VALIDATION:")) {
-      return badRequest(error.message.slice("VALIDATION:".length))
-    }
     logger.error({ err: error }, "[regenerate-section] failed")
     if (error instanceof Error && error.message.includes("ANTHROPIC_API_KEY")) {
       return internalError("AI service is not configured")

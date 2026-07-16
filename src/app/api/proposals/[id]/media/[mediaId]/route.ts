@@ -18,7 +18,7 @@ export const PATCH = requireAnyWorkspacePermission("upload:media", "update:propo
     const body  = await req.json()
     const input = updateMediaSchema.parse(body)
 
-    const media = await mediaService.update(mediaId, id, input)
+    const media = await mediaService.update(mediaId, id, workspaceId, input)
     return ok(media, "Media updated successfully")
   } catch (error) {
     return handleServiceError(error)
@@ -30,7 +30,7 @@ export const DELETE = requireAnyWorkspacePermission("upload:media", "update:prop
     const { id, mediaId } = await ctx.params
 
     await proposalService.getById(id, workspaceId)
-    await mediaService.delete(mediaId, id)
+    await mediaService.delete(mediaId, id, workspaceId)
 
     return noContent()
   } catch (error) {

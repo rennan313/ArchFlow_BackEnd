@@ -18,7 +18,7 @@ export const POST = requireAnyWorkspacePermission("upload:media", "update:propos
     const body  = await req.json()
     const input = addEmbedSchema.parse(body)
 
-    const media = await mediaService.addEmbed(id, input)
+    const media = await mediaService.addEmbed(id, workspaceId, input)
     return created(media, "Embed added successfully")
   } catch (error) {
     return handleServiceError(error)

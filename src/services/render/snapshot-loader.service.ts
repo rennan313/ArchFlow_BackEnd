@@ -37,7 +37,7 @@ export const snapshotLoaderService = {
     // asset URLs, which matters now that the PDF cover renders the logo.
     const [branding, rawMedia] = await Promise.all([
       brandingService.get(workspaceId),
-      mediaRepository.findAll(proposalId),
+      mediaRepository.findAll(proposalId, workspaceId),
     ])
 
     // Refresh signed URLs for Supabase-stored files

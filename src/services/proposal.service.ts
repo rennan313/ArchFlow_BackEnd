@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma"
 import { proposalRepository } from "@/repositories/proposal.repository"
+import { projectRepository } from "@/repositories/project.repository"
 import { clientService } from "@/services/client.service"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { withTransactionRetry } from "@/lib/transactionRetry"
 import type { CreateProposalInput, UpdateProposalInput, ProposalQueryInput } from "@/validations/proposal"
 
 export const proposalService = {
@@ -21,8 +23,13 @@ export const proposalService = {
   // Resolves the client (reuse by id, reuse by exact name, or create minimal)
   // and creates the Proposal atomically — either both succeed or neither is
   // persisted, so a failed proposal never leaves an orphaned client behind.
+  //
+  // CORE-6 (Sprint 0) — this already used callback-form $transaction (so
+  // atomicity/rollback were never the gap), but had no retry wrapper: a
+  // 2-collection write (Client find-or-create + Proposal create) with no
+  // protection against a losing WriteConflict under concurrent requests.
   async create(workspaceId: string, userId: string, input: CreateProposalInput) {
-    return prisma.$transaction(async (tx) => {
+    return withTransactionRetry(() => prisma.$transaction(async (tx) => {
       const { clientId, ...rest } = input
       const client = await clientService.findOrCreate(
         workspaceId, userId, { clientId, name: input.clientName }, tx,
@@ -33,7 +40,7 @@ export const proposalService = {
         user:      { connect: { id: userId } },
         workspace: { connect: { id: workspaceId } },
       }, tx);
-    });
+    }), { context: { workspaceId, userId, entity: "Proposal", op: "create" } });
   },
 
   async update(id: string, workspaceId: string, input: UpdateProposalInput) {
@@ -44,9 +51,15 @@ export const proposalService = {
     return proposalRepository.findById(id, workspaceId);
   },
 
+  // CORE-2 (Sprint 0) — same referential guard as opportunity.service.ts
+  // above (RC-2.3 pattern, one hop upstream): a Proposal that already
+  // converted to a Project (Project.proposalId) can no longer be deleted
+  // physically. See FINANCIAL_ARCHITECTURE_DECISIONS.md, Anexo B.
   async delete(id: string, workspaceId: string) {
     const existing = await proposalRepository.findById(id, workspaceId);
     if (!existing) throw new AppError(ErrorCode.NOT_FOUND)
+    const linkedProject = await projectRepository.findByProposalId(id, workspaceId)
+    if (linkedProject) throw new AppError(ErrorCode.PROPOSAL_HAS_PROJECT)
     await proposalRepository.delete(id, workspaceId);
   },
 };

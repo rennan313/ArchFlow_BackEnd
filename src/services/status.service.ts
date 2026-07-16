@@ -41,7 +41,7 @@ export const statusService = {
     const proposal = await proposalRepository.findById(proposalId, workspaceId)
     if (!proposal) throw new AppError(ErrorCode.NOT_FOUND)
 
-    const history = await statusRepository.getHistory(proposalId)
+    const history = await statusRepository.getHistory(proposalId, workspaceId)
 
     return history.map((h) => ({
       id:        h.id,

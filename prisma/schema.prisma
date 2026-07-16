@@ -233,6 +233,39 @@ enum BillingCycle {
   ANNUAL
 }
 
+// ─── Financial Domain ─────────────────────────────────────────────────────────
+// Tenant-office bookkeeping (the architecture office's own AP/AR) — distinct
+// bounded context from Subscription/BillingPlan/PaymentEvent/BillingHistory
+// above, which is ArchFlow charging the workspace for its SaaS plan. Never
+// reuse those models for office-level supplier/client money.
+
+enum BankAccountType {
+  CHECKING
+  SAVINGS
+}
+
+enum FinancialDirection {
+  PAYABLE
+  RECEIVABLE
+}
+
+// OVERDUE is intentionally not a stored state — there is no scheduled-job
+// infra in this backend to sweep and transition it. "Vencida" is derived at
+// query time (dueDate < now && status != PAID) wherever needed (KPIs, lists).
+enum InstallmentStatus {
+  OPEN
+  PARTIAL
+  PAID
+}
+
+enum PaymentMethod {
+  PIX
+  BOLETO
+  TRANSFER
+  CASH
+  CARD
+}
+
 // ─── Core Domain Models ───────────────────────────────────────────────────────
 
 model Workspace {
@@ -271,6 +304,13 @@ model Workspace {
   proposalSections   ProposalSection[]
   proposalBlocks     ProposalBlock[]
   proposalNarratives ProposalNarrative[]
+
+  supplierCategories  SupplierCategory[]
+  suppliers           Supplier[]
+  bankAccounts        BankAccount[]
+  financialCategories FinancialCategory[]
+  costCenters         CostCenter[]
+  financialDocuments  FinancialDocument[]
 
   @@map("workspaces")
 }
@@ -330,6 +370,9 @@ model User {
   proposalSections   ProposalSection[]
   proposalBlocks     ProposalBlock[]
   proposalNarratives ProposalNarrative[]
+
+  financialDocumentsCreated FinancialDocument[]
+  paymentsCreated           Payment[]
 
   @@index([workspaceId])
   @@map("users")
@@ -415,6 +458,8 @@ model Client {
   meetings        Meeting[]
   documents       Document[]
   documentFolders DocumentFolder[]
+
+  financialDocuments FinancialDocument[]
 
   @@index([userId])
   @@index([workspaceId])
@@ -573,7 +618,7 @@ model Proposal {
   // Proposal Builder — set by ProposalAdvisorService's recommendation when
   // the builder is initialized; "builder" prefix keeps these distinct from
   // the legacy one-shot fields above (generatedProposalJson/proposalTone).
-  builderTemplateId       String?              @db.ObjectId
+  builderTemplateId       String?               @db.ObjectId
   builderNarrativeProfile String? // NarrativeProfile value, e.g. "CONSULTIVE" — not a ProposalNarrative id, see proposal-advisor types
   builderSkin             ProposalSkin?
   builderStatus           ProposalBuilderStatus @default(DRAFT)
@@ -581,14 +626,14 @@ model Proposal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user            User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace       Workspace?                @relation(fields: [workspaceId], references: [id])
-  opportunity     Opportunity?              @relation(fields: [opportunityId], references: [id])
-  client          Client?                   @relation(fields: [clientId], references: [id])
-  projects        Project[] // app-enforced "at most one" — see Project.proposalId comment
-  media           ProposalMedia[]
-  statusHistory   ProposalStatusHistory[]
-  versions        ProposalVersion[]
+  user             User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace        Workspace?                @relation(fields: [workspaceId], references: [id])
+  opportunity      Opportunity?              @relation(fields: [opportunityId], references: [id])
+  client           Client?                   @relation(fields: [clientId], references: [id])
+  projects         Project[] // app-enforced "at most one" — see Project.proposalId comment
+  media            ProposalMedia[]
+  statusHistory    ProposalStatusHistory[]
+  versions         ProposalVersion[]
   sectionInstances ProposalSectionInstance[]
 
   @@index([userId, status])
@@ -728,13 +773,13 @@ model ProposalTemplate {
   userId      String  @db.ObjectId
   workspaceId String? @db.ObjectId
 
-  name        String
-  description String?
-  skin        ProposalSkin @default(EDITORIAL)
+  name         String
+  description  String?
+  skin         ProposalSkin @default(EDITORIAL)
   sectionOrder String[] // ordered ProposalSection.key refs
 
-  isArchived       Boolean @default(false)
-  isFavorite       Boolean @default(false)
+  isArchived        Boolean @default(false)
+  isFavorite        Boolean @default(false)
   isPlatformDefault Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -758,13 +803,13 @@ model ProposalSection {
   description String?
   order       Int     @default(0)
 
-  isArchived Boolean @default(false)
+  isArchived        Boolean @default(false)
   // Fase 2.0 — Etapa 6: true for sections that exist only to receive content
   // migrated from legacy generatedProposalJson proposals (e.g. "Investimento",
   // "Riscos"). Excluded from the AI advisor's recommendations and from the
   // manual "Adicionar seção" picker for new proposals — the legacy migrator
   // is the only caller allowed to use them.
-  isMigrationOnly Boolean @default(false)
+  isMigrationOnly   Boolean @default(false)
   // Proposal Experience v2 (Fase A): true for the 12 fixed premium-narrative
   // catalog rows (premium-cover … premium-closing). Excluded from the advisor
   // and the manual picker like isMigrationOnly, but semantically distinct:
@@ -778,12 +823,12 @@ model ProposalSection {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
 
-  @@index([workspaceId])
   // Workspace sections override platform defaults (workspaceId: null) by key.
   // The unique constraint already indexes [workspaceId, key] — a separate
   // @@index on the same columns is redundant and fails schema validation.
   // NOTE: existing duplicate keys must be resolved before running prisma db push.
   @@unique([workspaceId, key])
+  @@index([workspaceId])
   @@map("proposal_sections")
 }
 
@@ -856,9 +901,9 @@ model ProposalNarrative {
 // block (workspaceId: null), a different "scope" than the instance's own
 // workspaceId, so relation enforcement isn't meaningful here on Mongo anyway.
 model ProposalSectionInstance {
-  id          String  @id @default(auto()) @map("_id") @db.ObjectId
-  workspaceId String  @db.ObjectId
-  proposalId  String  @db.ObjectId
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+  proposalId  String @db.ObjectId
 
   sectionId String  @db.ObjectId // ProposalSection.id this slot represents
   blockId   String? @db.ObjectId // ProposalBlock.id this was snapshotted from — null for fully custom sections
@@ -869,11 +914,11 @@ model ProposalSectionInstance {
   metadata  String? // JSON-stringified — see Workspace.dashboardLayout for the same string-not-Json convention
 
   createdFromLibrary Boolean @default(false)
-  isCustomized        Boolean @default(false)
+  isCustomized       Boolean @default(false)
   // Fase B — hidden sections stay in the Builder's structure column
   // (toggleable) but are excluded from the preview, the detail view and
   // the exported PDF. Never deleted: content is preserved.
-  isHidden            Boolean @default(false)
+  isHidden           Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -944,6 +989,8 @@ model Project {
   documents       Document[]
   documentFolders DocumentFolder[]
   tasks           Task[]
+
+  financialDocuments FinancialDocument[]
 
   @@index([userId])
   @@index([workspaceId])
@@ -1081,6 +1128,279 @@ model Task {
   @@index([workspaceId, projectId, automationKey])
   @@index([assigneeId, status])
   @@map("tasks")
+}
+
+// ─── Financial Domain ─────────────────────────────────────────────────────────
+// Office-level bookkeeping: the workspace's own suppliers, clients billing,
+// and cash. Ledger shape is Título → Parcela → Baixa (FinancialDocument →
+// Installment → Payment) so partial/multiple payments per installment are
+// representable — a flat "contas a pagar" row with one paidAt could not do
+// that. Payment rows are append-only (no update/delete route is ever wired);
+// reversal is a deliberately deferred v2 (compensating entry, not a mutation).
+
+model SupplierCategory {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+
+  name       String
+  isArchived Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  suppliers Supplier[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("supplier_categories")
+}
+
+model Supplier {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String  @db.ObjectId
+  categoryId  String? @db.ObjectId
+
+  name     String
+  document String? // CPF/CNPJ, free text — no format enforced at the DB layer
+  email    String?
+  whatsapp String?
+  phone    String?
+  website  String?
+  address  String?
+  notes    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category           SupplierCategory?   @relation(fields: [categoryId], references: [id])
+  financialDocuments FinancialDocument[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, isActive])
+  @@index([categoryId])
+  @@map("suppliers")
+}
+
+model BankAccount {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+
+  name                String
+  bankName            String
+  agency              String?
+  accountNumber       String?
+  type                BankAccountType @default(CHECKING)
+  // Current balance is intentionally NOT stored — it would drift from the
+  // Payment ledger. Always derive: initialBalanceCents + net(payments).
+  // BigInt (BSON Int64), not Int (BSON Int32, caps at ~R$21.4M) — see
+  // RC-2.2 in docs/financial-architecture.md for why every money field in
+  // this domain uses BigInt.
+  initialBalanceCents BigInt          @default(0)
+  isActive            Boolean         @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  payments  Payment[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, isActive])
+  @@map("bank_accounts")
+}
+
+// Self-referencing tree (plano de contas). direction is fixed per branch so a
+// Despesas category can never be picked for a RECEIVABLE document — enforced
+// in the service layer at write time (Mongo has no CHECK constraints).
+model FinancialCategory {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String  @db.ObjectId
+  parentId    String? @db.ObjectId
+
+  name       String
+  direction  FinancialDirection
+  isArchived Boolean            @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // Self-relations on the Mongo connector must disable referential actions —
+  // there is no FK to cascade against, and Prisma requires this explicit for
+  // self-relations rather than inferring a default.
+  parent    FinancialCategory?  @relation("FinancialCategoryTree", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children  FinancialCategory[] @relation("FinancialCategoryTree")
+  documents FinancialDocument[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, direction])
+  @@index([parentId])
+  @@map("financial_categories")
+}
+
+model CostCenter {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+
+  name       String
+  isArchived Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  documents FinancialDocument[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("cost_centers")
+}
+
+// The "título" — projectId/clientId/supplierId are all optional so overhead
+// expenses (rent, payroll, software) can exist with no project, matching how
+// Document/FollowUp already use optional dual linkage elsewhere in this
+// schema. Direction constrains which of clientId/supplierId is valid — the
+// service layer enforces PAYABLE⇒no clientId, RECEIVABLE⇒no supplierId.
+model FinancialDocument {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+
+  direction FinancialDirection
+
+  projectId    String? @db.ObjectId
+  clientId     String? @db.ObjectId
+  supplierId   String? @db.ObjectId
+  categoryId   String  @db.ObjectId
+  costCenterId String? @db.ObjectId
+
+  description      String
+  competencyDate   DateTime
+  // Cache of sum(installments.amountCents), validated against the actual
+  // installments at creation time in the service layer — read-path
+  // convenience only, installments remain the source of truth. BigInt, see
+  // BankAccount.initialBalanceCents comment.
+  totalAmountCents BigInt
+  notes            String?
+  // Soft-cancel only — same append-only spirit as Payment, one level up.
+  // finance.delete maps to this, never a physical delete.
+  isCancelled      Boolean  @default(false)
+  // RC-3.1 — optimistic-concurrency counter, bumped by every write that must
+  // not silently race against a cancellation: registerPayment's guard-write
+  // and cancelIfNoPayments's own cancel-write both increment it. Its value
+  // is never read by application logic; its only job is to make both writers
+  // genuinely mutate this same document, which is what gives Mongo's
+  // multi-document transaction engine something real to detect a
+  // write-write conflict on. See installment.repository.ts#registerPayment
+  // for the full race-condition writeup this closes.
+  version          Int      @default(0)
+
+  createdByUserId String @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project      Project?          @relation(fields: [projectId], references: [id])
+  client       Client?           @relation(fields: [clientId], references: [id])
+  supplier     Supplier?         @relation(fields: [supplierId], references: [id])
+  category     FinancialCategory @relation(fields: [categoryId], references: [id])
+  costCenter   CostCenter?       @relation(fields: [costCenterId], references: [id])
+  createdBy    User              @relation(fields: [createdByUserId], references: [id])
+  installments Installment[]
+
+  @@index([workspaceId, direction])
+  @@index([workspaceId, projectId])
+  @@index([workspaceId, supplierId])
+  @@index([workspaceId, clientId])
+  @@index([workspaceId, categoryId])
+  @@index([workspaceId, competencyDate])
+  @@map("financial_documents")
+}
+
+model Installment {
+  id                  String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId         String @db.ObjectId
+  financialDocumentId String @db.ObjectId
+
+  number      Int // 1-based
+  amountCents BigInt // see BankAccount.initialBalanceCents comment
+  dueDate     DateTime
+  status      InstallmentStatus @default(OPEN)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  financialDocument FinancialDocument @relation(fields: [financialDocumentId], references: [id], onDelete: Cascade)
+  payments          Payment[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, dueDate])
+  @@index([financialDocumentId])
+  @@map("installments")
+}
+
+// The "baixa" — append-only by design (see file-level note above). Every
+// write that creates a Payment must also transition its Installment.status
+// (OPEN/PARTIAL/PAID) inside the same $transaction, since Mongo enforces no
+// referential integrity between the sum of payments and the installment.
+model Payment {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId   String @db.ObjectId
+  installmentId String @db.ObjectId
+  bankAccountId String @db.ObjectId
+
+  // RC-2.1 — idempotency. Every payment write must supply this (client-
+  // generated UUID, stable across retries of the same intent — see
+  // installment.repository.ts#registerPayment). The @unique index is the
+  // actual enforcement: a second insert attempt with the same key fails at
+  // the DB layer and the service catches that to return the original
+  // payment instead of erroring, which is race-safe under real concurrency
+  // in a way a "check then insert" read never is.
+  idempotencyKey String @unique
+
+  // RC-2.5 — denormalized from FinancialDocument.direction at creation time
+  // (via the Installment it's posted against) so dashboard/report
+  // aggregates can filter Payment directly instead of a 2-hop $lookup
+  // through Installment→FinancialDocument. Safe to denormalize: direction
+  // is immutable after a FinancialDocument is created (see that model's
+  // validation comment) and Payment rows are never edited, so this can
+  // never drift from its source once written.
+  direction FinancialDirection
+
+  // RC-3.3 — denormalized the same way and for the same safety reason as
+  // `direction` above (FinancialDocument.projectId is also immutable post-
+  // creation, per updateFinancialDocumentSchema). Measured, not guessed:
+  // scripts/rc3-perf-check.ts (see docs/financial-architecture.md §6) showed
+  // projectFinancialSummaryService's Payment aggregate going from ~30s to
+  // ~140ms at just 100k payments once this replaced the
+  // installment.financialDocument.projectId $lookup — a 200x+ difference at
+  // a workspace size that isn't even unusual, not a marginal optimization.
+  // Null for payments against documents with no project (overhead expenses).
+  projectId String? @db.ObjectId
+
+  amountCents BigInt // see BankAccount.initialBalanceCents comment
+  paidAt      DateTime
+  method      PaymentMethod
+
+  createdByUserId String @db.ObjectId
+
+  createdAt DateTime @default(now()) // no updatedAt on purpose — rows are never edited
+
+  installment Installment @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id])
+  createdBy   User        @relation(fields: [createdByUserId], references: [id])
+
+  @@index([workspaceId])
+  @@index([workspaceId, direction])
+  @@index([workspaceId, direction, paidAt])
+  // RC-3.3 — backs projectFinancialSummaryService's per-project aggregates directly.
+  @@index([workspaceId, projectId, direction])
+  @@index([installmentId])
+  @@index([bankAccountId])
+  @@map("payments")
 }
 
 // ─── Billing ──────────────────────────────────────────────────────────────────

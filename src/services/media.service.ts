@@ -16,8 +16,8 @@ import type { MediaType } from "@prisma/client"
 const MAX_MEDIA_PER_PROPOSAL = 50
 
 export const mediaService = {
-  async list(proposalId: string) {
-    const items = await mediaRepository.findAll(proposalId)
+  async list(proposalId: string, workspaceId: string) {
+    const items = await mediaRepository.findAll(proposalId, workspaceId)
 
     // Refresh signed URLs for stored files
     const withStorage = items.filter((m) => m.storagePath)
@@ -35,8 +35,8 @@ export const mediaService = {
     return items
   },
 
-  async upload(proposalId: string, file: File) {
-    const count = await mediaRepository.countByProposal(proposalId)
+  async upload(proposalId: string, workspaceId: string, file: File) {
+    const count = await mediaRepository.countByProposal(proposalId, workspaceId)
     if (count >= MAX_MEDIA_PER_PROPOSAL) {
       throw new AppError(ErrorCode.MEDIA_LIMIT_REACHED)
     }
@@ -61,9 +61,9 @@ export const mediaService = {
     })
   },
 
-  async addEmbed(proposalId: string, input: AddEmbedInput) {
-    const count = await mediaRepository.countByProposal(proposalId)
-    if (count >= MAX_MEDIA_PER_PROPOSAL) throw new Error("MEDIA_LIMIT_REACHED")
+  async addEmbed(proposalId: string, workspaceId: string, input: AddEmbedInput) {
+    const count = await mediaRepository.countByProposal(proposalId, workspaceId)
+    if (count >= MAX_MEDIA_PER_PROPOSAL) throw new AppError(ErrorCode.MEDIA_LIMIT_REACHED)
 
     let url       = input.url
     let thumbnail: string | null = null
@@ -86,15 +86,15 @@ export const mediaService = {
     })
   },
 
-  async update(mediaId: string, proposalId: string, input: UpdateMediaInput) {
-    const media = await mediaRepository.findById(mediaId, proposalId)
+  async update(mediaId: string, proposalId: string, workspaceId: string, input: UpdateMediaInput) {
+    const media = await mediaRepository.findById(mediaId, proposalId, workspaceId)
     if (!media) throw new AppError(ErrorCode.NOT_FOUND)
-    await mediaRepository.update(mediaId, proposalId, input)
-    return mediaRepository.findById(mediaId, proposalId)
+    await mediaRepository.update(mediaId, proposalId, workspaceId, input)
+    return mediaRepository.findById(mediaId, proposalId, workspaceId)
   },
 
-  async delete(mediaId: string, proposalId: string) {
-    const media = await mediaRepository.findById(mediaId, proposalId)
+  async delete(mediaId: string, proposalId: string, workspaceId: string) {
+    const media = await mediaRepository.findById(mediaId, proposalId, workspaceId)
     if (!media) throw new AppError(ErrorCode.NOT_FOUND)
 
     // Delete from Supabase if it's a stored file
@@ -104,11 +104,11 @@ export const mediaService = {
       })
     }
 
-    await mediaRepository.delete(mediaId, proposalId)
+    await mediaRepository.delete(mediaId, proposalId, workspaceId)
   },
 
-  async reorder(proposalId: string, input: ReorderMediaInput) {
-    await mediaRepository.reorder(proposalId, input.items)
-    return mediaRepository.findAll(proposalId)
+  async reorder(proposalId: string, workspaceId: string, input: ReorderMediaInput) {
+    await mediaRepository.reorder(proposalId, workspaceId, input.items)
+    return mediaRepository.findAll(proposalId, workspaceId)
   },
 }

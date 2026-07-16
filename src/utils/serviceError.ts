@@ -57,11 +57,60 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.BILLING_PLAN_NOT_SELLABLE]:     () => R.badRequest("This plan cannot be subscribed to online. Contact sales."),
   [ErrorCode.BILLING_PROVIDER_ERROR]:        () => R.internalError("Payment provider is temporarily unavailable. Please try again."),
   [ErrorCode.WEBHOOK_SIGNATURE_INVALID]:     () => R.unauthorized("Invalid webhook signature"),
+  // Financial
+  [ErrorCode.SUPPLIER_CATEGORY_NOT_FOUND]:   () => R.notFound("Supplier category not found"),
+  [ErrorCode.SUPPLIER_CATEGORY_NAME_TAKEN]:  () => R.conflict("A supplier category with this name already exists"),
+  [ErrorCode.SUPPLIER_NOT_FOUND]:            () => R.notFound("Supplier not found"),
+  [ErrorCode.BANK_ACCOUNT_NOT_FOUND]:        () => R.notFound("Bank account not found"),
+  [ErrorCode.FINANCIAL_CATEGORY_NOT_FOUND]:  () => R.notFound("Financial category not found"),
+  [ErrorCode.FINANCIAL_CATEGORY_NAME_TAKEN]: () => R.conflict("A financial category with this name already exists at this level"),
+  [ErrorCode.FINANCIAL_CATEGORY_DIRECTION_MISMATCH]: () => R.badRequest("A financial category must have the same direction (Receita/Despesa) as its parent"),
+  [ErrorCode.FINANCIAL_CATEGORY_HAS_CHILDREN]: () => R.conflict("Cannot archive a financial category that still has subcategories"),
+  [ErrorCode.COST_CENTER_NOT_FOUND]:         () => R.notFound("Cost center not found"),
+  [ErrorCode.COST_CENTER_NAME_TAKEN]:        () => R.conflict("A cost center with this name already exists"),
+  [ErrorCode.FINANCIAL_DOCUMENT_NOT_FOUND]:  () => R.notFound("Financial document not found"),
+  [ErrorCode.FINANCIAL_DOCUMENT_CANCELLED]:  () => R.badRequest("This financial document has been cancelled"),
+  [ErrorCode.FINANCIAL_DOCUMENT_HAS_PAYMENTS]: () => R.conflict("Cannot cancel a document that already has payments — reversal is not yet supported"),
+  [ErrorCode.FINANCIAL_DOCUMENT_DIRECTION_CONFLICT]: () => R.badRequest("A payable document cannot reference a client, and a receivable document cannot reference a supplier"),
+  [ErrorCode.INSTALLMENTS_TOTAL_MISMATCH]:   () => R.badRequest("The sum of installment amounts must equal the document total"),
+  [ErrorCode.INSTALLMENT_NOT_FOUND]:         () => R.notFound("Installment not found"),
+  [ErrorCode.INSTALLMENT_ALREADY_PAID]:      () => R.conflict("This installment has already been fully paid"),
+  [ErrorCode.PAYMENT_EXCEEDS_REMAINING]:     () => R.badRequest("Payment amount exceeds the remaining balance of this installment"),
+  [ErrorCode.PROJECT_HAS_FINANCIAL_HISTORY]: () => R.conflict("This project has financial documents linked to it and cannot be deleted. Archive it instead, or cancel/reassign its financial history first."),
+  [ErrorCode.CLIENT_HAS_FINANCIAL_HISTORY]:  () => R.conflict("This client has financial documents linked to it and cannot be deleted. Archive it instead (set status to Inativo), or cancel/reassign its financial history first."),
+  [ErrorCode.OPPORTUNITY_HAS_PROJECT]: () => R.conflict("This opportunity already converted to a project and cannot be deleted. Delete or reassign the project first if you need to remove this record."),
+  [ErrorCode.PROPOSAL_HAS_PROJECT]:    () => R.conflict("This proposal already converted to a project and cannot be deleted. Delete or reassign the project first if you need to remove this record."),
   // Legacy string aliases kept for backward compat during migration
   INVALID_TOKEN:     () => R.badRequest("Invalid reset token"),
   TOKEN_ALREADY_USED: () => R.badRequest("Reset token has already been used"),
   TOKEN_EXPIRED:     () => R.badRequest("Reset token has expired"),
 };
+
+// CORE-5 (Sprint 0) — string-prefix sentinel errors (thrown as
+// `new Error("PREFIX:details")` where an AppError/ErrorCode isn't a natural
+// fit — e.g. a validation message assembled inline in a service). Handled
+// centrally, same as INVALID_TRANSITION: below, instead of each route
+// re-implementing its own `error.message.startsWith(...)` block — the
+// Release 1.0 review found 3 routes duplicating this exact parsing for
+// VALIDATION: (see FINANCIAL_ARCHITECTURE_DECISIONS.md, Anexo). Add a new
+// prefix here rather than a bespoke per-route check when a future service
+// needs the same "inline message, no dedicated ErrorCode" shape.
+const MESSAGE_PREFIX_HANDLERS: Record<string, (detail: string) => NextResponse> = {
+  "VALIDATION:": (detail) => R.badRequest(detail),
+};
+
+// UNSUPPORTED_FILE_TYPE: is deliberately NOT centralized the same way —
+// each upload route allows a different file-type set, so the human-readable
+// "Allowed: ..." suffix is route-specific. This just centralizes the
+// PARSING (the part that was byte-for-byte duplicated across 4 routes);
+// callers still own their own message. See documents/route.ts for the
+// canonical call pattern.
+export function parseUnsupportedFileType(error: unknown): string | null {
+  if (error instanceof Error && error.message.startsWith("UNSUPPORTED_FILE_TYPE:")) {
+    return error.message.slice("UNSUPPORTED_FILE_TYPE:".length) || "unknown";
+  }
+  return null;
+}
 
 export function handleServiceError(error: unknown): NextResponse {
   if (error instanceof ZodError) return R.fromZodError(error);
@@ -76,6 +125,9 @@ export function handleServiceError(error: unknown): NextResponse {
       const [, from, to, allowed] = error.message.split(":")
       const allowedList = allowed ? ` Allowed: ${allowed.split(",").join(", ")}` : ""
       return R.badRequest(`Cannot transition from ${from} to ${to}.${allowedList}`)
+    }
+    for (const [prefix, handler] of Object.entries(MESSAGE_PREFIX_HANDLERS)) {
+      if (error.message.startsWith(prefix)) return handler(error.message.slice(prefix.length));
     }
     const handler = SERVICE_ERRORS[error.message];
     if (handler) return handler();

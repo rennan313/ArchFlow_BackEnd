@@ -1,17 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { Prisma } from "@prisma/client"
 
-// Inline prisma mock — extends global setup with proposalMedia and $transaction
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }))
+
+// Inline prisma mock — extends global setup with proposalMedia and $transaction.
+// CORE-1 (Sprint 0): $transaction defaults to invoking its callback with the
+// same mock object (so `tx.workspace.update`/`tx.subscription.update` resolve
+// to the exact mocks below), matching changePlan's move from array-form
+// $transaction([...]) to callback-form $transaction(tx => ...) wrapped in
+// withTransactionRetry — same convention as the financial repository mocks.
+vi.mock("@/lib/prisma", () => {
+  const mock = {
     workspace:     { findUnique: vi.fn(), update: vi.fn() },
     user:          { count: vi.fn() },
     proposal:      { count: vi.fn() },
     project:       { count: vi.fn() },
     proposalMedia: { count: vi.fn() },
     subscription:  { update: vi.fn() },
-    $transaction:  vi.fn(),
-  },
-}))
+    $transaction:  vi.fn((cb: (tx: unknown) => unknown) => cb(mock)),
+  }
+  return { prisma: mock }
+})
 
 vi.mock("@/repositories/subscription.repository", () => ({
   subscriptionRepository: {
@@ -420,23 +429,21 @@ describe("subscriptionService.changePlan", () => {
 
   it("updates Workspace.plan and Subscription.plan in the same transaction", async () => {
     subRepo.findByWorkspace.mockResolvedValue({ id: "sub-1", billingCycle: "MONTHLY" } as never)
-    tx.mockResolvedValue([{}, { id: "sub-1", plan: "PROFESSIONAL", status: "ACTIVE" }] as never)
+    vi.mocked(prisma.subscription.update).mockResolvedValue({ id: "sub-1", plan: "PROFESSIONAL", status: "ACTIVE" } as never)
 
     const result = await subscriptionService.changePlan("ws-1", "PROFESSIONAL")
 
     expect(tx).toHaveBeenCalledTimes(1)
+    expect(ws.update).toHaveBeenCalledWith({ where: { id: "ws-1" }, data: { plan: "PROFESSIONAL" } })
     expect(result).toMatchObject({ plan: "PROFESSIONAL", status: "ACTIVE" })
   })
 
   it("falls back to the existing billingCycle when none is passed explicitly", async () => {
     subRepo.findByWorkspace.mockResolvedValue({ id: "sub-1", billingCycle: "ANNUAL" } as never)
-    tx.mockResolvedValue([{}, {}] as never)
+    vi.mocked(prisma.subscription.update).mockResolvedValue({} as never)
 
     await subscriptionService.changePlan("ws-1", "STUDIO")
 
-    // prisma.subscription.update is called to BUILD the transaction array,
-    // before $transaction itself ever runs — so its own mock call args are
-    // what we inspect here, regardless of what $transaction resolves to.
     const subscriptionUpdateCall = vi.mocked(prisma.subscription.update).mock.calls[0]?.[0]
     expect(subscriptionUpdateCall?.data).toMatchObject({ billingCycle: "ANNUAL" })
   })
@@ -445,11 +452,27 @@ describe("subscriptionService.changePlan", () => {
   // it must work starting from EXPIRED, not just from TRIAL/ACTIVE.
   it("reactivates a workspace from EXPIRED to ACTIVE on the new plan", async () => {
     subRepo.findByWorkspace.mockResolvedValue({ id: "sub-1", status: "EXPIRED", billingCycle: "MONTHLY" } as never)
-    tx.mockResolvedValue([{}, { id: "sub-1", plan: "STUDIO", status: "ACTIVE" }] as never)
+    vi.mocked(prisma.subscription.update).mockResolvedValue({ id: "sub-1", plan: "STUDIO", status: "ACTIVE" } as never)
 
     const result = await subscriptionService.changePlan("ws-1", "STUDIO")
 
     expect(result).toMatchObject({ plan: "STUDIO", status: "ACTIVE" })
+  })
+
+  // CORE-1 (Sprint 0) — regression test for the retry wrapping itself: a
+  // losing write-conflict on the first attempt must not surface as a raw
+  // error, same guarantee every financial write already has (ADR-003).
+  it("retries once on a transient transaction conflict and succeeds", async () => {
+    subRepo.findByWorkspace.mockResolvedValue({ id: "sub-1", billingCycle: "MONTHLY" } as never)
+    vi.mocked(prisma.subscription.update).mockResolvedValue({ id: "sub-1", plan: "PROFESSIONAL", status: "ACTIVE" } as never)
+    const transientError = new Prisma.PrismaClientKnownRequestError("Transaction failed due to a write conflict or a deadlock. Please retry your transaction", { code: "P2034", clientVersion: "test" })
+    tx.mockImplementationOnce(() => { throw transientError })
+      .mockImplementationOnce(((cb: (tx: unknown) => unknown) => cb(prisma)) as never)
+
+    const result = await subscriptionService.changePlan("ws-1", "PROFESSIONAL")
+
+    expect(tx).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({ plan: "PROFESSIONAL", status: "ACTIVE" })
   })
 
   it("throws SUBSCRIPTION_NOT_FOUND when the workspace has no subscription yet", async () => {

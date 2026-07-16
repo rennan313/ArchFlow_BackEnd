@@ -142,6 +142,33 @@ describe("opportunityService — Automação 01 (auto-create Project on APPROVED
   })
 })
 
+// CORE-2 (Sprint 0) — referential guard mirroring RC-2.3's Project/Client
+// pattern, one hop upstream: an Opportunity that already auto-created a
+// Project can no longer be deleted physically.
+describe("opportunityService.delete", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("deletes normally when no Project was ever created from this opportunity", async () => {
+    vi.mocked(opportunityRepository.findById).mockResolvedValue(mockOpportunity as never)
+    vi.mocked(projectRepository.findByOpportunityId).mockResolvedValue(null)
+    vi.mocked(opportunityRepository.delete).mockResolvedValue(undefined as never)
+
+    await opportunityService.delete("opp-1", "workspace-1")
+
+    expect(opportunityRepository.delete).toHaveBeenCalledWith("opp-1", "workspace-1")
+  })
+
+  it("blocks deletion with OPPORTUNITY_HAS_PROJECT when a Project was already auto-created", async () => {
+    vi.mocked(opportunityRepository.findById).mockResolvedValue(mockOpportunity as never)
+    vi.mocked(projectRepository.findByOpportunityId).mockResolvedValue({ id: "proj-existing" } as never)
+
+    await expect(opportunityService.delete("opp-1", "workspace-1")).rejects.toMatchObject({
+      code: ErrorCode.OPPORTUNITY_HAS_PROJECT,
+    })
+    expect(opportunityRepository.delete).not.toHaveBeenCalled()
+  })
+})
+
 describe("opportunityService.list", () => {
   beforeEach(() => vi.clearAllMocks())
 

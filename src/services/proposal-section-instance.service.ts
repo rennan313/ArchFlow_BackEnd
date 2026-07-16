@@ -139,7 +139,7 @@ export const proposalSectionInstanceService = {
         const [project, branding, media] = await Promise.all([
           projectRepository.findByProposalId(proposalId, workspaceId),
           brandingService.getBrandingContext(workspaceId),
-          mediaRepository.findAll(proposalId),
+          mediaRepository.findAll(proposalId, workspaceId),
         ])
 
         const cover    = synthesizeCover(proposal, project, branding, media)

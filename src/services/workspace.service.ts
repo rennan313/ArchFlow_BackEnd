@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma"
 import { randomBytes } from "crypto"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { withTransactionRetry } from "@/lib/transactionRetry"
+import { auditLog } from "@/lib/auditLog"
 import { automationService } from "@/services/automation.service"
 import { subscriptionService } from "@/services/subscription.service"
 import type { WorkspaceRole } from "@prisma/client"
@@ -120,18 +122,24 @@ export const workspaceService = {
       throw new AppError(ErrorCode.ALREADY_IN_WORKSPACE, "You are already a member of a workspace")
     }
 
-    // Atomic: join workspace + consume invite in a single transaction
-    await prisma.$transaction([
-      prisma.user.update({
+    // CORE-6 (Sprint 0) — was array-form $transaction([...]) with no retry
+    // hook, same class of gap CORE-1 fixed in subscription.service.ts: a
+    // 2-collection write (user + workspaceInvite) with no protection against
+    // MongoDB's WriteConflict/TransientTransactionError under concurrent
+    // writes (e.g. the same invite link opened in two tabs at once).
+    const base = { workspaceId: invite.workspaceId, userId, entity: "WorkspaceInvite", entityId: invite.id, op: "acceptInvite" }
+    await withTransactionRetry(() => prisma.$transaction(async (tx) => {
+      await tx.user.update({
         where: { id: userId },
         data:  { workspaceId: invite.workspaceId, workspaceRole: invite.role },
-      }),
-      prisma.workspaceInvite.updateMany({
+      })
+      await tx.workspaceInvite.updateMany({
         where: { id: invite.id, accepted: false },
         data:  { accepted: true },
-      }),
-    ])
+      })
+    }), { context: base })
 
+    auditLog({ ...base, event: "workspace_invite_accepted" })
     return invite.workspaceId
   },
 

@@ -5,7 +5,7 @@ import { documentService } from "@/services/document.service"
 import { subscriptionService } from "@/services/subscription.service"
 import { documentQuerySchema } from "@/validations/document"
 import { ok, created, badRequest, forbidden } from "@/lib/response"
-import { handleServiceError } from "@/utils/serviceError"
+import { handleServiceError, parseUnsupportedFileType } from "@/utils/serviceError"
 import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<Record<string, string>> }
@@ -45,13 +45,8 @@ export const POST = requireAnyWorkspacePermission("create:documents")(async (req
     })
     return created(document, "Document uploaded successfully")
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith("UNSUPPORTED_FILE_TYPE")) {
-      const ext = error.message.split(":")[1] ?? "unknown"
-      return badRequest(`Unsupported file type: ${ext}. Allowed: PDF, JPG, PNG, DWG, DOCX`)
-    }
-    if (error instanceof Error && error.message.startsWith("VALIDATION:")) {
-      return badRequest(error.message.slice("VALIDATION:".length))
-    }
+    const unsupportedType = parseUnsupportedFileType(error)
+    if (unsupportedType) return badRequest(`Unsupported file type: ${unsupportedType}. Allowed: PDF, JPG, PNG, DWG, DOCX`)
     return handleServiceError(error)
   }
 })

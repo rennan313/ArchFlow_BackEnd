@@ -4,7 +4,7 @@ import { mediaService } from "@/services/media.service"
 import { proposalService } from "@/services/proposal.service"
 import { subscriptionService } from "@/services/subscription.service"
 import { created, badRequest, forbidden } from "@/lib/response"
-import { handleServiceError } from "@/utils/serviceError"
+import { handleServiceError, parseUnsupportedFileType } from "@/utils/serviceError"
 import type { JwtPayload } from "@/lib/jwt"
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -29,13 +29,11 @@ export const POST = requireAnyWorkspacePermission("upload:media", "update:propos
     const limitCheck = await subscriptionService.canUploadFile(workspaceId, sizeMb)
     if (!limitCheck.allowed) return forbidden(limitCheck.reason ?? "Storage limit reached")
 
-    const media = await mediaService.upload(id, file)
+    const media = await mediaService.upload(id, workspaceId, file)
     return created(media, "Media uploaded successfully")
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith("UNSUPPORTED_FILE_TYPE")) {
-      const type = error.message.split(":")[1] ?? "unknown"
-      return badRequest(`Unsupported file type: ${type}. Allowed: JPEG, PNG, WebP, GIF, MP4, WebM, MOV`)
-    }
+    const unsupportedType = parseUnsupportedFileType(error)
+    if (unsupportedType) return badRequest(`Unsupported file type: ${unsupportedType}. Allowed: JPEG, PNG, WebP, GIF, MP4, WebM, MOV`)
     return handleServiceError(error)
   }
 })

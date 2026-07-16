@@ -127,8 +127,16 @@ export const opportunityService = {
     })
   },
 
+  // CORE-2 (Sprint 0) — same referential guard as project.service.ts/
+  // client.service.ts (RC-2.3), one hop upstream: an approved Opportunity
+  // that already auto-created a Project (autoCreateProjectOnApproval above)
+  // can no longer be deleted physically — Project.opportunityId would dangle,
+  // and that Project may itself have financial history. Delete/reassign the
+  // Project first. See FINANCIAL_ARCHITECTURE_DECISIONS.md, Anexo B.
   async delete(id: string, workspaceId: string) {
     await this.getById(id, workspaceId)
+    const linkedProject = await projectRepository.findByOpportunityId(id, workspaceId)
+    if (linkedProject) throw new AppError(ErrorCode.OPPORTUNITY_HAS_PROJECT)
     await opportunityRepository.delete(id, workspaceId)
   },
 }

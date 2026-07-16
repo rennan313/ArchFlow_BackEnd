@@ -4,6 +4,7 @@ import { clientRepository } from "@/repositories/client.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { automationService } from "@/services/automation.service"
+import { financialDocumentService } from "@/modules/financial/financial.module"
 import type { CreateClientInput, UpdateClientInput, ClientQueryInput } from "@/validations/client"
 
 type Db = typeof prisma | Prisma.TransactionClient
@@ -57,8 +58,14 @@ export const clientService = {
     return clientRepository.findById(id, workspaceId)
   },
 
+  // RC-2.3 — same reasoning as project.service.ts#delete. Client already
+  // has a natural archive fallback (status: "INACTIVE") — the error
+  // message points callers at it directly.
   async delete(id: string, workspaceId: string) {
     await this.getById(id, workspaceId)
+    if (await financialDocumentService.hasDocumentsForClient(id, workspaceId)) {
+      throw new AppError(ErrorCode.CLIENT_HAS_FINANCIAL_HISTORY)
+    }
     await clientRepository.delete(id, workspaceId)
   },
 
