@@ -85,6 +85,15 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.PURCHASE_ORDER_NOT_DRAFT]: () => R.badRequest("This purchase order is no longer a draft and can't be edited or cancelled"),
   [ErrorCode.PURCHASE_ORDER_ALREADY_DECIDED]: () => R.conflict("This purchase order was already cancelled by someone else"),
   [ErrorCode.PURCHASE_ORDER_CATEGORY_DIRECTION_MISMATCH]: () => R.badRequest("The financial category for a purchase order must be a Despesa (payable) category"),
+  // Worklog
+  [ErrorCode.TIME_ENTRY_NOT_FOUND]:     () => R.notFound("Time entry not found"),
+  [ErrorCode.TIMER_ALREADY_RUNNING]:    () => R.conflict("You already have a timer running or paused. Finish it before starting a new one."),
+  [ErrorCode.TIMER_NOT_ACTIVE]:         () => R.badRequest("This time entry has no active timer to pause, resume, or stop"),
+  [ErrorCode.TIMER_NOT_PAUSED]:         () => R.badRequest("This timer is not paused"),
+  [ErrorCode.TIME_ENTRY_NOT_EDITABLE]:  () => R.forbidden("You can only edit your own time entries"),
+  [ErrorCode.TIME_ENTRY_ACTIVE_CANNOT_ARCHIVE]: () => R.badRequest("Stop this timer before archiving it"),
+  [ErrorCode.ACTIVITY_CATEGORY_NOT_FOUND]: () => R.notFound("Activity category not found"),
+  [ErrorCode.ACTIVITY_CATEGORY_NAME_TAKEN]: () => R.conflict("An activity category with this name already exists"),
   // Entity Lifecycle (ADR-020)
   [ErrorCode.ENTITY_ALREADY_ARCHIVED]: () => R.conflict("This record is already archived"),
   [ErrorCode.ENTITY_NOT_ARCHIVED]:     () => R.conflict("This record is not archived, there is nothing to restore"),

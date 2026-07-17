@@ -20,6 +20,7 @@ ArchFlow é um único banco MongoDB compartilhado (não há schema-per-context),
 | **Documentos** | `Document`, `DocumentVersion`, `DocumentFolder` | `src/services/document.service.ts` |
 | **Financeiro** (AP/AR do escritório) | `SupplierCategory`, `Supplier`, `BankAccount`, `FinancialCategory`, `CostCenter`, `FinancialDocument`, `Installment`, `Payment` | `src/modules/financial/` — **contexto de referência desta Release** |
 | **Compras** (Fase 1 — Fundação) | `PurchaseOrder`, `PurchaseOrderItem` | `src/modules/purchasing/` — depende de Financeiro numa via só (`Supplier`/`FinancialCategory`/`CostCenter` lidos na criação; gera `FinancialDocument` via `approve()`), ver `COMPRAS_ARCHITECTURE_DECISIONS.md` |
+| **Worklog** (Fase 1 — Fundação) | `TimeEntry`, `ActivityCategory` | `src/modules/worklog/` — depende de Projetos/Clientes/Tasks numa via só, só leitura de referência (`projectId`/`clientId`/`taskId` validados via `tenantGuard`, nunca importados como lógica de negócio); não é módulo Core nesta fase, ver `WORKLOG_ARCHITECTURE_DECISIONS.md` ADR-023 |
 | **Billing** (SaaS do ArchFlow cobrando o escritório) | `Subscription`, `PaymentEvent`, `BillingHistory`, `BillingPlan` | `src/modules/billing/` |
 | **Localização & Precificação** | `State`, `City`, `RegionalPricing` | `src/services/{location,pricing}.service.ts` — dado de referência público, sem `workspaceId` |
 | **Autenticação (tokens)** | `ResetPasswordToken`, `EmailVerificationToken`, `RefreshToken` | `src/services/auth.service.ts` |
@@ -70,6 +71,10 @@ PurchaseOrder (raiz do aggregate)
 - **Invariante 2**: transições de `status` só saem de `DRAFT` — `APPROVED`/`CANCELLED` são terminais, garantido por CAS (`ADR-017`).
 - **Invariante 3**: `financialDocumentId` só é preenchido atomicamente junto com a transição para `APPROVED` — nunca um `PurchaseOrder` aprovado sem o `FinancialDocument` correspondente, e vice-versa (mesma transação, `ADR-017`).
 - **Sem raça entre agregados diferentes** (ao contrário do ADR-004 do Financeiro): `approve()`/`cancel()` competem pelo MESMO documento `PurchaseOrder`, então o CAS de status já é suficiente — não precisou do padrão "escrever no documento compartilhado" porque aqui já é o documento compartilhado.
+
+### 2.6 TimeEntry (Worklog, aggregate de documento único)
+
+`TimeEntry` é sua própria raiz, sem filhos — o aggregate mais simples do mapa (nem Financeiro nem Compras têm um aggregate de um documento só). A invariante de concorrência ("no máximo um `TimeEntry` `RUNNING`/`PAUSED` por usuário") não usa o padrão CAS-no-mesmo-documento do Financeiro/Compras, porque o conflito aqui é entre documentos diferentes, não dentro de um só — resolvido via índice único esparso (`activeOwnerId`), ver `WORKLOG_ARCHITECTURE_DECISIONS.md` ADR-021. `ActivityCategory` é um aggregate de referência independente (mesma forma que `FinancialCategory`, sem hierarquia nesta fase).
 
 ---
 

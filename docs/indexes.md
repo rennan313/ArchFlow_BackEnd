@@ -130,3 +130,42 @@ db.purchase_orders.getIndexes()
 - Local development: once, after `prisma db push` for the Compras Fase 1 schema
 - Staging/Production: as part of the Compras Fase 1 deployment runbook —
   must exist before the first real `approve()` in that environment
+
+## Worklog — time_entries.activeOwnerId Sparse Unique Index
+
+### Why
+
+Same root cause as `supabaseId`/`financialDocumentId` above — `activeOwnerId`
+is null for every `COMPLETED`/archived `TimeEntry` and is only set to the
+owning `userId` while the timer is `RUNNING`/`PAUSED` (`WORKLOG_ARCHITECTURE_
+DECISIONS.md` ADR-021). It is declared as a plain nullable field in
+`schema.prisma` (no `@unique`) precisely because Prisma's `@unique` on Mongo
+would collide every pair of completed entries on their shared `null` — the
+same bug that demoted `financialDocumentId` above, applied here from the
+start instead of discovered later by a concurrency script.
+
+### How to create it
+
+```js
+use ArchFlowDb
+
+db.time_entries.createIndex(
+  { activeOwnerId: 1 },
+  { unique: true, sparse: true, name: "time_entries_activeOwnerId_sparse_unique" }
+)
+```
+
+### Verification
+
+```js
+db.time_entries.getIndexes()
+// Should show { unique: true, sparse: true } on activeOwnerId
+```
+
+### When to run
+
+- Local development: once, after `prisma db push` for the Worklog Fase 1
+  schema — **before** running the `start()` concurrency script (checklist
+  item 12), otherwise the script validates nothing but query-level timing
+- Staging/Production: as part of the Worklog Fase 1 deployment runbook —
+  must exist before the first real `start()` in that environment

@@ -64,6 +64,12 @@ const PERMISSIONS: Record<string, string[]> = {
     // route with an approve permission (approve:financial-documents is
     // reserved but unwired).
     "view:purchase-orders", "create:purchase-orders", "update:purchase-orders", "delete:purchase-orders", "approve:purchase-orders",
+    // Worklog (WORKLOG_ARCHITECTURE_DECISIONS.md ADR-022) — create/update/delete
+    // cover the caller's OWN time entries (every role below except VIEWER gets
+    // these, same tier as update:tasks); view:time-entries is the separate,
+    // restricted permission for seeing OTHER users' entries (team view,
+    // dashboard) — same sensitivity tier as view:financial-dashboard.
+    "create:time-entries", "update:time-entries", "delete:time-entries", "view:time-entries", "manage:worklog-settings",
   ],
 
   ARCHITECT: [
@@ -89,6 +95,10 @@ const PERMISSIONS: Record<string, string[]> = {
     // as update:branding/manage:automations above.
     // Compras (ADR-018) — same tier as financial-documents: full CRUD, no approve.
     "view:purchase-orders", "create:purchase-orders", "update:purchase-orders", "delete:purchase-orders",
+    // Worklog (ADR-022) — own entries + view:time-entries (OWNER/ADMIN/ARCHITECT
+    // tier, same as view:financial-dashboard). No manage:worklog-settings
+    // (categories stay ADMIN/OWNER, same tier as manage:financial-settings).
+    "create:time-entries", "update:time-entries", "delete:time-entries", "view:time-entries",
   ],
 
   DESIGNER: [
@@ -106,6 +116,10 @@ const PERMISSIONS: Record<string, string[]> = {
     // No delete:proposal-* either, same tier as documents.
     // No financial permissions at all — design staff has no default
     // visibility into office money, same reasoning as the block comment above.
+    // Worklog (ADR-022) — own entries only, no view:time-entries (design staff
+    // has no default visibility into other people's tracked time, same
+    // reasoning as the financial exclusion above).
+    "create:time-entries", "update:time-entries", "delete:time-entries",
   ],
 
   ASSISTANT: [
@@ -124,10 +138,16 @@ const PERMISSIONS: Record<string, string[]> = {
     // (office margin/profit), no settings.
     // Compras (ADR-018) — same tier as financial-documents: view/create/update, no delete/approve.
     "view:purchase-orders", "create:purchase-orders", "update:purchase-orders",
+    // Worklog (ADR-022) — own entries only (create/update/delete — arguably
+    // matches ASSISTANT's own-record autonomy elsewhere), no view:time-entries
+    // (no dashboard-level aggregate visibility, same reasoning as the
+    // financial exclusion above).
+    "create:time-entries", "update:time-entries", "delete:time-entries",
   ],
 
   VIEWER: ["read:*"],
   // No financial permissions — see block comment above.
+  // No Worklog permissions either (ADR-022) — VIEWER doesn't track time.
 }
 
 export function hasPermission(role: string, permission: string): boolean {

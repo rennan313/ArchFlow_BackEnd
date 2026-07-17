@@ -95,6 +95,51 @@ describe("hasPermission", () => {
   })
 })
 
+// ── Worklog (WORKLOG_ARCHITECTURE_DECISIONS.md ADR-022) — every role except
+// VIEWER manages its OWN time entries broadly; only OWNER/ADMIN/ARCHITECT get
+// view:time-entries (visibility into OTHER users' entries), same tier as
+// view:financial-dashboard. manage:worklog-settings (categories) is ADMIN/OWNER only.
+
+describe("hasPermission — Worklog (ADR-022)", () => {
+  it.each<Role>(["OWNER", "ADMIN", "ARCHITECT", "DESIGNER", "ASSISTANT"])(
+    "%s can create/update/delete their own time entries",
+    (role) => {
+      expect(hasPermission(role, "create:time-entries")).toBe(true)
+      expect(hasPermission(role, "update:time-entries")).toBe(true)
+      expect(hasPermission(role, "delete:time-entries")).toBe(true)
+    },
+  )
+
+  it("VIEWER has no Worklog permissions at all — doesn't track time", () => {
+    expect(hasPermission("VIEWER", "create:time-entries")).toBe(false)
+    expect(hasPermission("VIEWER", "update:time-entries")).toBe(false)
+    expect(hasPermission("VIEWER", "delete:time-entries")).toBe(false)
+    expect(hasPermission("VIEWER", "view:time-entries")).toBe(false)
+  })
+
+  it.each<Role>(["OWNER", "ADMIN", "ARCHITECT"])("%s can view other users' time entries", (role) => {
+    expect(hasPermission(role, "view:time-entries")).toBe(true)
+  })
+
+  it.each<Role>(["DESIGNER", "ASSISTANT"])(
+    "%s cannot view other users' time entries — no default visibility into colleagues' billable hours",
+    (role) => {
+      expect(hasPermission(role, "view:time-entries")).toBe(false)
+    },
+  )
+
+  it.each<Role>(["OWNER", "ADMIN"])("%s can manage worklog settings (activity categories)", (role) => {
+    expect(hasPermission(role, "manage:worklog-settings")).toBe(true)
+  })
+
+  it.each<Role>(["ARCHITECT", "DESIGNER", "ASSISTANT", "VIEWER"])(
+    "%s cannot manage worklog settings",
+    (role) => {
+      expect(hasPermission(role, "manage:worklog-settings")).toBe(false)
+    },
+  )
+})
+
 // ── requireWorkspaceRole — rank-based escalation ──────────────────────────────
 
 describe("requireWorkspaceRole", () => {

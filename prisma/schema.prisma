@@ -313,6 +313,9 @@ model Workspace {
   financialDocuments  FinancialDocument[]
   purchaseOrders      PurchaseOrder[]
 
+  timeEntries        TimeEntry[]
+  activityCategories ActivityCategory[]
+
   @@map("workspaces")
 }
 
@@ -375,6 +378,8 @@ model User {
   financialDocumentsCreated FinancialDocument[]
   paymentsCreated           Payment[]
   purchaseOrdersCreated     PurchaseOrder[]
+
+  timeEntries TimeEntry[]
 
   @@index([workspaceId])
   @@map("users")
@@ -473,6 +478,7 @@ model Client {
   documentFolders DocumentFolder[]
 
   financialDocuments FinancialDocument[]
+  timeEntries        TimeEntry[]
 
   @@index([userId])
   @@index([workspaceId])
@@ -1046,6 +1052,7 @@ model Project {
 
   financialDocuments FinancialDocument[]
   purchaseOrders     PurchaseOrder[]
+  timeEntries        TimeEntry[]
 
   @@index([userId])
   @@index([workspaceId])
@@ -1185,6 +1192,8 @@ model Task {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee  User      @relation(fields: [assigneeId], references: [id], onDelete: Cascade)
+
+  timeEntries TimeEntry[]
 
   @@index([workspaceId, projectId])
   @@index([workspaceId, projectId, automationKey])
@@ -1826,4 +1835,108 @@ model Instance {
   createdAt   DateTime       @default(now())
 
   @@map("instances")
+}
+
+// ─── Worklog ────────────────────────────────────────────────────────────────
+// Fase 1 (Fundação) — docs/WORKLOG_ARCHITECTURE_DECISIONS.md. Depends on
+// Projetos/Clientes/Tasks in one direction only, read-only reference
+// (DOMAIN_GUIDE.md §6/§1) — not a Core module in this phase (ADR-023).
+
+enum TimeEntryStatus {
+  RUNNING
+  PAUSED
+  COMPLETED
+}
+
+enum TimeEntrySource {
+  MANUAL
+  TIMER
+}
+
+model ActivityCategory {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String   @db.ObjectId
+
+  name      String
+  isDefault Boolean @default(false) // seeded default categories (prisma/seed.ts), workspace can still archive them
+
+  // Categoria B soft-delete (ADR-020) — delegated entirely to entityLifecycleService.
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  timeEntries TimeEntry[]
+
+  @@index([workspaceId, archived])
+  @@map("activity_categories")
+}
+
+model TimeEntry {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+  userId      String @db.ObjectId
+
+  projectId  String? @db.ObjectId
+  clientId   String? @db.ObjectId
+  taskId     String? @db.ObjectId
+  categoryId String? @db.ObjectId
+
+  description String?
+  tags        String[]
+
+  status     TimeEntryStatus  @default(COMPLETED)
+  source     TimeEntrySource  @default(MANUAL)
+  isBillable Boolean          @default(true)
+
+  // Immutable — the original moment the timer/manual entry began, used for
+  // display ("iniciado às...") and reporting. Never overwritten by
+  // pause()/resume(), unlike lastResumedAt below.
+  startedAt DateTime
+  endedAt   DateTime?
+
+  // Start of the CURRENT running span — reset on every resume(). Only
+  // meaningful while status === RUNNING; null while PAUSED/COMPLETED.
+  // Separate from startedAt so the original start time survives any number
+  // of pause/resume cycles for display purposes.
+  lastResumedAt DateTime?
+
+  // Seconds accumulated across previous RUNNING spans, before the current
+  // pause (or before stop() folds the final span in) — never the total by
+  // itself; stop() always computes durationSeconds server-side from this
+  // plus the final RUNNING span (now - lastResumedAt), never trusts a
+  // client-submitted duration.
+  pausedAccumSec  Int  @default(0)
+  durationSeconds Int? // set once, by stop() — immutable after that (manual entries set it at creation)
+
+  // ADR-021 — set to `userId` only while status is RUNNING/PAUSED, cleared to
+  // null on stop(). Deliberately NOT @unique here: Prisma's @unique on Mongo
+  // is not sparse (docs/indexes.md), so every COMPLETED/archived TimeEntry
+  // sharing `null` would collide. The real one-active-timer-per-user
+  // constraint is a manually-created sparse unique index — see
+  // docs/indexes.md, "Worklog — time_entries.activeOwnerId Sparse Unique
+  // Index". Must exist in every environment before the first real start().
+  activeOwnerId String? @db.ObjectId
+
+  // Categoria B soft-delete (ADR-020) — delegated entirely to entityLifecycleService.
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project?          @relation(fields: [projectId], references: [id])
+  client    Client?           @relation(fields: [clientId], references: [id])
+  task      Task?             @relation(fields: [taskId], references: [id])
+  category  ActivityCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([workspaceId, userId, archived])
+  @@index([workspaceId, projectId])
+  @@map("time_entries")
 }
