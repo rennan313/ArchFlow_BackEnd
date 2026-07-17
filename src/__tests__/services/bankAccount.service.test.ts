@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { ErrorCode } from "@/lib/errors"
 
 vi.mock("@/repositories/bankAccount.repository")
+vi.mock("@/services/entityLifecycle.service")
 
 import { bankAccountService } from "@/modules/financial/services/bankAccount.service"
 import { bankAccountRepository } from "@/repositories/bankAccount.repository"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 
-const mockAccount = { id: "acc-1", workspaceId: "ws-1", name: "Conta Principal", initialBalanceCents: 500_000n, isActive: true }
+const mockAccount = { id: "acc-1", workspaceId: "ws-1", name: "Conta Principal", initialBalanceCents: 500_000n, archived: false }
 
 describe("bankAccountService.create", () => {
   beforeEach(() => vi.clearAllMocks())
@@ -72,9 +74,11 @@ describe("bankAccountService.getById / getWithBalance", () => {
 describe("bankAccountService.deactivate", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("is a soft update (isActive: false), never a physical delete", async () => {
+  it("is a soft archive (ADR-020), never a physical delete", async () => {
     vi.mocked(bankAccountRepository.findById).mockResolvedValue(mockAccount as never)
-    await bankAccountService.deactivate("acc-1", "ws-1")
-    expect(bankAccountRepository.update).toHaveBeenCalledWith("acc-1", "ws-1", { isActive: false })
+    await bankAccountService.deactivate("acc-1", "ws-1", "user-1")
+    expect(entityLifecycleService.archive).toHaveBeenCalledWith(
+      expect.objectContaining({ entity: "BankAccount", id: "acc-1", workspaceId: "ws-1", userId: "user-1" }),
+    )
   })
 })

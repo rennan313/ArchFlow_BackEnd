@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma"
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import { withTransactionRetry } from "@/lib/transactionRetry"
 import { add, formatCentsBRL, type Cents } from "@/lib/money"
@@ -81,11 +81,11 @@ export const financialDocumentRepository = {
   // nested $transaction/retry here would be redundant and Mongo doesn't
   // support nesting transactions anyway). Compras' purchaseOrder.repository
   // #approve is the first consumer of this — see COMPRAS_ARCHITECTURE_DECISIONS.md ADR-017.
-  createWithInstallments(input: CreateWithInstallmentsInput, correlationId = newCorrelationId(), db?: Prisma.TransactionClient) {
+  createWithInstallments(input: CreateWithInstallmentsInput, correlationId = newCorrelationId(), db?: PrismaTransactionClient) {
     const totalAmountCents = add(...input.installments.map((i) => i.amountCents))
     const base = { correlationId, workspaceId: input.workspaceId, userId: input.createdByUserId, entity: "FinancialDocument", op: "createWithInstallments" }
 
-    const core = async (tx: Prisma.TransactionClient) => {
+    const core = async (tx: PrismaTransactionClient) => {
       const doc = await tx.financialDocument.create({
         data: {
           workspaceId:      input.workspaceId,

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const createSupplierSchema = z.object({
   name:       z.string().min(2).max(200),
@@ -12,16 +13,16 @@ export const createSupplierSchema = z.object({
   notes:      z.string().max(2000).optional(),
 })
 
-export const updateSupplierSchema = createSupplierSchema.partial().extend({
-  isActive: z.boolean().optional(),
-})
+// archived/archivedAt/archivedBy are never editable through the generic
+// update endpoint (ADR-020) — only through the dedicated archive/restore actions.
+export const updateSupplierSchema = createSupplierSchema.partial()
 
 export const supplierQuerySchema = z.object({
   page:       z.coerce.number().int().min(1).optional().default(1),
   limit:      z.coerce.number().int().min(1).max(200).optional().default(20),
   search:     z.string().optional(),
   categoryId: z.string().optional(),
-  isActive:   z.coerce.boolean().optional(),
+  archived:   booleanQueryParam.optional(),
   sortBy:     z.enum(["name", "createdAt", "updatedAt"]).optional().default("name"),
   sortOrder:  z.enum(["asc", "desc"]).optional().default("asc"),
 })

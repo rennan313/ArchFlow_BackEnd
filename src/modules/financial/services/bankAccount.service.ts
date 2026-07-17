@@ -1,6 +1,8 @@
+import { prisma } from "@/lib/prisma"
 import { bankAccountRepository } from "@/repositories/bankAccount.repository"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { add, subtract, zero, reaisToCents, type Cents } from "@/lib/money"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { CreateBankAccountInput, UpdateBankAccountInput } from "@/validations/bankAccount"
 
 // RECEIVABLE payments add to the account, PAYABLE payments subtract — the
@@ -21,8 +23,8 @@ export const bankAccountService = {
   // initialBalanceCents here instead — a number that never changes after
   // creation — would silently mislead the one screen (Configurações
   // Financeiras) where a user checks "how much do I actually have."
-  async list(workspaceId: string, includeInactive: boolean) {
-    const accounts = await bankAccountRepository.findMany(workspaceId, includeInactive)
+  async list(workspaceId: string, archived: boolean) {
+    const accounts = await bankAccountRepository.findMany(workspaceId, archived)
     return Promise.all(accounts.map(async (account) => {
       const sums = await bankAccountRepository.findPaymentSumsByDirection(account.id, workspaceId)
       return { ...account, currentBalanceCents: add(account.initialBalanceCents, netByDirectionSums(sums)) }
@@ -60,10 +62,21 @@ export const bankAccountService = {
   },
 
   // No physical delete — a bank account with payment history can never be
-  // removed without breaking the ledger's audit trail. "Ativa/Inativa" is
-  // the full lifecycle, exactly as the brief specifies.
-  async deactivate(id: string, workspaceId: string) {
+  // removed without breaking the ledger's audit trail. Archiving (ADR-020)
+  // is the full lifecycle end-state, exactly as the brief specifies.
+  async deactivate(id: string, workspaceId: string, userId: string) {
     await this.getById(id, workspaceId)
-    await bankAccountRepository.update(id, workspaceId, { isActive: false })
+    await entityLifecycleService.archive({
+      entity: "BankAccount", id, workspaceId, userId,
+      delegate: prisma.bankAccount,
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "BankAccount", id, workspaceId, userId,
+      delegate: prisma.bankAccount,
+    })
+    return this.getById(id, workspaceId)
   },
 }

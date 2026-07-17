@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const proposalSkinSchema = z.enum([
   "EDITORIAL", "MINIMAL", "PREMIUM", "CORPORATE", "LUXURY",
@@ -12,16 +13,19 @@ export const createProposalTemplateSchema = z.object({
   sectionOrder: z.array(z.string()).optional().default([]),
 })
 
+// archived/archivedAt/archivedBy are never editable through the generic
+// update endpoint (ADR-020) — they only ever change via the dedicated
+// archive/restore actions, which is the only path that stamps attribution
+// and emits an audit event.
 export const updateProposalTemplateSchema = createProposalTemplateSchema.partial().extend({
-  isArchived: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
 })
 
 export const proposalTemplateQuerySchema = z.object({
-  page:       z.coerce.number().int().min(1).optional().default(1),
-  limit:      z.coerce.number().int().min(1).max(100).optional().default(50),
-  search:     z.string().optional(),
-  isArchived: z.coerce.boolean().optional(),
+  page:     z.coerce.number().int().min(1).optional().default(1),
+  limit:    z.coerce.number().int().min(1).max(100).optional().default(50),
+  search:   z.string().optional(),
+  archived: booleanQueryParam.optional(),
 })
 
 export type ProposalSkin               = z.infer<typeof proposalSkinSchema>

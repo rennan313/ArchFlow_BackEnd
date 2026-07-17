@@ -10,7 +10,7 @@ export const proposalNarrativeRepository = {
   },
 
   async findMany(workspaceId: string, query: ProposalNarrativeQueryInput) {
-    const { search, isArchived } = query
+    const { search, archived } = query
 
     const searchFilter: Prisma.ProposalNarrativeWhereInput = search
       ? { name: { contains: search, mode: "insensitive" } }
@@ -18,11 +18,11 @@ export const proposalNarrativeRepository = {
 
     const [own, defaults] = await Promise.all([
       prisma.proposalNarrative.findMany({
-        where: { workspaceId, isArchived: isArchived ?? false, ...searchFilter },
+        where: { workspaceId, archived: archived ?? false, ...searchFilter },
         orderBy: { createdAt: "desc" },
       }),
       prisma.proposalNarrative.findMany({
-        where: { workspaceId: null, isArchived: false, ...searchFilter },
+        where: { workspaceId: null, archived: false, ...searchFilter },
         orderBy: { createdAt: "desc" },
       }),
     ])

@@ -23,10 +23,10 @@ export const PUT = requireWorkspacePermission("manage:financial-settings")(async
   } catch (error) { return handleServiceError(error) }
 })
 
-export const DELETE = requireWorkspacePermission("manage:financial-settings")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
+export const DELETE = requireWorkspacePermission("manage:financial-settings")(async (_req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
-    await costCenterService.archive(id, workspaceId)
+    await costCenterService.archive(id, workspaceId, user.sub)
     return noContent()
   } catch (error) { return handleServiceError(error) }
 })

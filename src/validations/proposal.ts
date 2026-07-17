@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { booleanQueryParam } from "./common";
 import { PricingMethodEnum, ComplexityEnum } from "./pricing";
 
 export const createProposalSchema = z.object({
@@ -45,6 +46,7 @@ export const proposalQuerySchema = z.object({
   status:    z.enum(["DRAFT", "REVIEW", "SENT", "NEGOTIATION", "APPROVED", "REJECTED"]).optional(),
   sortBy:    z.enum(["createdAt", "updatedAt", "clientName", "squareMeters", "estimatedTotal"]).optional().default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+  archived:  booleanQueryParam.optional(),
 });
 
 export const generateProposalSchema = z.object({

@@ -1,5 +1,7 @@
+import { prisma } from "@/lib/prisma"
 import { financialCategoryRepository } from "@/repositories/financialCategory.repository"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { CreateFinancialCategoryInput, UpdateFinancialCategoryInput, FinancialCategoryQueryInput } from "@/validations/financialCategory"
 
 export const financialCategoryService = {
@@ -52,10 +54,32 @@ export const financialCategoryService = {
   // (an archived parent with live children would orphan them from the tree
   // in the category picker), matching how the brief treats structural
   // taxonomy edits as more guarded than everyday CRUD.
-  async archive(id: string, workspaceId: string) {
+  async archive(id: string, workspaceId: string, userId: string) {
     await this.getById(id, workspaceId)
-    const childCount = await financialCategoryRepository.countChildren(id, workspaceId)
-    if (childCount > 0) throw new AppError(ErrorCode.FINANCIAL_CATEGORY_HAS_CHILDREN)
-    await financialCategoryRepository.update(id, workspaceId, { isArchived: true })
+    await entityLifecycleService.archive({
+      entity: "FinancialCategory", id, workspaceId, userId,
+      delegate: prisma.financialCategory,
+      guard: async () => {
+        const childCount = await financialCategoryRepository.countChildren(id, workspaceId)
+        if (childCount > 0) throw new AppError(ErrorCode.FINANCIAL_CATEGORY_HAS_CHILDREN)
+      },
+    })
+  },
+
+  // ADR-020 — restoring a subcategory while its parent is still archived
+  // would put it back in the tree with no reachable ancestor in the
+  // category picker; restore the parent first (PARENT_ARCHIVED).
+  async restore(id: string, workspaceId: string, userId: string) {
+    const category = await this.getById(id, workspaceId)
+    await entityLifecycleService.restore({
+      entity: "FinancialCategory", id, workspaceId, userId,
+      delegate: prisma.financialCategory,
+      integrityCheck: async () => {
+        if (!category.parentId) return
+        const parent = await financialCategoryRepository.findById(category.parentId, workspaceId)
+        if (parent?.archived) throw new AppError(ErrorCode.PARENT_ARCHIVED)
+      },
+    })
+    return this.getById(id, workspaceId)
   },
 }

@@ -85,6 +85,10 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.PURCHASE_ORDER_NOT_DRAFT]: () => R.badRequest("This purchase order is no longer a draft and can't be edited or cancelled"),
   [ErrorCode.PURCHASE_ORDER_ALREADY_DECIDED]: () => R.conflict("This purchase order was already cancelled by someone else"),
   [ErrorCode.PURCHASE_ORDER_CATEGORY_DIRECTION_MISMATCH]: () => R.badRequest("The financial category for a purchase order must be a Despesa (payable) category"),
+  // Entity Lifecycle (ADR-020)
+  [ErrorCode.ENTITY_ALREADY_ARCHIVED]: () => R.conflict("This record is already archived"),
+  [ErrorCode.ENTITY_NOT_ARCHIVED]:     () => R.conflict("This record is not archived, there is nothing to restore"),
+  [ErrorCode.PARENT_ARCHIVED]:         () => R.conflict("Cannot restore this record while its parent record is archived — restore the parent first"),
   // Legacy string aliases kept for backward compat during migration
   INVALID_TOKEN:     () => R.badRequest("Invalid reset token"),
   TOKEN_ALREADY_USED: () => R.badRequest("Reset token has already been used"),

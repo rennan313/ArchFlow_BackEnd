@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { ErrorCode } from "@/lib/errors"
 
 vi.mock("@/repositories/costCenter.repository")
+vi.mock("@/services/entityLifecycle.service")
 
 import { costCenterService } from "@/modules/financial/services/costCenter.service"
 import { costCenterRepository } from "@/repositories/costCenter.repository"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 
-const mockCostCenter = { id: "cc-1", workspaceId: "ws-1", name: "Obra Casa Verde", isArchived: false }
+const mockCostCenter = { id: "cc-1", workspaceId: "ws-1", name: "Obra Casa Verde", archived: false }
 
 describe("costCenterService", () => {
   beforeEach(() => vi.clearAllMocks())
@@ -34,13 +36,15 @@ describe("costCenterService", () => {
     await expect(costCenterService.update("cc-1", "ws-1", { name: "Outra Obra" })).rejects.toMatchObject({ code: ErrorCode.COST_CENTER_NAME_TAKEN })
   })
 
-  it("archive is a soft update, never a physical delete", async () => {
+  it("archive is a soft update (ADR-020), never a physical delete", async () => {
     vi.mocked(costCenterRepository.findById).mockResolvedValue(mockCostCenter as never)
-    await costCenterService.archive("cc-1", "ws-1")
-    expect(costCenterRepository.update).toHaveBeenCalledWith("cc-1", "ws-1", { isArchived: true })
+    await costCenterService.archive("cc-1", "ws-1", "user-1")
+    expect(entityLifecycleService.archive).toHaveBeenCalledWith(
+      expect.objectContaining({ entity: "CostCenter", id: "cc-1", workspaceId: "ws-1", userId: "user-1" }),
+    )
   })
 
-  it("list delegates to the repository with the includeArchived flag", async () => {
+  it("list delegates to the repository with the archived flag", async () => {
     vi.mocked(costCenterRepository.findMany).mockResolvedValue([mockCostCenter] as never)
     await costCenterService.list("ws-1", true)
     expect(costCenterRepository.findMany).toHaveBeenCalledWith("ws-1", true)

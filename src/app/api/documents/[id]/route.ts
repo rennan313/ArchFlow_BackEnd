@@ -15,10 +15,10 @@ export const GET = withWorkspace(async (_req: NextRequest, ctx: Ctx, _user: JwtP
   } catch (error) { return handleServiceError(error) }
 })
 
-export const DELETE = requireWorkspacePermission("delete:documents")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
+export const DELETE = requireWorkspacePermission("delete:documents")(async (_req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
-    await documentService.delete(id, workspaceId)
+    await documentService.delete(id, workspaceId, user.sub)
     return noContent()
   } catch (error) { return handleServiceError(error) }
 })

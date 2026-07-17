@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { ErrorCode } from "@/lib/errors"
 
 vi.mock("@/repositories/supplierCategory.repository")
+vi.mock("@/services/entityLifecycle.service")
 
 import { supplierCategoryService } from "@/modules/financial/services/supplierCategory.service"
 import { supplierCategoryRepository } from "@/repositories/supplierCategory.repository"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 
-const mockCategory = { id: "cat-1", workspaceId: "ws-1", name: "Marcenaria", isArchived: false }
+const mockCategory = { id: "cat-1", workspaceId: "ws-1", name: "Marcenaria", archived: false }
 
 describe("supplierCategoryService", () => {
   beforeEach(() => vi.clearAllMocks())
@@ -51,10 +53,12 @@ describe("supplierCategoryService", () => {
     ).rejects.toMatchObject({ code: ErrorCode.SUPPLIER_CATEGORY_NAME_TAKEN })
   })
 
-  it("archive is a soft update, never a physical delete", async () => {
+  it("archive is a soft update (ADR-020), never a physical delete", async () => {
     vi.mocked(supplierCategoryRepository.findById).mockResolvedValue(mockCategory as never)
 
-    await supplierCategoryService.archive("cat-1", "ws-1")
-    expect(supplierCategoryRepository.update).toHaveBeenCalledWith("cat-1", "ws-1", { isArchived: true })
+    await supplierCategoryService.archive("cat-1", "ws-1", "user-1")
+    expect(entityLifecycleService.archive).toHaveBeenCalledWith(
+      expect.objectContaining({ entity: "SupplierCategory", id: "cat-1", workspaceId: "ws-1", userId: "user-1" }),
+    )
   })
 })

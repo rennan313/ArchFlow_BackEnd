@@ -5,6 +5,7 @@ vi.mock("@/repositories/opportunity.repository")
 vi.mock("@/repositories/client.repository")
 vi.mock("@/repositories/project.repository")
 vi.mock("@/services/automation.service")
+vi.mock("@/services/entityLifecycle.service")
 vi.mock("@/lib/pagination")
 
 import { opportunityService } from "@/services/opportunity.service"
@@ -12,6 +13,7 @@ import { opportunityRepository } from "@/repositories/opportunity.repository"
 import { clientRepository } from "@/repositories/client.repository"
 import { projectRepository } from "@/repositories/project.repository"
 import { automationService } from "@/services/automation.service"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import { buildMeta } from "@/lib/pagination"
 
 const mockOpportunity = {
@@ -148,24 +150,30 @@ describe("opportunityService — Automação 01 (auto-create Project on APPROVED
 describe("opportunityService.delete", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("deletes normally when no Project was ever created from this opportunity", async () => {
+  it("archives normally when no Project was ever created from this opportunity", async () => {
     vi.mocked(opportunityRepository.findById).mockResolvedValue(mockOpportunity as never)
     vi.mocked(projectRepository.findByOpportunityId).mockResolvedValue(null)
-    vi.mocked(opportunityRepository.delete).mockResolvedValue(undefined as never)
+    vi.mocked(entityLifecycleService.archive).mockImplementation(async (opts) => {
+      if (opts.guard) await opts.guard()
+    })
 
-    await opportunityService.delete("opp-1", "workspace-1")
+    await opportunityService.delete("opp-1", "workspace-1", "user-1")
 
-    expect(opportunityRepository.delete).toHaveBeenCalledWith("opp-1", "workspace-1")
+    expect(entityLifecycleService.archive).toHaveBeenCalledWith(
+      expect.objectContaining({ entity: "Opportunity", id: "opp-1", workspaceId: "workspace-1", userId: "user-1" }),
+    )
   })
 
   it("blocks deletion with OPPORTUNITY_HAS_PROJECT when a Project was already auto-created", async () => {
     vi.mocked(opportunityRepository.findById).mockResolvedValue(mockOpportunity as never)
     vi.mocked(projectRepository.findByOpportunityId).mockResolvedValue({ id: "proj-existing" } as never)
+    vi.mocked(entityLifecycleService.archive).mockImplementation(async (opts) => {
+      if (opts.guard) await opts.guard()
+    })
 
-    await expect(opportunityService.delete("opp-1", "workspace-1")).rejects.toMatchObject({
+    await expect(opportunityService.delete("opp-1", "workspace-1", "user-1")).rejects.toMatchObject({
       code: ErrorCode.OPPORTUNITY_HAS_PROJECT,
     })
-    expect(opportunityRepository.delete).not.toHaveBeenCalled()
   })
 })
 

@@ -1,10 +1,12 @@
+import { prisma } from "@/lib/prisma"
 import { costCenterRepository } from "@/repositories/costCenter.repository"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { CreateCostCenterInput, UpdateCostCenterInput } from "@/validations/costCenter"
 
 export const costCenterService = {
-  list(workspaceId: string, includeArchived: boolean) {
-    return costCenterRepository.findMany(workspaceId, includeArchived)
+  list(workspaceId: string, archived: boolean) {
+    return costCenterRepository.findMany(workspaceId, archived)
   },
 
   async getById(id: string, workspaceId: string) {
@@ -32,8 +34,19 @@ export const costCenterService = {
     return this.getById(id, workspaceId)
   },
 
-  async archive(id: string, workspaceId: string) {
+  async archive(id: string, workspaceId: string, userId: string) {
     await this.getById(id, workspaceId)
-    await costCenterRepository.update(id, workspaceId, { isArchived: true })
+    await entityLifecycleService.archive({
+      entity: "CostCenter", id, workspaceId, userId,
+      delegate: prisma.costCenter,
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "CostCenter", id, workspaceId, userId,
+      delegate: prisma.costCenter,
+    })
+    return this.getById(id, workspaceId)
   },
 }

@@ -3,7 +3,9 @@ import { AppError, ErrorCode } from "@/lib/errors"
 
 vi.mock("@/repositories/proposal.repository")
 vi.mock("@/repositories/project.repository")
+vi.mock("@/repositories/client.repository")
 vi.mock("@/services/client.service")
+vi.mock("@/services/entityLifecycle.service")
 vi.mock("@/lib/pagination")
 vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }))
 
@@ -21,6 +23,7 @@ import { proposalService } from "@/services/proposal.service"
 import { proposalRepository } from "@/repositories/proposal.repository"
 import { projectRepository } from "@/repositories/project.repository"
 import { clientService } from "@/services/client.service"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import { prisma } from "@/lib/prisma"
 import { buildMeta } from "@/lib/pagination"
 
@@ -151,31 +154,37 @@ describe("proposalService.delete", () => {
   it("throws NOT_FOUND when proposal does not exist", async () => {
     vi.mocked(proposalRepository.findById).mockResolvedValue(null)
 
-    await expect(proposalService.delete("nonexistent", "workspace-1"))
+    await expect(proposalService.delete("nonexistent", "workspace-1", "user-1"))
       .rejects.toThrow("NOT_FOUND")
   })
 
-  it("deletes when found and no Project was ever created from this proposal", async () => {
+  it("archives when found and no Project was ever created from this proposal", async () => {
     vi.mocked(proposalRepository.findById).mockResolvedValue(mockProposal as never)
     vi.mocked(projectRepository.findByProposalId).mockResolvedValue(null)
-    vi.mocked(proposalRepository.delete).mockResolvedValue(undefined as never)
+    vi.mocked(entityLifecycleService.archive).mockImplementation(async (opts) => {
+      if (opts.guard) await opts.guard()
+    })
 
-    await proposalService.delete("prop-1", "workspace-1")
+    await proposalService.delete("prop-1", "workspace-1", "user-1")
 
-    expect(proposalRepository.delete).toHaveBeenCalledWith("prop-1", "workspace-1")
+    expect(entityLifecycleService.archive).toHaveBeenCalledWith(
+      expect.objectContaining({ entity: "Proposal", id: "prop-1", workspaceId: "workspace-1", userId: "user-1" }),
+    )
   })
 
   // CORE-2 (Sprint 0) — referential guard mirroring RC-2.3's Project/Client
   // pattern, one hop upstream: a Proposal that already converted to a
-  // Project can no longer be deleted physically.
+  // Project can no longer be archived (or deleted).
   it("blocks deletion with PROPOSAL_HAS_PROJECT when a Project already exists for this proposal", async () => {
     vi.mocked(proposalRepository.findById).mockResolvedValue(mockProposal as never)
     vi.mocked(projectRepository.findByProposalId).mockResolvedValue({ id: "proj-existing" } as never)
+    vi.mocked(entityLifecycleService.archive).mockImplementation(async (opts) => {
+      if (opts.guard) await opts.guard()
+    })
 
-    await expect(proposalService.delete("prop-1", "workspace-1")).rejects.toMatchObject({
+    await expect(proposalService.delete("prop-1", "workspace-1", "user-1")).rejects.toMatchObject({
       code: ErrorCode.PROPOSAL_HAS_PROJECT,
     })
-    expect(proposalRepository.delete).not.toHaveBeenCalled()
   })
 })
 

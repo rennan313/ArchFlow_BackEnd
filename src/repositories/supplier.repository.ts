@@ -12,13 +12,13 @@ export const supplierRepository = {
   },
 
   async findMany(workspaceId: string, query: SupplierQueryInput) {
-    const { page, limit, search, categoryId, isActive, sortBy, sortOrder } = query
+    const { page, limit, search, categoryId, archived, sortBy, sortOrder } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.SupplierWhereInput = {
       workspaceId,
       ...(categoryId && { categoryId }),
-      ...(isActive !== undefined && { isActive }),
+      ...(archived !== undefined && { archived }),
       ...(search && {
         OR: [
           { name:     { contains: search, mode: "insensitive" } },

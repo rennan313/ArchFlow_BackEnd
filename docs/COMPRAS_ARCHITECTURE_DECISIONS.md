@@ -73,6 +73,8 @@ Uma vez `status === "APPROVED"`, o pedido é terminal nesta fase: sem rota de ex
 
 **Impacto futuro**: se uma fase futura de Compras adicionar cancelamento de pedido `APPROVED` (exigindo cancelar o `FinancialDocument` vinculado), essa é uma mudança estrutural nova — precisa de sua própria ADR antes do código, não uma extensão silenciosa desta.
 
+> **Ver também**: `FINANCIAL_ARCHITECTURE_DECISIONS.md`, ADR-019 — a Domain Review de Compras (2026-07-16) encontrou o achado Crítico que esta ADR-018 deixava em aberto: nada impede o cancelamento direto do `FinancialDocument` gerado por um `PurchaseOrder` `APPROVED`, produzindo um pedido que afirma um compromisso financeiro inexistente. A ADR-019 resolve isso com um lock de origem genérico no próprio `FinancialDocument`, sem inverter a dependência unidirecional. Implementação ainda não realizada — ver o roadmap da ADR-019.
+
 ---
 
 ## Checklist de criação de módulo (`MODULE_CREATION_CHECKLIST.md`)

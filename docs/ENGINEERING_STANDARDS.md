@@ -184,7 +184,46 @@ Checklist obrigatório para qualquer query nova que roda no caminho de leitura d
 
 ---
 
-## 8. Como revisar Pull Requests (checklist)
+## 8. Como implementar Arquivar/Restaurar/Cancelar (Entity Lifecycle, ADR-020)
+
+Toda entidade nova que precisa de um botão "excluir" na UI, mas cujo domínio nunca deve perder o registro de verdade, segue este padrão — não reimplementa seu próprio arquivamento.
+
+**Passo a passo**:
+
+1. **Schema**: adicione exatamente `archived Boolean @default(false)`, `archivedAt DateTime?`, `archivedBy String? @db.ObjectId`, e `@@index([workspaceId, archived])`. Nunca reaproveite `status`/`active`/`inactive` já existentes na entidade para este propósito — são conceitos diferentes (ver `DOMAIN_GUIDE.md` §7).
+2. **Allow-list**: adicione o nome do model a `ARCHIVABLE_MODELS` em `src/lib/prisma.ts` — é isso que ativa a filtragem automática de `archived: false` em toda listagem normal (`findMany`/`count`/`aggregate`/`groupBy`) sem precisar tocar em nenhum repository.
+3. **Service**: delegue a `entityLifecycleService.archive()`/`.restore()` (import de `@/services/entityLifecycle.service`), passando `delegate: prisma.<model>`, `entity: "<NomeDoModel>"`, e qualquer `guard`/`integrityCheck` específico da entidade como callback:
+
+```ts
+// Padrão de referência — client.service.ts (resumido)
+async delete(id: string, workspaceId: string, userId: string) {
+  await this.getById(id, workspaceId)
+  await entityLifecycleService.archive({
+    entity: "Client", id, workspaceId, userId,
+    delegate: prisma.client,
+    guard: async () => {
+      if (await financialDocumentService.hasDocumentsForClient(id, workspaceId)) {
+        throw new AppError(ErrorCode.CLIENT_HAS_FINANCIAL_HISTORY)
+      }
+    },
+  })
+},
+async restore(id: string, workspaceId: string, userId: string) {
+  await entityLifecycleService.restore({
+    entity: "Client", id, workspaceId, userId,
+    delegate: prisma.client,
+  })
+  return clientRepository.findById(id, workspaceId)
+},
+```
+
+4. **Rota**: `DELETE` já existente passa a receber `user.sub` como `userId` (nunca `_user` descartado — `archivedBy` depende disso). Adicione `src/app/api/<entidade>/[id]/restore/route.ts`, um `POST` protegido pela MESMA permissão do `DELETE` (restaurar não ganha uma entrada nova em `PERMISSIONS`).
+5. **Listagem**: adicione `archived: z.coerce.boolean().optional()` ao schema Zod de query da entidade, e passe `query.archived` para o `where` do repository (`archived: query.archived ?? false`) — isso é o que permite a tela de "Itens Arquivados" pedir `?archived=true` no mesmo endpoint de listagem, sem endpoint dedicado.
+6. **Nunca** implemente exclusão física para uma entidade nova sem primeiro provar, por escrito, que ela não pode ter histórico de negócio de terceiros apontando para ela (ver ADR-020, Regras do domínio).
+
+---
+
+## 9. Como revisar Pull Requests (checklist)
 
 Bloqueante — qualquer um destes ausente é motivo para pedir mudança antes de aprovar:
 
@@ -196,3 +235,4 @@ Bloqueante — qualquer um destes ausente é motivo para pedir mudança antes de
 - [ ] Escrita multi-coleção usa `$transaction` + `withTransactionRetry()`, nunca `$transaction` sozinho.
 - [ ] Nenhum segredo, token, ou dado sensível em log — só IDs internos e valores já formatados.
 - [ ] Testes cobrem o comportamento real adicionado (branch de erro, invariante) — não só o caminho feliz, e não teste de repository CRUD fino sem lógica própria só para inflar número de cobertura.
+- [ ] Toda entidade arquivável nova delega a `entityLifecycleService` (§8, ADR-020) — nunca um `updateMany` de arquivamento reimplementado à mão, nunca `status`/`active`/`isArchived` reaproveitado para o mesmo propósito.

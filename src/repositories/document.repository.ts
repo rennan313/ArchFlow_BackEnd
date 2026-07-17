@@ -13,11 +13,12 @@ export const documentRepository = {
   },
 
   async findMany(workspaceId: string, query: DocumentQueryInput) {
-    const { page, limit, search, type, clientId, projectId, folderId, sortBy, sortOrder } = query
+    const { page, limit, search, type, clientId, projectId, folderId, sortBy, sortOrder, archived } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.DocumentWhereInput = {
       workspaceId,
+      archived: archived ?? false,
       ...(type      && { type }),
       ...(clientId  && { clientId }),
       ...(projectId && { projectId }),
@@ -40,7 +41,7 @@ export const documentRepository = {
 
   listRecent(workspaceId: string, limit: number) {
     return prisma.document.findMany({
-      where:   { workspaceId },
+      where:   { workspaceId, archived: false },
       orderBy: { createdAt: "desc" },
       take:    limit,
       include: { versions: { orderBy: { version: "desc" }, take: 1 } },
@@ -92,10 +93,6 @@ export const documentRepository = {
       },
     })
     return prisma.document.findFirst({ where: { id: documentId, workspaceId }, include: VERSION_INCLUDE })
-  },
-
-  delete(id: string, workspaceId: string) {
-    return prisma.document.deleteMany({ where: { id, workspaceId } })
   },
 
   findFolderById(id: string, workspaceId: string) {

@@ -80,7 +80,7 @@ export const financialDashboardService = {
         where: { workspaceId, direction: "PAYABLE" },
         _sum: { amountCents: true },
       }),
-      prisma.bankAccount.aggregate({ where: { workspaceId, isActive: true }, _sum: { initialBalanceCents: true } }),
+      prisma.bankAccount.aggregate({ where: { workspaceId, archived: false }, _sum: { initialBalanceCents: true } }),
       // Contas vencidas — open/partial installments past due.
       prisma.installment.aggregate({
         where: { workspaceId, status: { in: OPEN_STATUSES }, dueDate: { lt: now }, financialDocument: { direction: "RECEIVABLE", isCancelled: false } },

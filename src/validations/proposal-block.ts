@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const createProposalBlockSchema = z.object({
   sectionKey:        z.string().min(2).max(60),
@@ -9,8 +10,9 @@ export const createProposalBlockSchema = z.object({
   sharedInWorkspace: z.boolean().optional().default(true),
 })
 
+// archived/archivedAt/archivedBy are never editable through the generic
+// update endpoint (ADR-020) — only through the dedicated archive/restore actions.
 export const updateProposalBlockSchema = createProposalBlockSchema.partial().extend({
-  isArchived: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
 })
 
@@ -19,7 +21,7 @@ export const proposalBlockQuerySchema = z.object({
   limit:      z.coerce.number().int().min(1).max(100).optional().default(50),
   search:     z.string().optional(),
   sectionKey: z.string().optional(),
-  isArchived: z.coerce.boolean().optional(),
+  archived:   booleanQueryParam.optional(),
   isFavorite: z.coerce.boolean().optional(),
 })
 

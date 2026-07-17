@@ -24,10 +24,10 @@ export const PUT = requireWorkspacePermission("update:clients")(async (req: Next
   } catch (error) { return handleServiceError(error) }
 })
 
-export const DELETE = requireWorkspacePermission("delete:clients")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
+export const DELETE = requireWorkspacePermission("delete:clients")(async (_req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
-    await clientService.delete(id, workspaceId)
+    await clientService.delete(id, workspaceId, user.sub)
     return noContent()
   } catch (error) { return handleServiceError(error) }
 })

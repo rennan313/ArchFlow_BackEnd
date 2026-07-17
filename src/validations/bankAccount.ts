@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParamWithDefault } from "./common"
 
 export const BankAccountTypeEnum = z.enum(["CHECKING", "SAVINGS"])
 
@@ -13,13 +14,14 @@ export const createBankAccountSchema = z.object({
   initialBalance: z.number().finite().optional().default(0),
 })
 
+// archived/archivedAt/archivedBy are never editable through the generic
+// update endpoint (ADR-020) — only through the dedicated archive/restore actions.
 export const updateBankAccountSchema = createBankAccountSchema
   .omit({ initialBalance: true })
   .partial()
-  .extend({ isActive: z.boolean().optional() })
 
 export const bankAccountQuerySchema = z.object({
-  includeInactive: z.coerce.boolean().optional().default(false),
+  archived: booleanQueryParamWithDefault(false),
 })
 
 export type CreateBankAccountInput = z.infer<typeof createBankAccountSchema>

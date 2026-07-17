@@ -31,10 +31,10 @@ export const PUT = requireWorkspacePermission("update:proposals")(async (req: Ne
   }
 });
 
-export const DELETE = requireWorkspacePermission("delete:proposals")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
+export const DELETE = requireWorkspacePermission("delete:proposals")(async (_req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params;
-    await proposalService.delete(id, workspaceId);
+    await proposalService.delete(id, workspaceId, user.sub);
     return noContent();
   } catch (error) {
     return handleServiceError(error);

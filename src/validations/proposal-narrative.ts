@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const createProposalNarrativeSchema = z.object({
   name:        z.string().min(2).max(100),
@@ -7,15 +8,15 @@ export const createProposalNarrativeSchema = z.object({
   sectionFlow: z.array(z.string()).optional().default([]),
 })
 
-export const updateProposalNarrativeSchema = createProposalNarrativeSchema.partial().extend({
-  isArchived: z.boolean().optional(),
-})
+// archived/archivedAt/archivedBy are never editable through the generic
+// update endpoint (ADR-020) — only through the dedicated archive/restore actions.
+export const updateProposalNarrativeSchema = createProposalNarrativeSchema.partial()
 
 export const proposalNarrativeQuerySchema = z.object({
-  page:       z.coerce.number().int().min(1).optional().default(1),
-  limit:      z.coerce.number().int().min(1).max(100).optional().default(50),
-  search:     z.string().optional(),
-  isArchived: z.coerce.boolean().optional(),
+  page:     z.coerce.number().int().min(1).optional().default(1),
+  limit:    z.coerce.number().int().min(1).max(100).optional().default(50),
+  search:   z.string().optional(),
+  archived: booleanQueryParam.optional(),
 })
 
 export type CreateProposalNarrativeInput = z.infer<typeof createProposalNarrativeSchema>

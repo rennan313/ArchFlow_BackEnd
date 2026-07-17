@@ -449,6 +449,17 @@ model Client {
   meetingDate    DateTime?
   meetingSummary String? // long text — AI input source
 
+  // Categoria B soft-delete (archive) — deliberately independent of `status`.
+  // `status: INACTIVE` is a user-selectable CRM pipeline state (exposed in
+  // ClientForm and the client list's "Inativos" tab) and must never be
+  // conflated with "this record was archived via the delete button" — doing
+  // so would make a manually-INACTIVE client indistinguishable from an
+  // archived one, and restoring an archived client would wrongly leave it
+  // looking like a normal INACTIVE pipeline client.
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -467,6 +478,7 @@ model Client {
   @@index([workspaceId])
   @@index([userId, name])
   @@index([userId, status])
+  @@index([workspaceId, archived])
   @@map("clients")
 }
 
@@ -488,6 +500,11 @@ model Opportunity {
   stage            OpportunityStage @default(LEAD)
   source           String?
 
+  // Categoria B soft-delete (archive) — never physically deleted.
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -503,6 +520,7 @@ model Opportunity {
   @@index([workspaceId, stage])
   @@index([userId, clientId])
   @@index([userId, createdAt])
+  @@index([workspaceId, archived])
   @@map("opportunities")
 }
 
@@ -625,6 +643,11 @@ model Proposal {
   builderSkin             ProposalSkin?
   builderStatus           ProposalBuilderStatus @default(DRAFT)
 
+  // Categoria B soft-delete (archive) — never physically deleted.
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -643,6 +666,7 @@ model Proposal {
   @@index([userId, createdAt])
   @@index([opportunityId])
   @@index([clientId])
+  @@index([workspaceId, archived])
   @@map("proposals")
 }
 
@@ -713,6 +737,11 @@ model Document {
   type           DocumentType
   currentVersion Int          @default(1)
 
+  // Categoria B soft-delete (archive) — never physically deleted.
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -728,6 +757,7 @@ model Document {
   @@index([projectId])
   @@index([folderId])
   @@index([workspaceId, createdAt])
+  @@index([workspaceId, archived])
   @@map("documents")
 }
 
@@ -780,9 +810,13 @@ model ProposalTemplate {
   skin         ProposalSkin @default(EDITORIAL)
   sectionOrder String[] // ordered ProposalSection.key refs
 
-  isArchived        Boolean @default(false)
   isFavorite        Boolean @default(false)
   isPlatformDefault Boolean @default(false)
+
+  // Categoria B soft-delete (Entity Lifecycle, ADR-020).
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -791,7 +825,7 @@ model ProposalTemplate {
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
-  @@index([workspaceId, isArchived])
+  @@index([workspaceId, archived])
   @@map("proposal_templates")
 }
 
@@ -805,7 +839,6 @@ model ProposalSection {
   description String?
   order       Int     @default(0)
 
-  isArchived        Boolean @default(false)
   // Fase 2.0 — Etapa 6: true for sections that exist only to receive content
   // migrated from legacy generatedProposalJson proposals (e.g. "Investimento",
   // "Riscos"). Excluded from the AI advisor's recommendations and from the
@@ -819,6 +852,11 @@ model ProposalSection {
   // premium initialize() path, never picked à la carte.
   isPremiumFlowOnly Boolean @default(false)
 
+  // Categoria B soft-delete (Entity Lifecycle, ADR-020) — replaces isArchived.
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -831,6 +869,7 @@ model ProposalSection {
   // NOTE: existing duplicate keys must be resolved before running prisma db push.
   @@unique([workspaceId, key])
   @@index([workspaceId])
+  @@index([workspaceId, archived])
   @@map("proposal_sections")
 }
 
@@ -857,9 +896,13 @@ model ProposalBlock {
   version       Int     @default(1)
   parentBlockId String? @db.ObjectId // previous version in the chain, if any
 
-  isArchived        Boolean @default(false)
   isFavorite        Boolean @default(false)
   sharedInWorkspace Boolean @default(true)
+
+  // Categoria B soft-delete (Entity Lifecycle, ADR-020).
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -869,7 +912,7 @@ model ProposalBlock {
 
   @@index([workspaceId])
   @@index([workspaceId, sectionKey])
-  @@index([workspaceId, isArchived])
+  @@index([workspaceId, archived])
   @@map("proposal_blocks")
 }
 
@@ -883,7 +926,10 @@ model ProposalNarrative {
   toneKey     String // maps to the existing 5 tone personas in tone.service.ts
   sectionFlow String[] // recommended ProposalSection.key order
 
-  isArchived Boolean @default(false)
+  // Categoria B soft-delete (Entity Lifecycle, ADR-020).
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -892,6 +938,7 @@ model ProposalNarrative {
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
+  @@index([workspaceId, archived])
   @@map("proposal_narratives")
 }
 
@@ -980,6 +1027,11 @@ model Project {
   // Internal
   notes String?
 
+  // Categoria B soft-delete (archive) — never physically deleted.
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1004,6 +1056,7 @@ model Project {
   @@index([workspaceId, estimatedEndDate])
   @@index([proposalId])
   @@index([opportunityId])
+  @@index([workspaceId, archived])
   @@map("projects")
 }
 
@@ -1047,6 +1100,11 @@ model Meeting {
   // Future — Integrated AI
   aiSummary String?
 
+  // Categoria B soft-delete (archive) — never physically deleted.
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1062,6 +1120,7 @@ model Meeting {
   @@index([userId, scheduledAt])
   @@index([projectId])
   @@index([proposalId])
+  @@index([workspaceId, archived])
   @@map("meetings")
 }
 
@@ -1146,7 +1205,11 @@ model SupplierCategory {
   workspaceId String @db.ObjectId
 
   name       String
-  isArchived Boolean @default(false)
+
+  // Categoria B soft-delete (Entity Lifecycle, ADR-020).
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1156,6 +1219,7 @@ model SupplierCategory {
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
+  @@index([workspaceId, archived])
   @@map("supplier_categories")
 }
 
@@ -1172,7 +1236,11 @@ model Supplier {
   website  String?
   address  String?
   notes    String?
-  isActive Boolean @default(true)
+
+  // Categoria B soft-delete (Entity Lifecycle, ADR-020).
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1183,7 +1251,7 @@ model Supplier {
   purchaseOrders     PurchaseOrder[]
 
   @@index([workspaceId])
-  @@index([workspaceId, isActive])
+  @@index([workspaceId, archived])
   @@index([categoryId])
   @@map("suppliers")
 }
@@ -1203,7 +1271,11 @@ model BankAccount {
   // RC-2.2 in docs/financial-architecture.md for why every money field in
   // this domain uses BigInt.
   initialBalanceCents BigInt          @default(0)
-  isActive            Boolean         @default(true)
+
+  // Categoria B soft-delete (Entity Lifecycle, ADR-020).
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1212,7 +1284,7 @@ model BankAccount {
   payments  Payment[]
 
   @@index([workspaceId])
-  @@index([workspaceId, isActive])
+  @@index([workspaceId, archived])
   @@map("bank_accounts")
 }
 
@@ -1226,7 +1298,11 @@ model FinancialCategory {
 
   name       String
   direction  FinancialDirection
-  isArchived Boolean            @default(false)
+
+  // Categoria B soft-delete (Entity Lifecycle, ADR-020).
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1243,6 +1319,7 @@ model FinancialCategory {
   @@index([workspaceId])
   @@index([workspaceId, direction])
   @@index([parentId])
+  @@index([workspaceId, archived])
   @@map("financial_categories")
 }
 
@@ -1251,7 +1328,11 @@ model CostCenter {
   workspaceId String @db.ObjectId
 
   name       String
-  isArchived Boolean @default(false)
+
+  // Categoria B soft-delete (Entity Lifecycle, ADR-020).
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?   @db.ObjectId
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1262,6 +1343,7 @@ model CostCenter {
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
+  @@index([workspaceId, archived])
   @@map("cost_centers")
 }
 

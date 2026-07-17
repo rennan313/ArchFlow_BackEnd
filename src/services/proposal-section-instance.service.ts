@@ -129,7 +129,7 @@ export const proposalSectionInstanceService = {
       if (premiumOutput) {
         // The 12 fixed catalog rows — real ObjectIds, unlike the legacy
         // flattener's zero-ObjectId placeholder.
-        const { data: allSections } = await proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 100, isArchived: false })
+        const { data: allSections } = await proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 100, archived: false })
         const sectionByKey = new Map(allSections.map((s) => [s.key, s]))
         const missing = PREMIUM_NARRATIVE_SECTION_KEYS.filter((k) => !sectionByKey.has(k))
         if (missing.length > 0) {
@@ -223,7 +223,7 @@ export const proposalSectionInstanceService = {
 
       const advice = await proposalAdvisorService.advise(project.id, workspaceId)
 
-      const { data: sections } = await proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 50, isArchived: false })
+      const { data: sections } = await proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 50, archived: false })
       const sectionByKey = new Map(sections.map((s) => [s.key, s]))
 
       await Promise.all(

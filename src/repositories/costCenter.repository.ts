@@ -10,9 +10,9 @@ export const costCenterRepository = {
     return prisma.costCenter.findFirst({ where: { workspaceId, name: { equals: name, mode: "insensitive" } } })
   },
 
-  findMany(workspaceId: string, includeArchived: boolean) {
+  findMany(workspaceId: string, archived: boolean) {
     return prisma.costCenter.findMany({
-      where: { workspaceId, ...(includeArchived ? {} : { isArchived: false }) },
+      where: { workspaceId, archived },
       orderBy: { name: "asc" },
     })
   },

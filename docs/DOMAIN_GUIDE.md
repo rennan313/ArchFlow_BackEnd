@@ -153,3 +153,18 @@ Exemplo concreto: `project.service.ts#delete` chama `financialDocumentService.ha
 **Por que essa direção e não a outra**: Financeiro é o contexto mais "denso" em invariantes (dinheiro, auditoria, imutabilidade) — deixá-lo como folha da árvore de dependências (nada depende dele saber sobre o resto do app) significa que qualquer módulo futuro pode adicionar uma checagem contra o Financeiro sem o Financeiro precisar mudar uma linha. Se a direção fosse invertida (Financeiro sabendo sobre Projetos/Compras), toda mudança em Projetos arriscaria quebrar o módulo mais sensível do sistema.
 
 **Regra para a Sprint de Compras**: Compras vai depender de `Supplier` (Financeiro) e vai gerar `FinancialDocument` (Financeiro) — isso é uma dependência de Compras sobre Financeiro, seguindo exatamente esta regra. Financeiro nunca deve importar nada do módulo de Compras. Ver `ARCHITECTURE_ROADMAP.md` para o desenho completo dessa integração.
+
+---
+
+## 7. Entity Lifecycle — Arquivar, Restaurar, Cancelar, Excluir (ADR-020)
+
+Toda entidade deste mapa que participa do ciclo de vida "arquivável" (§2/§3 acima — a maioria das entidades com identidade própria e ciclo de vida rastreável) segue um padrão único de plataforma, formalizado em `CORE_ARCHITECTURE_DECISIONS.md` ADR-020. Este parágrafo existe para que qualquer bounded context novo (Contratos, Portal do Cliente, Integrações) encontre a resposta aqui, sem precisar de uma ADR própria.
+
+**Os quatro comportamentos, e como não confundi-los**:
+
+- **Arquivar** (`archived`/`archivedAt`/`archivedBy`) — esconde o registro das telas normais, sempre reversível. É o significado de "excluir" na maioria dos botões de UI do ArchFlow hoje (Cliente, Oportunidade, Proposta, Projeto, Reunião, Documento, Fornecedor e toda entidade de referência financeira).
+- **Cancelar** (`isCancelled`/`status: CANCELLED`, específico de cada entidade) — o registro deixa de representar um compromisso de negócio ativo, mas nunca é escondido nem some das telas. `FinancialDocument`/`PurchaseOrder` usam este padrão, não Arquivar, porque cancelamento é sobre o *significado* do registro, não sobre visibilidade.
+- **Excluir fisicamente** — reservado a entidades sem nenhum histórico de terceiros possível no estado em que a exclusão é permitida (hoje: só `PurchaseOrder` em `DRAFT`). Nunca o comportamento padrão de uma entidade nova.
+- **Um valor comum de `status` de negócio** (ex. `ClientStatus.INACTIVE`) nunca é arquivamento — é só mais um valor dentro da própria máquina de estados da entidade, livremente editável.
+
+**Regra para qualquer módulo novo**: toda entidade arquivável tem exatamente `archived: Boolean`/`archivedAt: DateTime?`/`archivedBy: String? @db.ObjectId`, nunca reaproveitando `status`/`active`/`inactive`/`deleted`/`disabled` para o mesmo propósito, e delega a `src/services/entityLifecycle.service.ts` para executar a transição (guarda de negócio + carimbo + auditoria via `auditLog`, ADR-012) — nunca reimplementa seu próprio `updateMany` de arquivamento. Ver a ADR-020 completa para a tabela de comportamento oficial, os anti-padrões, e como isso se generaliza para Compras/Contratos/Portal/IA/Integrações sem exigir nenhuma alteração no modelo.

@@ -1,11 +1,11 @@
-import { prisma } from "@/lib/prisma"
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import type { ClientQueryInput } from "@/validations/client"
 
 // Accepts either the global `prisma` singleton or a transaction client
 // (`prisma.$transaction(async (tx) => ...)`), so find-or-create logic can
 // run either standalone or as part of a larger atomic transaction.
-type Db = typeof prisma | Prisma.TransactionClient
+type Db = typeof prisma | PrismaTransactionClient
 
 export const clientRepository = {
   findById(id: string, workspaceId: string, db: Db = prisma) {
@@ -24,11 +24,12 @@ export const clientRepository = {
   },
 
   async findMany(workspaceId: string, query: ClientQueryInput) {
-    const { page, limit, search, status, state, sortBy, sortOrder } = query
+    const { page, limit, search, status, state, sortBy, sortOrder, archived } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.ClientWhereInput = {
       workspaceId,
+      archived: archived ?? false,
       ...(status && { status }),
       ...(state  && { state }),
       ...(search && {
@@ -70,13 +71,9 @@ export const clientRepository = {
     return prisma.client.updateMany({ where: { id, workspaceId }, data })
   },
 
-  delete(id: string, workspaceId: string) {
-    return prisma.client.deleteMany({ where: { id, workspaceId } })
-  },
-
   findProposals(clientId: string, workspaceId: string) {
     return prisma.proposal.findMany({
-      where:   { clientId, workspaceId },
+      where:   { clientId, workspaceId, archived: false },
       orderBy: { createdAt: "desc" },
     })
   },

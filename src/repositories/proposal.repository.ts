@@ -1,10 +1,10 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type { ProposalQueryInput } from "@/validations/proposal";
 
 // Accepts either the global `prisma` singleton or a transaction client, so
 // creation can run standalone or as part of a larger atomic transaction.
-type Db = typeof prisma | Prisma.TransactionClient;
+type Db = typeof prisma | PrismaTransactionClient;
 
 export const proposalRepository = {
   findById(id: string, workspaceId: string) {
@@ -12,11 +12,12 @@ export const proposalRepository = {
   },
 
   async findMany(workspaceId: string, query: ProposalQueryInput) {
-    const { page, limit, search, status, sortBy, sortOrder } = query;
+    const { page, limit, search, status, sortBy, sortOrder, archived } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.ProposalWhereInput = {
       workspaceId,
+      archived: archived ?? false,
       ...(status && { status }),
       ...(search && {
         OR: [
@@ -62,15 +63,12 @@ export const proposalRepository = {
     return result.count === 1;
   },
 
-  delete(id: string, workspaceId: string) {
-    return prisma.proposal.deleteMany({ where: { id, workspaceId } });
-  },
-
   /** SENT proposals with no movement since `cutoff` — feeds the on-demand stale-proposal follow-up automation. */
   findStaleSent(workspaceId: string, cutoff: Date) {
     return prisma.proposal.findMany({
       where: {
         workspaceId,
+        archived: false,
         status: "SENT",
         OR: [
           { statusUpdatedAt: { lt: cutoff } },

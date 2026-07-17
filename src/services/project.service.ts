@@ -1,4 +1,6 @@
+import { prisma } from "@/lib/prisma"
 import { projectRepository } from "@/repositories/project.repository"
+import { clientRepository } from "@/repositories/client.repository"
 import { followUpRepository } from "@/repositories/followup.repository"
 import { taskRepository } from "@/repositories/task.repository"
 import { buildMeta } from "@/lib/pagination"
@@ -7,6 +9,7 @@ import { assertWorkspaceReferences } from "@/lib/tenantGuard"
 import { automationService } from "@/services/automation.service"
 import { taskService } from "@/services/task.service"
 import { financialDocumentService } from "@/modules/financial/financial.module"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { CreateProjectInput, UpdateProjectInput, ProjectQueryInput, ProjectPhase } from "@/validations/project"
 import type { AutomationKey } from "@prisma/client"
 
@@ -122,20 +125,40 @@ export const projectService = {
     }
   },
 
-  // RC-2.3 — a project with linked FinancialDocuments can never be hard
-  // deleted: Mongo has no FK to cascade or block on, so a plain deleteMany
-  // here would silently orphan every financial record's projectId (still
-  // correct in aggregates, but unresolvable to a name in the UI —
-  // exactly the gap the RC-1 audit flagged). There is no "archive" state
-  // for Project to fall back to instead; the caller must cancel/reassign
-  // the financial history first, or simply not delete a project with a
-  // real financial footprint.
-  async delete(id: string, workspaceId: string) {
+  // RC-2.3 — Categoria B soft-delete: a project with linked FinancialDocuments
+  // can never be archived (or deleted): Mongo has no FK to cascade or block
+  // on, so silently archiving here would leave every financial record's
+  // projectId pointing at a hidden project — unresolvable to a name in the
+  // UI (exactly the gap the RC-1 audit flagged). The caller must
+  // cancel/reassign the financial history first, or simply not archive a
+  // project with a real financial footprint.
+  async delete(id: string, workspaceId: string, userId: string) {
     await this.getById(id, workspaceId)
-    if (await financialDocumentService.hasDocumentsForProject(id, workspaceId)) {
-      throw new AppError(ErrorCode.PROJECT_HAS_FINANCIAL_HISTORY)
-    }
-    await projectRepository.delete(id, workspaceId)
+    await entityLifecycleService.archive({
+      entity: "Project", id, workspaceId, userId,
+      delegate: prisma.project,
+      guard: async () => {
+        if (await financialDocumentService.hasDocumentsForProject(id, workspaceId)) {
+          throw new AppError(ErrorCode.PROJECT_HAS_FINANCIAL_HISTORY)
+        }
+      },
+    })
+  },
+
+  // ADR-020 — a Project always has a Client; restoring it while that Client
+  // is still archived would put it back on every list with no reachable
+  // parent (the client picker/detail page would 404 on it).
+  async restore(id: string, workspaceId: string, userId: string) {
+    const project = await this.getById(id, workspaceId)
+    await entityLifecycleService.restore({
+      entity: "Project", id, workspaceId, userId,
+      delegate: prisma.project,
+      integrityCheck: async () => {
+        const client = await clientRepository.findById(project.clientId, workspaceId)
+        if (client?.archived) throw new AppError(ErrorCode.PARENT_ARCHIVED)
+      },
+    })
+    return this.getById(id, workspaceId)
   },
 
   async phaseStats(workspaceId: string) {

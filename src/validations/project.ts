@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const projectTypeSchema = z.enum([
   "RESIDENTIAL",
@@ -60,6 +61,7 @@ export const projectQuerySchema = z.object({
   clientId:  z.string().optional(),
   sortBy:    z.enum(["name", "createdAt", "updatedAt", "status", "estimatedEndDate"]).optional().default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+  archived:  booleanQueryParam.optional(),
 })
 
 export type ProjectType        = z.infer<typeof projectTypeSchema>

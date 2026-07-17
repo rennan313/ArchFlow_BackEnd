@@ -122,7 +122,7 @@ export const legacyMigrationService = {
       { sectionKey: "closing",                title: legacy.finalConsiderations?.title ?? "Considerações Finais", content: legacy.finalConsiderations?.content ?? "" },
     ].filter((f) => f.content.trim().length > 0) // skip fields the legacy proposal never populated
 
-    const { data: catalog } = await proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 50, isArchived: false })
+    const { data: catalog } = await proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 50, archived: false })
     const sectionByKey = new Map(catalog.map((s) => [s.key, s]))
 
     try {

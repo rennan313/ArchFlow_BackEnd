@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const createProposalSectionSchema = z.object({
   key:         z.string().min(2).max(60).regex(/^[a-z0-9-]+$/, "key must be kebab-case"),
@@ -7,15 +8,15 @@ export const createProposalSectionSchema = z.object({
   order:       z.coerce.number().int().min(0).optional().default(0),
 })
 
-export const updateProposalSectionSchema = createProposalSectionSchema.partial().extend({
-  isArchived: z.boolean().optional(),
-})
+// archived/archivedAt/archivedBy are never editable through the generic
+// update endpoint (ADR-020) — only through the dedicated archive/restore actions.
+export const updateProposalSectionSchema = createProposalSectionSchema.partial()
 
 export const proposalSectionQuerySchema = z.object({
-  page:       z.coerce.number().int().min(1).optional().default(1),
-  limit:      z.coerce.number().int().min(1).max(100).optional().default(50),
-  search:     z.string().optional(),
-  isArchived: z.coerce.boolean().optional(),
+  page:     z.coerce.number().int().min(1).optional().default(1),
+  limit:    z.coerce.number().int().min(1).max(100).optional().default(50),
+  search:   z.string().optional(),
+  archived: booleanQueryParam.optional(),
 })
 
 export type CreateProposalSectionInput = z.infer<typeof createProposalSectionSchema>

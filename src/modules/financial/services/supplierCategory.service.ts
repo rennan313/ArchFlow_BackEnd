@@ -1,5 +1,7 @@
+import { prisma } from "@/lib/prisma"
 import { supplierCategoryRepository } from "@/repositories/supplierCategory.repository"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { CreateSupplierCategoryInput, UpdateSupplierCategoryInput, SupplierCategoryQueryInput } from "@/validations/supplierCategory"
 
 export const supplierCategoryService = {
@@ -36,8 +38,19 @@ export const supplierCategoryService = {
   // of the Financial domain (see FinancialDocument.isCancelled comment).
   // Archiving is safe even while suppliers still reference this category:
   // the picker for new suppliers just stops offering it going forward.
-  async archive(id: string, workspaceId: string) {
+  async archive(id: string, workspaceId: string, userId: string) {
     await this.getById(id, workspaceId)
-    await supplierCategoryRepository.update(id, workspaceId, { isArchived: true })
+    await entityLifecycleService.archive({
+      entity: "SupplierCategory", id, workspaceId, userId,
+      delegate: prisma.supplierCategory,
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "SupplierCategory", id, workspaceId, userId,
+      delegate: prisma.supplierCategory,
+    })
+    return this.getById(id, workspaceId)
   },
 }

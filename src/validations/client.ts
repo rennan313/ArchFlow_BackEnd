@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const clientStatusSchema = z.enum(["LEAD", "NEGOTIATION", "ACTIVE", "INACTIVE"])
 export const meetingStatusSchema = z.enum(["NOT_SCHEDULED", "SCHEDULED", "COMPLETED"])
@@ -30,6 +31,7 @@ export const clientQuerySchema = z.object({
   state:     z.string().length(2).optional(),
   sortBy:    z.enum(["name", "createdAt", "updatedAt", "status"]).optional().default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+  archived:  booleanQueryParam.optional(),
 })
 
 export type ClientStatus      = z.infer<typeof clientStatusSchema>

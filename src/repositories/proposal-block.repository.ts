@@ -10,7 +10,7 @@ export const proposalBlockRepository = {
   },
 
   async findMany(workspaceId: string, query: ProposalBlockQueryInput) {
-    const { search, sectionKey, isArchived, isFavorite } = query
+    const { search, sectionKey, archived, isFavorite } = query
 
     const sharedFilter: Prisma.ProposalBlockWhereInput = {
       ...(sectionKey && { sectionKey }),
@@ -23,11 +23,11 @@ export const proposalBlockRepository = {
     // same section, both are valid picker options.
     const [own, defaults] = await Promise.all([
       prisma.proposalBlock.findMany({
-        where: { workspaceId, isArchived: isArchived ?? false, ...sharedFilter },
+        where: { workspaceId, archived: archived ?? false, ...sharedFilter },
         orderBy: { createdAt: "desc" },
       }),
       prisma.proposalBlock.findMany({
-        where: { workspaceId: null, isArchived: false, sharedInWorkspace: true, ...sharedFilter },
+        where: { workspaceId: null, archived: false, sharedInWorkspace: true, ...sharedFilter },
         orderBy: { createdAt: "desc" },
       }),
     ])

@@ -1,6 +1,8 @@
+import { prisma } from "@/lib/prisma"
 import { proposalTemplateRepository } from "@/repositories/proposal-template.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type {
   CreateProposalTemplateInput,
   UpdateProposalTemplateInput,
@@ -30,9 +32,23 @@ export const proposalTemplateService = {
     return proposalTemplateRepository.findById(id, workspaceId)
   },
 
-  async delete(id: string, workspaceId: string) {
+  // ADR-020 — Entity Lifecycle. Delegates to entityLifecycleService instead
+  // of hand-rolling the archive flip, so this participates in the same
+  // archivedBy/auditLog guarantees as every other archivable entity.
+  async delete(id: string, workspaceId: string, userId: string) {
     const existing = await this.getById(id, workspaceId)
     if (existing.workspaceId !== workspaceId) throw new AppError(ErrorCode.PROPOSAL_TEMPLATE_NOT_FOUND)
-    await proposalTemplateRepository.delete(id, workspaceId)
+    await entityLifecycleService.archive({
+      entity: "ProposalTemplate", id, workspaceId, userId,
+      delegate: prisma.proposalTemplate,
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "ProposalTemplate", id, workspaceId, userId,
+      delegate: prisma.proposalTemplate,
+    })
+    return this.getById(id, workspaceId)
   },
 }

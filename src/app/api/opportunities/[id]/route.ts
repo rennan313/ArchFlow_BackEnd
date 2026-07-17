@@ -24,10 +24,10 @@ export const PUT = requireWorkspacePermission("update:opportunities")(async (req
   } catch (error) { return handleServiceError(error) }
 })
 
-export const DELETE = requireWorkspacePermission("delete:opportunities")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
+export const DELETE = requireWorkspacePermission("delete:opportunities")(async (_req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
-    await opportunityService.delete(id, workspaceId)
+    await opportunityService.delete(id, workspaceId, user.sub)
     return noContent()
   } catch (error) { return handleServiceError(error) }
 })

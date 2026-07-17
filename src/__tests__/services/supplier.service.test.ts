@@ -3,12 +3,14 @@ import { ErrorCode } from "@/lib/errors"
 
 vi.mock("@/repositories/supplier.repository")
 vi.mock("@/lib/tenantGuard")
+vi.mock("@/services/entityLifecycle.service")
 
 import { supplierService } from "@/modules/financial/services/supplier.service"
 import { supplierRepository } from "@/repositories/supplier.repository"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 
-const mockSupplier = { id: "sup-1", workspaceId: "ws-1", name: "Marcenaria Ipê", categoryId: "cat-1", isActive: true }
+const mockSupplier = { id: "sup-1", workspaceId: "ws-1", name: "Marcenaria Ipê", categoryId: "cat-1", archived: false }
 
 describe("supplierService", () => {
   beforeEach(() => {
@@ -47,11 +49,13 @@ describe("supplierService", () => {
     expect(assertWorkspaceReferences).not.toHaveBeenCalled()
   })
 
-  it("deactivate is a soft update (isActive: false), never a physical delete", async () => {
+  it("delete is a soft archive (ADR-020), never a physical delete", async () => {
     vi.mocked(supplierRepository.findById).mockResolvedValue(mockSupplier as never)
 
-    await supplierService.deactivate("sup-1", "ws-1")
+    await supplierService.delete("sup-1", "ws-1", "user-1")
 
-    expect(supplierRepository.update).toHaveBeenCalledWith("sup-1", "ws-1", { isActive: false })
+    expect(entityLifecycleService.archive).toHaveBeenCalledWith(
+      expect.objectContaining({ entity: "Supplier", id: "sup-1", workspaceId: "ws-1", userId: "user-1" }),
+    )
   })
 })

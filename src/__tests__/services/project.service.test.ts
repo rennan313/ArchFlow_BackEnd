@@ -9,6 +9,7 @@ vi.mock("@/repositories/proposal.repository")
 vi.mock("@/repositories/opportunity.repository")
 vi.mock("@/services/automation.service")
 vi.mock("@/services/task.service")
+vi.mock("@/services/entityLifecycle.service")
 vi.mock("@/lib/pagination")
 vi.mock("@/modules/financial/financial.module", () => ({
   financialDocumentService: { hasDocumentsForProject: vi.fn(), hasDocumentsForClient: vi.fn() },
@@ -21,6 +22,7 @@ import { taskRepository } from "@/repositories/task.repository"
 import { clientRepository } from "@/repositories/client.repository"
 import { automationService } from "@/services/automation.service"
 import { taskService } from "@/services/task.service"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import { buildMeta } from "@/lib/pagination"
 import { financialDocumentService } from "@/modules/financial/financial.module"
 import { ErrorCode } from "@/lib/errors"
@@ -76,21 +78,27 @@ describe("projectService.delete", () => {
   it("blocks deletion (PROJECT_HAS_FINANCIAL_HISTORY) when a FinancialDocument references this project", async () => {
     vi.mocked(projectRepository.findById).mockResolvedValue(mockProject as never)
     vi.mocked(financialDocumentService.hasDocumentsForProject).mockResolvedValue(true)
+    vi.mocked(entityLifecycleService.archive).mockImplementation(async (opts) => {
+      if (opts.guard) await opts.guard()
+    })
 
     await expect(
-      projectService.delete("proj-1", "workspace-1"),
+      projectService.delete("proj-1", "workspace-1", "user-1"),
     ).rejects.toMatchObject({ code: ErrorCode.PROJECT_HAS_FINANCIAL_HISTORY })
-    expect(projectRepository.delete).not.toHaveBeenCalled()
   })
 
-  it("allows deletion when no FinancialDocument references this project", async () => {
+  it("allows archiving when no FinancialDocument references this project", async () => {
     vi.mocked(projectRepository.findById).mockResolvedValue(mockProject as never)
     vi.mocked(financialDocumentService.hasDocumentsForProject).mockResolvedValue(false)
-    vi.mocked(projectRepository.delete).mockResolvedValue({ count: 1 } as never)
+    vi.mocked(entityLifecycleService.archive).mockImplementation(async (opts) => {
+      if (opts.guard) await opts.guard()
+    })
 
-    await projectService.delete("proj-1", "workspace-1")
+    await projectService.delete("proj-1", "workspace-1", "user-1")
 
-    expect(projectRepository.delete).toHaveBeenCalledWith("proj-1", "workspace-1")
+    expect(entityLifecycleService.archive).toHaveBeenCalledWith(
+      expect.objectContaining({ entity: "Project", id: "proj-1", workspaceId: "workspace-1", userId: "user-1" }),
+    )
   })
 })
 

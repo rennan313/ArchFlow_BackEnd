@@ -13,7 +13,7 @@ export const proposalTemplateRepository = {
   },
 
   async findMany(workspaceId: string, query: ProposalTemplateQueryInput) {
-    const { search, isArchived } = query
+    const { search, archived } = query
 
     const searchFilter: Prisma.ProposalTemplateWhereInput = search
       ? { name: { contains: search, mode: "insensitive" } }
@@ -21,11 +21,11 @@ export const proposalTemplateRepository = {
 
     const [own, defaults] = await Promise.all([
       prisma.proposalTemplate.findMany({
-        where: { workspaceId, isArchived: isArchived ?? false, ...searchFilter },
+        where: { workspaceId, archived: archived ?? false, ...searchFilter },
         orderBy: { createdAt: "desc" },
       }),
       prisma.proposalTemplate.findMany({
-        where: { workspaceId: null, isArchived: false, ...searchFilter },
+        where: { workspaceId: null, archived: false, ...searchFilter },
         orderBy: { createdAt: "desc" },
       }),
     ])

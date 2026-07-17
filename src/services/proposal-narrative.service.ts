@@ -1,6 +1,8 @@
+import { prisma } from "@/lib/prisma"
 import { proposalNarrativeRepository } from "@/repositories/proposal-narrative.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type {
   CreateProposalNarrativeInput,
   UpdateProposalNarrativeInput,
@@ -30,9 +32,20 @@ export const proposalNarrativeService = {
     return proposalNarrativeRepository.findById(id, workspaceId)
   },
 
-  async delete(id: string, workspaceId: string) {
+  async delete(id: string, workspaceId: string, userId: string) {
     const existing = await this.getById(id, workspaceId)
     if (existing.workspaceId !== workspaceId) throw new AppError(ErrorCode.PROPOSAL_NARRATIVE_NOT_FOUND)
-    await proposalNarrativeRepository.delete(id, workspaceId)
+    await entityLifecycleService.archive({
+      entity: "ProposalNarrative", id, workspaceId, userId,
+      delegate: prisma.proposalNarrative,
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "ProposalNarrative", id, workspaceId, userId,
+      delegate: prisma.proposalNarrative,
+    })
+    return this.getById(id, workspaceId)
   },
 }

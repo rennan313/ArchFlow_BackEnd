@@ -24,10 +24,10 @@ export const PUT = requireWorkspacePermission("update:proposal-blocks")(async (r
   } catch (error) { return handleServiceError(error) }
 })
 
-export const DELETE = requireWorkspacePermission("delete:proposal-blocks")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
+export const DELETE = requireWorkspacePermission("delete:proposal-blocks")(async (_req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
-    await proposalBlockService.delete(id, workspaceId)
+    await proposalBlockService.delete(id, workspaceId, user.sub)
     return noContent()
   } catch (error) { return handleServiceError(error) }
 })

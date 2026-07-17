@@ -22,6 +22,7 @@ Este documento é um log de Architecture Decision Records (ADR). Cada decisão n
 | [009](#adr-009--dashboard-consome-agregações-nunca-contém-regra-de-negócio) | Dashboard consome agregações, nunca contém regra de negócio | Congelado |
 | [010](#adr-010--logging-estruturado-com-correlationid-e-event) | Logging estruturado com correlationId e event | Congelado |
 | [011](#adr-011--desnormalização-é-decidida-por-medição-não-por-intuição) | Desnormalização é decidida por medição, não por intuição | Congelado |
+| [019](#adr-019--financial-document-ownership-lock-de-origem-genérico) | Financial Document Ownership — lock de origem genérico | ACCEPTED (princípio arquitetural congelado) |
 
 ---
 
@@ -232,6 +233,187 @@ Nenhum log inclui segredos, tokens, ou números de conta — apenas IDs internos
 **Justificativa**: as duas únicas condições que tornam uma denormalização segura sem mecanismo de sincronização adicional: (1) o campo de origem é imutável após a criação do documento pai, e (2) o documento que carrega a cópia nunca é editado depois de escrito (append-only). `FinancialDocument.direction`/`.projectId` são ambos imutáveis por regra de validação (`updateFinancialDocumentSchema` não os aceita); `Payment` é append-only por design (ADR-008). Sem as duas condições simultaneamente, denormalizar introduziria risco de divergência silenciosa — e nesse caso a resposta correta é um rollup mantido ativamente (ver `PERFORMANCE_GUIDE.md`), não uma cópia estática.
 
 **Impacto futuro**: nenhum campo é denormalizado em qualquer módulo futuro sem antes (1) medir o custo real da alternativa sem denormalização contra dados em volume realista, e (2) confirmar as duas condições de segurança acima. `PERFORMANCE_GUIDE.md` formaliza esse processo como checklist obrigatório.
+
+---
+
+## ADR-019 — Financial Document Ownership: lock de origem genérico
+
+**Status**: `ACCEPTED` — ratificada em 2026-07-16 após Domain Review, Architecture Review e Final Hardening. **Architecture Freeze**: SIM — princípio arquitetural congelado, não mais específico de Compras (ver "Princípio arquitetural" abaixo). **Breaking Change**: NÃO. **Supersedes**: Nenhuma. **Superseded By**: Nenhuma. **Review Required**: somente se o significado de domínio do Aggregate `FinancialDocument` mudar. Numeração global (ADR-012 a ADR-018 vivem em `CORE_ARCHITECTURE_DECISIONS.md` e `COMPRAS_ARCHITECTURE_DECISIONS.md` — ver `ARCHITECTURE_GOVERNANCE.md` §1, "numeração sequencial, independente do arquivo").
+
+**Princípio arquitetural que esta ADR estabelece** (aplicável a todo o ArchFlow, não só a Compras): *"Quando uma transição de estado de um Aggregate precisa respeitar um compromisso assumido por outro bounded context, essa condição é expressa como dado opaco gravado pelo contexto de origem no único momento em que ele possui acesso de escrita legítimo ao Aggregate — nunca como uma consulta em tempo real a esse contexto. O Aggregate permanece o único responsável por interpretar e impor essa condição sobre si mesmo."* Chamado, para referência futura, de **Princípio da Autoridade Persistida**.
+
+**Origem**: achado Crítico da Domain Review do módulo Compras (2026-07-16) — um `PurchaseOrder` aprovado pode ficar apontando para um `FinancialDocument` cancelado, sem detecção, porque nada impede o cancelamento direto do documento pela tela Financeiro.
+
+### Problema
+
+`financialDocumentService.cancel()` só bloqueia cancelamento quando `paymentCount > 0` (ADR-008/RC-3.1). Não existe nenhuma noção de "este documento representa um compromisso ainda ativo assumido por outra parte do sistema". Resultado: um `PurchaseOrder.status = "APPROVED"` (que, pela ADR-018 de Compras, significa "gerei um `FinancialDocument` real e correspondente") pode coexistir com `FinancialDocument.isCancelled = true` — o pedido afirma um compromisso que não existe mais, sem log, sem erro, sem forma de detectar exceto auditoria manual cruzando as duas coleções.
+
+### Contexto
+
+O problema nasceu de uma tensão entre duas regras corretas e já congeladas, não de um erro de implementação:
+
+1. **Financeiro nunca importa nada de nenhum módulo de produto** (`DOMAIN_GUIDE.md` §6) — Financeiro precisa continuar podendo ser a folha da árvore de dependências, sem saber que "Compras" existe como conceito.
+2. **`PurchaseOrder.status = APPROVED` é uma invariante forte**, não uma sugestão (ADR-018 de Compras) — uma vez aprovado, o pedido afirma categoricamente que um `FinancialDocument` vivo existe.
+
+O padrão de guard já usado no resto do app (`PROJECT_HAS_FINANCIAL_HISTORY`, RC-2.3/CORE-2) resolve a direção oposta: o módulo **upstream** (Projeto, Oportunidade) consulta Financeiro **antes de se autodestruir**. Aqui o problema é invertido — é o módulo **leaf** (Financeiro) que muda de estado, e é o módulo **upstream** (Compras) que fica inconsistente. O padrão existente não cobre essa direção, e replicá-lo ao contrário (Financeiro consulta Compras antes de cancelar) violaria a regra 1.
+
+### Ownership do Aggregate vs. Authority sobre transições de estado
+
+Esta ADR depende de uma distinção que precisa estar explícita, para não ser mal lida em cinco anos:
+
+- **Ownership do Aggregate** é estrutural e nunca muda: o módulo Financeiro é, e permanece, o único proprietário do Aggregate `FinancialDocument` — schema, persistência, e a responsabilidade de impor todos os seus próprios invariantes. Nenhum outro módulo lê, escreve, ou decide nada sobre `FinancialDocument` além do que o próprio Financeiro expõe como API pública. Isso não é alterado por esta ADR.
+- **Authority sobre uma transição específica** é condicional e pode ser delegada — não ao módulo de origem diretamente (Financeiro não "pergunta" a ninguém, ver §Decisão), mas a um **dado que o próprio Aggregate carrega sobre si mesmo** (`originLocked`), gravado pela origem no único momento em que ela tem acesso de escrita legítimo (a criação do documento). A partir daí, é o próprio `FinancialDocument` — e só ele — quem consulta esse dado e recusa a transição. A origem nunca é consultada em tempo de cancelamento; ela já disse o que precisava dizer, uma vez, no momento da criação.
+
+Formulação de referência para qualquer texto futuro sobre este tema: *"O módulo Financeiro permanece proprietário do Aggregate `FinancialDocument`. Determinadas transições podem exigir autorização do contexto de origem, expressa através de metadados persistidos no próprio Aggregate no momento da criação — nunca através de uma consulta em tempo real a outro módulo."* Evitar formulações como "Financeiro é dono do ciclo de vida" isoladamente, sem a segunda frase — sozinha, ela não distingue posse de autoridade sobre uma transição, e é exatamente essa distinção que sustenta toda a decisão.
+
+### Alternativas consideradas
+
+- **Financeiro importa/consulta Compras antes de cancelar** — resolveria o problema diretamente, mas viola a regra congelada de dependência unidirecional; descartada por restrição explícita, não por preferência.
+- **Coleção neutra de "referências ativas"** (`document_references`, escrita por qualquer módulo, lida por Financeiro antes de cancelar) — mantém a direção de dependência correta (Financeiro só lê uma coleção genérica, não importa nenhum módulo específico), mas introduz uma peça de infraestrutura nova inteira — mais uma coleção, mais um índice, mais uma camada de leitura — para resolver algo que um campo no próprio agregado já resolve. Mesmo raciocínio que descartou lock distribuído na ADR-004: não reaproveitar uma peça de infraestrutura maior quando o documento já dá o que precisamos.
+- **Reconciliação assíncrona** (um job/relatório que compara periodicamente `PurchaseOrder.status = APPROVED` contra `FinancialDocument.isCancelled`) — detecta o problema depois, não o previne; não fecha a invariante em tempo real, só produz um relatório de auditoria a posteriori. Pode coexistir com a solução escolhida como camada extra de observabilidade, mas sozinha não resolve a garantia de domínio.
+- **Fundir `FinancialDocument` num aggregate maior com sub-documentos de compromissos externos** — já avaliada e descartada por RC-3.9/ADR-004 como reescrita grande demais para o problema que motiva; mesma decisão se aplica aqui, não reabrir.
+- **Campo genérico de origem no próprio `FinancialDocument`, interpretado somente por Financeiro** — a escolhida. Detalhada abaixo.
+
+### Decisão
+
+`FinancialDocument` ganha três campos próprios, opcionais, aditivos:
+
+```
+originType   String?   // ex.: "PurchaseOrder" — string livre, não enum fechado
+originId     String?   @db.ObjectId   // id do agregado de origem, opaco para Financeiro
+originLocked Boolean   @default(false)
+```
+
+**A regra central**: Financeiro nunca resolve `originId` contra nenhuma coleção, nunca importa nada para interpretar `originType`, e nunca chama nenhum outro módulo. Ele só lê o `Boolean` que já é seu. Quem escreve esses campos é o módulo de origem, no momento em que **já tem acesso de escrita** ao `FinancialDocument` — porque é ele quem está criando o documento, pela mesma via de composição transacional que Compras já usa hoje (ADR-017 de Compras, o parâmetro `db` opcional de `createWithInstallments`). Não é Financeiro perguntando a Compras "posso cancelar?" — é Compras, no ato de criar o documento, deixando escrito nele mesmo "este documento nasceu comprometido".
+
+**O que `originLocked` significa — e o que não significa.** `originLocked = true` **não** significa "documento imutável". Significa, precisa e apenas: *"o Aggregate exige autorização do contexto de origem antes de permitir a transição `isCancelled: false → true`."* Nenhuma outra transição é afetada — `description`, `notes`, `categoryId`, `costCenterId` continuam editáveis via `update()` exatamente como hoje, independentemente do valor de `originLocked` (o problema original era especificamente sobre cancelamento, e a solução é escopada exatamente a esse mesmo tamanho, não mais). Um documento travado não é um documento congelado; é um documento com uma transição condicionada.
+
+`originType` é `String?` livre, não um enum Prisma fechado — um enum obrigaria alterar o schema de Financeiro toda vez que um módulo novo (Contratos, Portal, Integrações, IA) precisasse gerar documentos, o que é exatamente o tipo de acoplamento que a regra de dependência unidirecional existe para evitar. Não existe motivo técnico real para um enum aqui: o campo nunca é usado em nenhuma cláusula `where` de lógica de negócio (só `originLocked` é), então não há ganho de correção/performance em fechá-lo — só custo de acoplamento. `String` livre é, portanto, parte deliberada da estratégia de evolução da plataforma para este campo especificamente: o vocabulário de "quem pode ser origem de um `FinancialDocument`" nunca precisa estar completo no momento em que Financeiro é escrito. O campo é usado só para exibição/auditoria (rastreabilidade humana: "por que este documento está travado, e por quem"), nunca por lógica de negócio — a única coisa que decide comportamento é `originLocked`.
+
+`cancelIfNoPayments` (ou equivalente) ganha uma segunda precondição, do mesmo jeito que já tem a checagem de pagamentos: se `originLocked = true`, recusa com uma mensagem genérica e sem menção a nenhum módulo específico ("este documento está vinculado a um compromisso externo ativo; libere o vínculo primeiro") — Financeiro não sabe, nem precisa saber, que esse vínculo é um `PurchaseOrder`. A checagem, a recusa, e a mensagem são código do próprio Financeiro, executado inteiramente dentro do próprio Aggregate — nunca uma chamada de saída.
+
+**Justificativa**: isto não é uma solução nova inventada para este problema — é a mesma primitiva que Financeiro já usa para `projectId`/`supplierId`/`clientId`/`costCenterId` desde a Release 1.0: um escalar opaco, referenciando outro bounded context, sem `@relation` obrigatória, sem import, interpretado como dado passivo. A única diferença é que aqui um dos campos (`originLocked`) **também** influencia uma decisão de Financeiro — mas essa decisão usa exclusivamente um dado que já é seu, gravado por quem tinha autoridade para gravá-lo no momento da criação. Nenhuma nova direção de dependência é criada.
+
+### Regras do domínio
+
+- **Ownership**: o módulo Financeiro é o único proprietário do Aggregate `FinancialDocument`, em todo momento, sem exceção — isso não muda com esta ADR, e nenhuma regra abaixo altera esse fato. O que esta ADR introduz é autoridade condicional sobre uma transição específica, nunca posse compartilhada do Aggregate.
+- **Authority sobre o cancelamento**: pertence, por padrão, ao próprio Financeiro (mesma regra de hoje: qualquer usuário com `delete:financial-documents`, bloqueado se houver pagamento). Quando `originLocked = true`, essa autoridade fica condicionada a uma autorização prévia do contexto de origem — expressa unicamente pelo valor do campo, nunca por uma consulta em tempo real.
+- **Documento criado manualmente** (tela Financeiro, fluxo já existente) → `originType: null`, `originLocked: false` → nenhuma condição adicional, comportamento idêntico ao atual, zero mudança percebida.
+- **Documento criado por outro domínio** (Compras hoje; Contratos/Portal/Integrações/IA amanhã) → a origem decide, no momento da criação, o valor de `originLocked` — não há default automático "sempre travado": um documento gerado automaticamente mas que não representa um compromisso rígido (ex.: uma sugestão que o usuário ainda pode livremente descartar, ou um documento histórico importado) pode nascer com `originLocked: false`, mesmo tendo `originType` preenchido para fins de rastreabilidade.
+- **Quem pode cancelar**: qualquer usuário com `delete:financial-documents`, sujeito às regras já existentes (bloqueado se houver pagamento) **e**, quando `originLocked = true`, bloqueado até a condição abaixo ser satisfeita.
+- **Quem pode satisfazer essa condição (liberar a autorização)**: só o módulo de origem, escrevendo `originLocked: false` pela mesma via de escrita que já usa para compor com Financeiro — nunca uma ação unilateral de Financeiro, e nunca uma consulta de Financeiro a esse módulo.
+- **Override manual**: reservado a `OWNER` (não `ADMIN`, não `delete:financial-documents` sozinho) — uma escotilha de emergência deliberadamente rara, com evento de auditoria que marca explicitamente que foi override manual, não liberação da origem, para nunca confundir os dois na trilha de auditoria.
+- **Quando a autorização do contexto de origem deixa de ser exigida**: quando `originLocked` volta a `false` — seja porque a origem liberou deliberadamente, seja por override de `OWNER`. Financeiro nunca deixou de ser o dono do documento neste intervalo; apenas uma de suas transições esteve condicionada.
+
+### Tabela de comportamento (oficial — elimina interpretação subjetiva)
+
+| Origem | `originLocked` | Financeiro pode cancelar diretamente? | Quem autoriza a liberação? |
+|---|---|---|---|
+| Manual (tela Financeiro) | `false` | Sim, sem condição adicional | Financeiro (regra já existente: bloqueado só se houver pagamento) |
+| `PurchaseOrder` (Compras) | `true` | Não | Compras, ao liberar o vínculo (ex.: fluxo futuro de cancelamento de pedido aprovado) |
+| Contrato | `true` | Não | Módulo de Contratos, ao encerrar/liberar o contrato |
+| API Externa / Integração | `true` | Não | O sistema de integração, ao desfazer a operação de origem |
+| Importação histórica (ex.: conciliação bancária) | `false` | Sim, sem condição adicional | Financeiro — origem preenchida só para rastreabilidade, sem exigir proteção |
+| Sugestão de IA (não confirmada por humano) | `false` | Sim, sem condição adicional | Financeiro, até confirmação humana promover o documento a `true` |
+| Qualquer origem, após override | `false` (após override) | Sim | `OWNER` já exerceu o override; evento de auditoria registra que não foi a origem quem liberou |
+
+Duas linhas com `originLocked: false` mas `originType` preenchido (Importação, IA não confirmada) existem deliberadamente na tabela: demonstram que "ter origem" e "exigir autorização para cancelar" são independentes — o campo de rastreabilidade nunca implica proteção automática.
+
+### Aggregate
+
+`FinancialDocument` continua sendo o único Aggregate responsável por todos os seus próprios invariantes — isto não muda com `originLocked`. A checagem do novo campo acontece dentro do mesmo método que já checa `paymentCount > 0` (`cancelIfNoPayments`), com a mesma forma: uma condição a mais no mesmo guard, avaliada com dados que já pertencem ao próprio documento. Nenhum código externo ao Financeiro decide, impõe, ou verifica essa regra — `originLocked` é um dado de entrada para o Aggregate, no mesmo sentido em que `isCancelled` ou a lista de `installments` já são. A responsabilidade não é redistribuída; a superfície de dados que o Aggregate já usa para se autogovernar apenas cresce em um campo.
+
+### Dependências (revalidação explícita)
+
+Nenhuma dependência implícita ou acoplamento indireto encontrado:
+
+- **Financeiro não depende de Compras**: confirmado — `originType`/`originId`/`originLocked` são escritos pela origem através da API pública já existente de Financeiro (mesma via que já escreve `supplierId`/`categoryId`), nunca lidos por Financeiro através de um import ou chamada a Compras.
+- **Compras não depende de nada novo em Financeiro**: a única mudança do lado de Compras é passar três campos a mais numa chamada que já faz hoje (`createWithInstallments`) — não é uma dependência nova, é uso mais completo de uma dependência que já existe e já é sancionada (ADR-017).
+- **Nenhum ciclo**: o fluxo de dados é estritamente Compras → Financeiro na escrita (criação e liberação do lock) e Financeiro → ninguém na leitura/decisão (o cancelamento é decidido inteiramente dentro de Financeiro). Não existe nenhum caminho em que Financeiro chama Compras, direta ou indiretamente.
+- **RBAC do override (`OWNER`)** não introduz acoplamento — `OWNER` é um papel de workspace já global, ortogonal a qualquer módulo específico.
+
+### Estados
+
+Nenhum estado novo é introduzido em nenhuma máquina de estados. `FinancialDocument.isCancelled` continua sendo o único booleano de estado relevante; `originLocked` é uma **precondição de transição**, não um estado — mesmo espírito do guard condicional já usado no `where`-clause da ADR-004, não uma expansão da máquina de estados. `PurchaseOrder` não precisa de nenhuma mudança — ele continua com seus três estados (`DRAFT`/`APPROVED`/`CANCELLED`, ADR-018), sem ficar sabendo que essa proteção existe do outro lado.
+
+### Impacto
+
+- **Financeiro**: três campos opcionais aditivos (nenhum documento existente é afetado — todos nascem com `originType: null`/`originLocked: false` por default, preservando 100% do comportamento atual); uma precondição nova em `cancelIfNoPayments`; uma regra de RBAC nova (override restrito a `OWNER`).
+- **Compras**: ganha a opção (não obrigação retroativa — Fase 1 já implementada continua válida sem alteração até que isto seja de fato implementado) de setar `originLocked: true` em `approve()`; quando "cancelar `PurchaseOrder` aprovado" for desenhado no futuro (explicitamente fora de escopo da Fase 1, ADR-018), esse fluxo passa a incluir liberar o lock antes de chamar o cancelamento do documento.
+- **Analytics/Dashboard**: nenhum impacto de comportamento — os campos são passivos para leitura agregada; podem virar dimensão de relatório futuro ("documentos por origem") como oportunidade, não obrigação.
+- **Portal do Cliente**: nenhum impacto — dimensão ortogonal. Portal lida com escopo de visibilidade (`clientId`, ADR de segunda dimensão de escopo já prevista no roadmap); lock de cancelamento é sobre autoridade de escrita, não sobre quem pode ver.
+- **Integrações/IA**: mesma via genérica de qualquer origem futura — nenhum trabalho extra de modelagem quando chegarem. Para IA especificamente, a convenção recomendada (não uma regra imposta pelo schema) é nascer com `originLocked: false` até confirmação humana, e só então transicionar para `true` — mesma primitiva, uso mais cauteloso.
+
+### Generalização
+
+A pergunta relevante para qualquer módulo futuro nunca é "esta ADR precisa mudar para me acomodar" — é só "meu documento representa um compromisso que Financeiro não deveria poder desfazer sozinho?". Testado explicitamente contra todo o conjunto pedido, sem nenhuma alteração ao modelo:
+
+- **Compras**: `originType: "PurchaseOrder"`, `originLocked: true` (já coberto acima e na tabela).
+- **Contratos**: `originType: "Contract"`, `originLocked: true` enquanto o contrato estiver ativo.
+- **Portal do Cliente**: ortogonal — Portal resolve *quem pode ver* (dimensão de escopo por `clientId`, já prevista no roadmap), não *quem pode cancelar*. Se o Portal um dia permitir ao cliente confirmar algo que gera um `FinancialDocument`, a mesma primitiva se aplica sem fricção.
+- **Marketplace**: `originType: "Marketplace"`, mesmo padrão de uma compra confirmada por um fornecedor externo.
+- **Integrações / API externa**: `originType: "<nome da integração>"` — a integração decide o lock no momento em que grava o documento pela mesma via de escrita.
+- **Importação histórica** (ex.: conciliação bancária, OFX): caso interessante porque demonstra a flexibilidade do modelo — `originType` preenchido para rastreabilidade, mas `originLocked: false`, porque um documento importado não representa um compromisso *ativo* de nenhum sistema vivo; é só dado histórico com proveniência registrada.
+- **IA**: `originType: "AI"`, `originLocked: false` até confirmação humana — o mesmo campo booleano serve tanto para "proteger imediatamente" quanto para "proteger só depois de um gate humano", sem precisar de um terceiro estado.
+
+Nenhum desses casos exige um campo novo, um enum novo, ou uma regra nova em Financeiro — todos se encaixam nos três campos já definidos. A única limitação real é a já documentada em Compatibilidade (uma origem por documento), e ela se aplica igualmente a todos, não é específica de nenhum.
+
+### Compatibilidade
+
+Totalmente aditiva e retrocompatível. Nenhum dado existente, contrato de API, ou comportamento muda para qualquer documento sem origem — que é o caso universal hoje (Compras Fase 1 nunca setou esses campos, porque eles ainda não existem). Não contradiz nem reabre nenhuma ADR anterior (001–018); não move nem inverte nenhuma dependência.
+
+**Limite conhecido, aceito deliberadamente**: o modelo suporta uma única origem por documento (campos escalares, não uma lista). Se um cenário futuro genuíno exigir múltiplas origens simultâneas reivindicando o mesmo documento, isso muda o significado do próprio agregado `FinancialDocument` — não é uma lacuna desta ADR, é uma decisão de domínio maior, fora de escopo aqui.
+
+### Limites — o que esta ADR explicitamente não resolve
+
+- **Múltiplas origens simultâneas por documento** — um `FinancialDocument` só pode ter uma origem registrada por vez (campos escalares). Se dois compromissos diferentes precisarem reivindicar o mesmo documento, isso é uma mudança de significado do Aggregate, não uma extensão desta ADR.
+- **Ownership compartilhado** — não é resolvido porque não é o problema: esta ADR existe precisamente para que ownership *nunca* seja compartilhado, mesmo quando autoridade sobre uma transição é condicionada.
+- **Composição de documentos** — um `FinancialDocument` montado a partir de múltiplos compromissos de origens diferentes (ex.: um documento único cobrindo parte de um `PurchaseOrder` e parte de um Contrato) está fora de escopo — o modelo assume um documento, uma origem.
+- **Reversão/estorno** — um documento cancelado (com ou sem lock) continua sem caminho de estorno; essa limitação já existia (`FINANCIAL_DOCUMENT_HAS_PAYMENTS`) e não é alterada aqui.
+- **Bloqueio de outras transições além do cancelamento** — `originLocked` nunca se estende a edição de campos mutáveis; um framework genérico de "permissões condicionais por campo" está fora de escopo.
+- **Detecção proativa de locks esquecidos** — um lock que nunca é liberado (origem nunca chama release, override nunca é usado) não gera alerta automático; isso seria um relatório operacional futuro, não uma garantia de domínio desta ADR.
+
+### Invariantes garantidas
+
+1. `FinancialDocument` é sempre o único responsável por decidir se uma transição sua pode ocorrer — nenhuma decisão de cancelamento depende de código fora do próprio Aggregate.
+2. Ownership do Aggregate `FinancialDocument` nunca muda, independentemente de origem, tipo de origem, ou valor de `originLocked`.
+3. Um documento com `originLocked = true` só pode ser cancelado por exatamente dois caminhos: a origem liberando o lock, ou override explícito de `OWNER` — nunca por um terceiro caminho.
+4. Financeiro nunca importa, nunca chama, e nunca consulta em tempo real nenhum outro bounded context para decidir uma transição própria.
+5. `originLocked` afeta exclusivamente a transição de cancelamento — nenhuma outra transição do documento é condicionada por ele.
+6. Todo documento sem origem registrada (`originType: null`) se comporta exatamente como antes desta ADR existir, sem exceção.
+7. Ausência de lock é sempre seguro por padrão (`originLocked: false`) — nenhuma origem trava um documento sem decidir isso explicitamente no momento da criação.
+
+### Anti-patterns — nunca implementar
+
+- **Financeiro importar qualquer módulo de produto para resolver `originId` ou checar estado de origem.** Viola `DOMAIN_GUIDE.md` §6 diretamente — é exatamente o problema que esta ADR existe para fechar sem cometer.
+- **Resolver `originId` consultando outro módulo, mesmo só leitura.** Mesmo uma consulta "inofensiva" (ex.: buscar o nome do pedido para exibir) reintroduz a dependência de import na direção proibida. Resolução de exibição é responsabilidade do frontend, que já tem acesso a ambos os módulos — nunca do backend de Financeiro.
+- **Criar um enum fechado para `originType`.** Obrigaria alterar o schema de Financeiro a cada módulo novo — o oposto do que a decisão existe para permitir.
+- **Ramificar lógica de negócio por valor de `originType` dentro de Financeiro** (`if (originType === "PurchaseOrder") {...}`). Reintroduziria conhecimento de um módulo de produto dentro de Financeiro pela porta dos fundos. A única coisa que Financeiro pode ler é `originLocked`; `originType` é estritamente de exibição/auditoria.
+- **Chamadas síncronas entre bounded contexts para validar um cancelamento** (ex.: Financeiro chamando um endpoint interno de Compras "posso cancelar?"). Reintroduz acoplamento em tempo de execução e um ponto de falha distribuído para uma decisão que deve ser local e instantânea.
+- **Gravar `originLocked` fora da mesma transação que cria o documento.** Quebraria a atomicidade que a composição transacional (ADR-017) já garante — lock e documento devem nascer juntos, nunca em passos separados que reabrem uma janela de corrida.
+- **Usar `originLocked` para bloquear qualquer transição além do cancelamento.** Expandir o escopo do campo silenciosamente reabre exatamente a ambiguidade que o Final Hardening desta ADR fechou.
+- **Tratar o override de `OWNER` como caminho normal de operação.** Se um fluxo de produto passa a depender rotineiramente do override, o sintoma real é que a origem deveria estar liberando o lock pela via normal — a resposta é corrigir a origem, nunca facilitar o override.
+
+### Consequências — decisões futuras que passam a seguir esta ADR automaticamente
+
+Nenhum módulo futuro que gere um `FinancialDocument` precisa de uma ADR própria para resolver "como não deixar Financeiro cancelar por baixo do meu pé" — a resposta já está decidida aqui, de uma vez por todas:
+
+- **Contratos**, **Marketplace**, **Integrações** (incluindo a fase de conciliação bancária/Open Finance já prevista no roadmap) e **Importações**: usam a mesma primitiva (`originType`/`originId`/`originLocked`) sem exceção nem extensão.
+- **Portal do Cliente**: se algum dia gerar um `FinancialDocument` diretamente (hoje só lê), usa a mesma primitiva — ortogonal à dimensão de escopo por `clientId` já prevista.
+- **IA**: usa a mesma primitiva, com a convenção (não regra de schema) de nascer com `originLocked: false` até confirmação humana.
+- **Analytics/Dashboard**: nenhuma consequência de comportamento — ganham campos adicionais disponíveis para leitura, se quiserem, nunca uma obrigação.
+- **API Pública** (quando existir, per `ARCHITECTURE_GOVERNANCE.md` §6.3): qualquer integração externa que gere documentos financeiros o faz através de um serviço interno do ArchFlow que já teria acesso de escrita — a mesma primitiva se aplica, mediada pelo mesmo backend que já intermedeia todo acesso externo hoje.
+
+### Roadmap (sem implementação nesta Sprint)
+
+1. Adicionar `originType`/`originId`/`originLocked` ao schema de `FinancialDocument` — aditivo, sem backfill (defaults cobrem todo dado existente).
+2. Adicionar a precondição de `originLocked` em `cancelIfNoPayments`.
+3. Adicionar a regra de override restrito a `OWNER`, com evento de auditoria dedicado (`document_cancel_override_by_owner`, distinto de `document_cancelled` normal).
+4. Compras: `purchaseOrder.repository.ts#approve` passa a setar `originType: "PurchaseOrder"`, `originId: po.id`, `originLocked: true` ao chamar `createWithInstallments`.
+5. Eventos novos: `document_locked_by_origin`/`document_unlocked_by_origin` (via `auditLog`, não `AutomationKey` — mesmo raciocínio da ADR-017: isto é rastro de auditoria, não automação opcional); `document_cancel_rejected` ganha um novo valor de `reason` (`"LOCKED_BY_ORIGIN"`) em vez de um evento novo — aditivo, não renomeia nada existente (ADR-010).
+6. Esta lista não é um compromisso de sprint — é o registro de "o que fica pronto para ser implementado quando a decisão for acionada", conforme pedido nesta revisão.
+
+> **Ver também**: `COMPRAS_ARCHITECTURE_DECISIONS.md` — esta ADR resolve o achado Crítico da Domain Review de Compras (2026-07-16); a implementação, quando ocorrer, deve atualizar a tabela de status daquele documento.
 
 ---
 

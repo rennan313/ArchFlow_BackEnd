@@ -1,10 +1,13 @@
+import { prisma } from "@/lib/prisma"
 import { opportunityRepository } from "@/repositories/opportunity.repository"
 import { projectRepository } from "@/repositories/project.repository"
+import { clientRepository } from "@/repositories/client.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
 import { STAGE_PROBABILITY } from "@/validations/opportunity"
 import { automationService } from "@/services/automation.service"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { ProjectType } from "@/validations/project"
 import type { CreateOpportunityInput, UpdateOpportunityInput, OpportunityQueryInput } from "@/validations/opportunity"
 
@@ -130,14 +133,36 @@ export const opportunityService = {
   // CORE-2 (Sprint 0) — same referential guard as project.service.ts/
   // client.service.ts (RC-2.3), one hop upstream: an approved Opportunity
   // that already auto-created a Project (autoCreateProjectOnApproval above)
-  // can no longer be deleted physically — Project.opportunityId would dangle,
-  // and that Project may itself have financial history. Delete/reassign the
-  // Project first. See FINANCIAL_ARCHITECTURE_DECISIONS.md, Anexo B.
-  async delete(id: string, workspaceId: string) {
+  // can no longer be archived (or deleted) — Project.opportunityId would
+  // point at a hidden opportunity, and that Project may itself have
+  // financial history. Delete/reassign the Project first. See
+  // FINANCIAL_ARCHITECTURE_DECISIONS.md, Anexo B.
+  async delete(id: string, workspaceId: string, userId: string) {
     await this.getById(id, workspaceId)
-    const linkedProject = await projectRepository.findByOpportunityId(id, workspaceId)
-    if (linkedProject) throw new AppError(ErrorCode.OPPORTUNITY_HAS_PROJECT)
-    await opportunityRepository.delete(id, workspaceId)
+    await entityLifecycleService.archive({
+      entity: "Opportunity", id, workspaceId, userId,
+      delegate: prisma.opportunity,
+      guard: async () => {
+        const linkedProject = await projectRepository.findByOpportunityId(id, workspaceId)
+        if (linkedProject) throw new AppError(ErrorCode.OPPORTUNITY_HAS_PROJECT)
+      },
+    })
+  },
+
+  // ADR-020 — an Opportunity always has a Client; restoring it while that
+  // Client is still archived would put it back on the Kanban with no
+  // reachable parent.
+  async restore(id: string, workspaceId: string, userId: string) {
+    const opp = await this.getById(id, workspaceId)
+    await entityLifecycleService.restore({
+      entity: "Opportunity", id, workspaceId, userId,
+      delegate: prisma.opportunity,
+      integrityCheck: async () => {
+        const client = await clientRepository.findById(opp.clientId, workspaceId)
+        if (client?.archived) throw new AppError(ErrorCode.PARENT_ARCHIVED)
+      },
+    })
+    return this.getById(id, workspaceId)
   },
 }
 

@@ -11,7 +11,7 @@ type Ctx = { params: Promise<Record<string, string>> }
 export const GET = requireWorkspacePermission("view:financial-documents")(async (req: NextRequest, _ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const query = costCenterQuerySchema.parse(Object.fromEntries(req.nextUrl.searchParams))
-    return ok(await costCenterService.list(workspaceId, query.includeArchived))
+    return ok(await costCenterService.list(workspaceId, query.archived))
   } catch (error) { return handleServiceError(error) }
 })
 

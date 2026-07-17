@@ -65,7 +65,7 @@ describe("financialDashboardService.getWidgets", () => {
     await financialDashboardService.getWidgets("ws-1")
 
     for (const call of mocked.payment.aggregate.mock.calls) {
-      const where = call[0].where
+      const where = call[0]!.where
       expect(where).toHaveProperty("direction")
       expect(where).not.toHaveProperty("installment")
     }
@@ -83,7 +83,7 @@ describe("financialDashboardService.getWidgets", () => {
     await financialDashboardService.getWidgets("ws-1")
 
     const firstCall = mocked.financialDocument.aggregate.mock.calls[0]!
-    const competencyFilter = firstCall[0].where?.competencyDate as { gte: Date; lte: Date }
+    const competencyFilter = firstCall[0]!.where?.competencyDate as { gte: Date; lte: Date }
     expect(competencyFilter.gte).toBeInstanceOf(Date)
     expect(competencyFilter.lte).toBeInstanceOf(Date)
     // Boundaries must fall exactly on Brazil-local midnight (03:00 UTC start,

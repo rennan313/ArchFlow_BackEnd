@@ -13,6 +13,7 @@
 | [013](#adr-013--withtransactionretry-é-obrigatório-para-toda-escrita-multi-coleção-em-qualquer-módulo) | `withTransactionRetry()` é obrigatório para toda escrita multi-coleção, em qualquer módulo | ADR-003 |
 | [014](#adr-014--guardas-de-exclusão-segura-cobrem-toda-a-cadeia-de-conversão-de-negócio) | Guardas de exclusão segura cobrem toda a cadeia de conversão de negócio | ADR-008 |
 | [015](#adr-015--workspace-first-vale-mesmo-sem-campo-direto-de-workspaceid) | Workspace-First vale mesmo sem campo direto de `workspaceId` | ADR-006 |
+| [020](#adr-020--entity-lifecycle-arquivar-restaurar-cancelar-excluir-como-padrão-oficial) | Entity Lifecycle — Arquivar/Restaurar/Cancelar/Excluir como padrão oficial | ADR-008, ADR-010, ADR-014 |
 
 ---
 
@@ -81,3 +82,117 @@ O módulo Financeiro foi migrado nesta sprint para usar `auditLog` em vez de cha
 **Justificativa**: o objetivo do ADR-006 nunca foi "todo modelo tem um campo chamado `workspaceId`" — é "toda consulta prova que o recurso pertence ao workspace do chamador, na própria consulta, sem depender só de quem chamou". Filtrar por relação atinge exatamente esse objetivo sem o custo de uma migração de schema para entidades que nunca vão precisar de um índice composto próprio nesse campo.
 
 **Impacto futuro**: para qualquer entidade nova sem `workspaceId` direto (deveria ser raro — a maioria dos modelos novos deve seguir o ADR-006 literalmente), a regra é: (1) usar filtro por relação em toda leitura/escrita-em-lote, (2) para operações restritas a `where` único (`update`/`upsert`/`findUnique`), fazer uma pré-checagem explícita do pai antes de escrever — nunca pular a checagem só porque o Prisma não aceita o filtro direto na mesma chamada.
+
+---
+
+## ADR-020 — Entity Lifecycle: Arquivar/Restaurar/Cancelar/Excluir como padrão oficial
+
+**Status**: `ACCEPTED` — 2026-07-17. **Breaking Change**: NÃO (aditivo — três campos novos por entidade, defaults preservam 100% do comportamento atual). **Supersedes**: os campos ad-hoc `isActive` (Supplier, BankAccount) e `isArchived` (SupplierCategory, CostCenter, FinancialCategory, ProposalTemplate, ProposalSection, ProposalBlock, ProposalNarrative), que existiam antes desta ADR com o mesmo propósito mas sem nome nem semântica compartilhada. **Superseded By**: nenhuma. **Review Required**: somente se um novo tipo de transição de ciclo de vida (além de Arquivar/Restaurar/Cancelar/Excluir) precisar ser introduzido. Numeração global (ADR-016 a ADR-018 vivem em `COMPRAS_ARCHITECTURE_DECISIONS.md`, ADR-019 em `FINANCIAL_ARCHITECTURE_DECISIONS.md` — ver `ARCHITECTURE_GOVERNANCE.md` §1).
+
+### Problema
+
+Antes desta ADR, cada módulo tinha inventado sua própria resposta para "como faço este registro parar de aparecer nas telas normais sem apagá-lo de verdade": `Client`/`Opportunity`/`Proposal`/`Project`/`Meeting`/`Document` já usavam um par `archived`/`archivedAt` (sem `archivedBy`, sem auditoria, sem tela de consulta); `Supplier`/`BankAccount` usavam `isActive: false`; `SupplierCategory`/`CostCenter`/`FinancialCategory`/`ProposalTemplate`/`ProposalSection`/`ProposalBlock`/`ProposalNarrative` usavam `isArchived: true`. Três nomes de campo, duas polaridades diferentes (`isActive:false` é o inverso lógico de `isArchived:true`), nenhum registro de quem arquivou, nenhuma tela para encontrar o que foi arquivado, e nenhum serviço central — cada `service.ts` reimplementava seu próprio `updateMany` de arquivamento, sem guarda de RBAC/workspace consistente e sem gerar evento de auditoria. Adicionalmente, `FinancialDocument`/`PurchaseOrder` já tinham um conceito de **Cancelamento** (`isCancelled`/`status: CANCELLED`) que preserva o registro mas encerra seu significado de negócio — um terceiro comportamento, distinto de ambos, sem nunca ter sido escrito ao lado dos outros dois para que a diferença ficasse explícita.
+
+### Alternativas consideradas
+
+- **Deixar cada módulo com seu próprio campo/nome** — rejeitada; é exatamente a inconsistência que motivou esta Sprint, e cada nome novo (`isHidden`, `isDisabled`, etc.) só pioraria a fragmentação para o próximo desenvolvedor.
+- **Um único campo genérico `status: "ACTIVE" | "ARCHIVED" | "CANCELLED" | "DELETED"`** — rejeitada: colapsaria em um único enum dois eixos ortogonais (arquivamento é reversível e não tem opinião sobre o significado de negócio do registro; `status` de negócio — como `ProjectStatus`/`ProjectPhase`/`PurchaseOrderStatus` — já existe por entidade e tem sua própria máquina de estados). Um Cliente `status: INACTIVE` (estágio de CRM, editável livremente) e um Cliente arquivado (ação destrutiva reversível, via botão de exclusão) são conceitos completamente diferentes; um único campo `status` compartilhado forçaria escolher entre os dois na mesma transição, exatamente o erro que o comentário de schema em `Client.archived` (ADR pré-existente, ver linha do modelo) já registrava informalmente.
+- **Cada módulo continuar arquivando por conta própria, só padronizando o NOME dos três campos** — resolveria a fragmentação de nomes, mas não a de comportamento: RBAC, auditoria e a checagem de integridade na restauração continuariam duplicados e divergentes entre módulos, o oposto do que a Parte 6 do brief pede ("cada módulo apenas delega, nunca duplica regras").
+- **Três campos padronizados (`archived`/`archivedAt`/`archivedBy`) + um serviço central (`entityLifecycleService`) do qual todo módulo arquivável delega, e um enum de negócio (`status`/`isCancelled`) mantido inteiramente separado para Cancelamento** — a escolhida.
+
+### Definições — nunca misturar estes cinco conceitos
+
+| Conceito | Significa | Reversível? | Quem decide | Exemplo |
+|---|---|---|---|---|
+| **Archived** (`archived`/`archivedAt`/`archivedBy`) | O usuário escondeu o registro das telas normais através da ação de exclusão da UI — o registro continua existindo, íntegro, e pode ser trazido de volta. | Sim, via Restaurar. | Usuário com a permissão `delete:<entidade>` (ver RBAC abaixo). | Arquivar um Cliente que não é mais atendido. |
+| **Cancelled** (`isCancelled` ou `status: CANCELLED`, por entidade) | O registro **em si** deixou de representar um compromisso de negócio ativo — não é sobre visibilidade na tela, é sobre o significado do registro. Um documento financeiro cancelado continua visível e consultável; só para de contar como dívida/receita ativa. | Não, por padrão (ver ADR-008/ADR-018 — cancelamento é terminal salvo exceção explícita da própria entidade). | O próprio Aggregate, através de sua regra de negócio específica (ex.: `FinancialDocument.cancel()`, `PurchaseOrder.cancel()`). | Cancelar um Pedido de Compra em `DRAFT`. |
+| **Deleted** (exclusão física — `.delete()`/`.deleteMany()` real) | O registro deixa de existir no banco. Sem histórico, sem auditoria de conteúdo (só o evento de que a exclusão ocorreu). | Não, nunca. | Reservado — ver Parte 5/Regras abaixo; a resposta-padrão para qualquer entidade nova é "não". | Excluir um `PurchaseOrder` em `DRAFT` sem nenhum vínculo financeiro. |
+| **Inactive** (`status: "INACTIVE"` como valor de um enum de negócio já existente, ex. `ClientStatus`) | Um valor de negócio comum, escolhido livremente pelo usuário, dentro da máquina de estados própria da entidade (pipeline de CRM). Não tem nenhuma relação com arquivamento. | Sim, trivialmente — é só outro valor de `status`. | Usuário com permissão de `update:<entidade>`, igual a qualquer outro valor de `status`. | Marcar um Cliente como `INACTIVE` no funil comercial, continuando 100% visível em todas as telas. |
+| **Disabled** | Não é um padrão do domínio — não existe hoje como conceito de entidade no ArchFlow (a palavra aparece só como estado de UI de um botão/campo). Se um módulo futuro precisar de um interruptor binário de "ligado/desligado" sem significado de arquivamento nem de negócio (ex.: uma integração externa pausada temporariamente), esse é um campo `enabled: Boolean` próprio da entidade, não uma reinterpretação de `archived`. | Depende do campo. | Depende do módulo. | (Nenhum uso hoje — documentado para nunca ser confundido com os quatro acima.) |
+
+A regra prática que elimina qualquer ambiguidade futura: **`archived` responde "isso deveria aparecer nas telas normais?"; o `status`/`isCancelled` de cada entidade responde "isso ainda representa um compromisso de negócio ativo?"**. As duas perguntas são sempre independentes — um registro pode estar `archived: false` e `status: CANCELLED` ao mesmo tempo (documento cancelado, mas ninguém o arquivou), ou `archived: true` e com um `status` de negócio que continua o que era antes de ser arquivado (o arquivamento nunca reescreve o `status`).
+
+### Decisão
+
+Toda entidade arquivável ganha exatamente três campos, aditivos:
+
+```prisma
+archived   Boolean   @default(false)
+archivedAt DateTime?
+archivedBy String?   @db.ObjectId
+```
+
+Nunca reutilizar `status`/`active`/`inactive`/`deleted`/`disabled` para este propósito — esses nomes já têm (ou podem vir a ter) um significado de negócio próprio por entidade, e um campo de arquivamento com identidade própria é o que impede a colisão.
+
+Um serviço único, `src/services/entityLifecycle.service.ts` (`entityLifecycleService`), expõe quatro operações — `archive()`, `restore()`, `cancel()`, `delete()` — que todo módulo arquivável delega, nunca reimplementa:
+
+- **`archive(opts)`** — `updateMany({ where: { id, workspaceId, archived: false }, data: { archived: true, archivedAt: now, archivedBy: userId } })`, executando primeiro `opts.guard?.()` (checagem específica da entidade — ex.: "não tem histórico financeiro vinculado") e emitindo `auditLog` com evento `<entidade>_archived`. Lança `ENTITY_ALREADY_ARCHIVED` se o registro já estava arquivado — arquivar não é idempotente por design (ver Anti-padrões).
+- **`restore(opts)`** — o inverso, executando `opts.integrityCheck?.()` antes (ex.: "o Cliente-pai não pode estar arquivado" — `PARENT_ARCHIVED`) e emitindo `<entidade>_restored`. Lança `ENTITY_NOT_ARCHIVED` se o registro não estava arquivado.
+- **`cancel(opts)`** — centraliza apenas o guarda + auditoria (`<entidade>_cancelled` ou `opts.eventSuffix`); os campos que representam "cancelado" continuam 100% específicos de cada entidade (`data: opts.data`), porque Cancelamento nunca teve um vocabulário comum entre módulos e não deveria ganhar um agora (ver Definições acima — forçar um "cancelado" genérico reabriria a mesma confusão que motivou não ter um `status` genérico).
+- **`delete(opts)`** — exclusão física real, com `level: "warn"` no log (uma exclusão de verdade deve se destacar numa busca de log ao lado de arquivamentos/restaurações rotineiros). Reservado — ver regra abaixo.
+
+Cada operação recebe o delegate Prisma do próprio model (`delegate: prisma.client`, `delegate: prisma.supplier`, etc.) — o serviço nunca conhece nenhum model especificamente, só as duas formas estruturais (`updateMany`/`deleteMany`) que precisa chamar. Isso é o que permite um único arquivo servir 15 entidades hoje e qualquer módulo futuro sem nunca precisar de um `if (entity === "X")`.
+
+**Filtragem automática (Parte 9)**: `src/lib/prisma.ts` estende o client do Prisma (`$extends`) para injetar `where: { archived: false }` automaticamente em todo `findMany`/`count`/`aggregate`/`groupBy` de um model arquivável — mas só quando o chamador ainda não especificou `archived` no próprio `where`. Isso é o que permite toda tela normal ignorar registros arquivados sem nenhum código por tela, e é também exatamente o mecanismo que a futura tela de "Itens Arquivados" usa para pedir `archived: true` e receber exatamente isso, sem sofrer a injeção automática. A lista de models cobertos (`ARCHIVABLE_MODELS`) é uma allow-list explícita, não introspecção do schema — um campo chamado `archived` adicionado a um model por outro motivo nunca começa a ser filtrado silenciosamente.
+
+### Regras do domínio
+
+- **Quem pode arquivar/restaurar**: a mesma permissão que já protegia a exclusão daquela entidade (`delete:<entidade>` ou `manage:financial-settings`, conforme já mapeado por módulo) — restaurar é o inverso da mesma ação de nível destrutivo, não uma capacidade nova que precisa de sua própria entrada em `PERMISSIONS`.
+- **Restaurar sempre valida integridade antes de reverter o campo** — nunca restaura um registro para um estado inconsistente. O caso coberto hoje: uma entidade cujo pai obrigatório (`Client`, no caso de `Project`/`Opportunity`/`Meeting`; opcionalmente `Client` no caso de `Proposal`; `FinancialCategory` pai no caso de subcategorias) está arquivado — a restauração é bloqueada com `PARENT_ARCHIVED` até o pai ser restaurado primeiro. A mensagem de erro é sempre específica o bastante para o usuário agir (`ENTITY_ALREADY_ARCHIVED`/`ENTITY_NOT_ARCHIVED`/`PARENT_ARCHIVED` são três causas de conflito diferentes, nunca um genérico "erro ao restaurar").
+- **Exclusão física é a exceção, nunca o padrão**: por default, nenhuma entidade nova ganha uma rota de exclusão física. Uma entidade só pode ser fisicamente excluída quando (1) ela nunca pode ter acumulado histórico de negócio de terceiros apontando para ela, ou (2) esse histórico é comprovadamente impossível no estado em que a exclusão é permitida. Hoje, isso vale para exatamente um caso: `PurchaseOrder` em `status: DRAFT` (nunca teve um `FinancialDocument` vinculado — ADR-018 de Compras). Toda entidade com qualquer relação financeira possível (`Client`, `Project`, `Opportunity`, `Proposal`, `Supplier`, `BankAccount`, documentos e categorias financeiras) é arquivamento-apenas, para sempre — não é uma limitação temporária desta Sprint.
+- **Confirmação dupla para exclusão física**: qualquer rota de exclusão física exige, na camada de apresentação, confirmação dupla (modal de confirmação + digitar o texto exato, ex. `EXCLUIR`) antes de a chamada ao backend ocorrer — o mesmo padrão já usado por `ConfirmDialog`/`typeToConfirmText` para remoção de membro de equipe e cancelamento de assinatura. O backend em si não pode ver "quantas vezes o usuário confirmou" — a dupla confirmação é uma garantia de UX, reforçada pela garantia de domínio equivalente (RBAC + estado exigido, ex. `DRAFT`).
+- **Auditoria**: toda transição de lifecycle usa exclusivamente `auditLog` (ADR-012) — nunca um mecanismo paralelo. Eventos padronizados: `<entidade>_archived`, `<entidade>_restored`, `<entidade>_cancelled` (ou sufixo específico), `<entidade>_deleted` (nível `warn`).
+
+### Aggregate
+
+Nenhuma entidade perde a responsabilidade por seus próprios invariantes de negócio. `entityLifecycleService` não decide QUANDO uma entidade pode ser arquivada/cancelada/excluída — cada serviço de entidade continua sendo o único lugar que conhece suas próprias regras (ex.: `financialCategoryService.archive` ainda é quem sabe que uma categoria com filhos ativos não pode arquivar; `entityLifecycleService` só centraliza COMO a transição é executada — o `updateMany`/`deleteMany`, o carimbo de atribuição, e o evento de auditoria — depois que o guarda específico da entidade já decidiu que a transição é permitida. Mesmo espírito da ADR-019 (Persisted Authority): a entidade continua a única dona de seu próprio invariante; o serviço compartilhado só evita que 15 módulos reimplementem o mesmo `updateMany`.
+
+### Dependências
+
+Nenhuma nova direção de dependência entre bounded contexts é criada. `entityLifecycleService` é infraestrutura compartilhada (mesmo nível de `auditLog`, `withTransactionRetry`), não um módulo de domínio — todo módulo já importa infraestrutura compartilhada, e isso não viola a regra de dependência unidirecional entre Financeiro/Compras/CRM (`DOMAIN_GUIDE.md` §6), porque nenhum desses módulos passa a importar OUTRO módulo de domínio por causa desta ADR.
+
+### Generalização
+
+Testado contra a lista completa pedida — Compras, Contratos, Portal do Cliente, Integrações, Marketplace, IA, API, Importação — nenhum exige extensão do modelo:
+
+- **Compras**: `PurchaseOrder`/`PurchaseOrderItem` já usam Cancelamento (`status: CANCELLED`, ADR-018) para seu próprio ciclo de vida em vez de arquivamento — correto, porque um pedido de compra é sempre um compromisso de negócio (Cancelled), nunca um "esconder da tela" (Archived); se Compras precisar futuramente de uma ação de "arquivar pedidos antigos já cancelados/entregues" (puramente de visibilidade, não de negócio), a primitiva `archived`/`archivedAt`/`archivedBy` se aplica sem alteração.
+- **Contratos, Marketplace, Integrações, Portal do Cliente, IA, API, Importação**: qualquer entidade nova que precise de "esconder da tela, mas manter recuperável" usa a mesma tripla de campos e delega a `entityLifecycleService`; qualquer entidade que precise de "meu registro não representa mais um compromisso ativo" define seu próprio campo de negócio (`status`/booleano específico) e usa `entityLifecycleService.cancel()` apenas para a parte de guarda+auditoria — nunca reinventa nenhuma das duas partes.
+
+### Tabela de comportamento (oficial)
+
+| Ação | Quando usar | Reversível | Quem autoriza | Auditoria |
+|---|---|---|---|---|
+| Arquivar | Usuário clicou "excluir" numa entidade cujo domínio nunca perde histórico (todas as 15 entidades de hoje) | Sim (Restaurar) | `delete:<entidade>` | `<entidade>_archived` |
+| Restaurar | Usuário quer um item de volta às telas normais | — | Mesma permissão de Arquivar | `<entidade>_restored` |
+| Cancelar | O registro deixou de representar um compromisso de negócio ativo, mas deve continuar visível/consultável | Não, por padrão | Regra própria da entidade (ex. `delete:financial-documents`, `delete:purchase-orders`) | `<entidade>_cancelled` |
+| Excluir (física) | Reservado a entidades sem nenhum histórico possível no estado permitido (hoje: `PurchaseOrder` em `DRAFT`) | Não, nunca | Mesma permissão + confirmação dupla (digitar `EXCLUIR`) | `<entidade>_deleted` (nível `warn`) |
+
+### Anti-patterns — nunca implementar
+
+- **Reutilizar `status`, `active`, `inactive`, `deleted` ou `disabled` para representar arquivamento.** Cada um desses nomes já carrega (ou pode vir a carregar) significado de negócio próprio por entidade — colidir os dois conceitos no mesmo campo é exatamente o bug que motivou o `Client.archived` original a ser desenhado como campo independente de `status`.
+- **Um módulo reimplementar seu próprio `archive()`/`restore()` em vez de delegar a `entityLifecycleService`.** Reabre a fragmentação de RBAC/auditoria que esta ADR existe para fechar.
+- **Tratar `archived: true` como sinônimo de imutável.** Não é — um registro arquivado continua sendo o mesmo registro; a única coisa que muda é que ele para de aparecer nas listagens normais e não pode ser editado diretamente (precisa ser restaurado primeiro, ver Parte 8 do brief).
+- **Adicionar exclusão física a uma entidade nova "porque parece mais simples".** A pergunta-padrão é sempre "essa entidade pode algum dia ter algo de negócio de terceiros apontando para ela?" — se a resposta não é um "não" comprovável, a resposta é arquivamento.
+- **Criar um segundo mecanismo de auditoria específico de lifecycle.** `auditLog` (ADR-012) já é o único padrão; um `LifecycleLog` paralelo duplicaria exatamente o que essa ADR já resolveu uma vez.
+- **Deixar a tela de item arquivado permitir edição direta.** Editar sempre exige restaurar primeiro — evita que um registro escondido das telas normais receba mudanças que ninguém revisando o fluxo normal veria.
+
+### Limites — o que esta ADR explicitamente não resolve
+
+- **Múltiplos arquivamentos simultâneos por diferentes atores não geram histórico de "quem arquivou antes de quem"** — `archivedBy`/`archivedAt` guardam apenas o evento mais recente, o mesmo espírito de `updatedAt`. O rastro completo de idas-e-vindas fica no `auditLog`, não no registro em si.
+- **Detecção proativa de itens arquivados há muito tempo sem revisão** não é uma garantia desta ADR — um relatório operacional futuro ("itens arquivados há mais de 1 ano"), não uma obrigação de domínio.
+- **`Task`, `FollowUp`, `User` e `Workspace` não participam deste padrão.** `Task`/`FollowUp` não têm hoje nenhuma tela ou necessidade de "esconder e restaurar" — são encerrados via seu próprio campo de conclusão (`completed`) ou removidos fisicamente sem histórico de negócio a proteger (achado do RC/auditoria original, não alterado aqui). `User` não tem conceito de arquivamento — remoção de um usuário de um workspace já é modelada como desvinculação de membership (`workspaceService.removeUser`), não como lifecycle de um registro de domínio. `Workspace.active` existe no schema mas nunca é escrito por nenhum caminho hoje — permanece fora do escopo desta ADR até que exista um fluxo real de suspensão de workspace; não deve ser confundido com o padrão de entidade arquivável descrito aqui.
+- **A migração de dados legados (`scripts/migrate-lifecycle-archive-fields.ts`)** foi escrita assumindo uma janela em que os campos antigos (`isActive`/`isArchived`) e os novos (`archived`/`archivedAt`/`archivedBy`) coexistiam no schema para permitir backfill seguro antes de remover os antigos. O schema desta Sprint já removeu os campos antigos diretamente — esse script fica registrado como dívida técnica (ver relatório da Sprint) e não deve ser executado contra o schema atual sem primeiro reintroduzir os campos legados temporariamente, ou reescrevê-lo para ler de um snapshot/backup anterior à migração de schema.
+
+### Invariantes garantidas
+
+1. Toda entidade arquivável tem exatamente `archived`/`archivedAt`/`archivedBy` — nunca um quarto campo concorrente para o mesmo propósito.
+2. Arquivar nunca apaga dado nenhum — é sempre reversível via Restaurar.
+3. Restaurar nunca deixa um registro em estado inconsistente — a checagem de integridade do pai é obrigatória quando aplicável.
+4. Cancelar nunca é a mesma operação que Arquivar, mesmo quando ambos "escondem" um registro de um fluxo ativo — os dois têm significados de domínio diferentes e nunca compartilham campo.
+5. Exclusão física é sempre a exceção documentada, nunca o comportamento padrão de uma entidade nova.
+6. Toda transição de lifecycle gera exatamente um evento de auditoria via `auditLog` — nunca zero, nunca um mecanismo paralelo.
+7. Toda consulta de listagem normal ignora registros arquivados sem precisar de código por tela — a filtragem é automática ao nível do client Prisma.
+
+### Consequências — decisões futuras que passam a seguir esta ADR automaticamente
+
+Nenhum módulo futuro (Compras, Contratos, Portal do Cliente, IA, Analytics, Integrações) precisa de uma ADR própria para decidir "como arquivar/restaurar/cancelar/excluir os registros que eu crio" — a resposta já está decidida aqui: usar `archived`/`archivedAt`/`archivedBy` + `entityLifecycleService` para arquivamento/restauração, um campo de negócio próprio + `entityLifecycleService.cancel()` para cancelamento, e nunca adicionar exclusão física sem primeiro provar que a entidade não pode ter histórico de terceiros apontando para ela.

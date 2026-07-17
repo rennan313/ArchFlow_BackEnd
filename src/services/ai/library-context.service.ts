@@ -18,7 +18,7 @@ export const libraryContextService = {
   async build(workspaceId: string, input: ProposalGenerationInput): Promise<LibraryContext> {
     try {
       const { data: allSections } = await proposalSectionRepository.findMany(workspaceId, {
-        page: 1, limit: 50, isArchived: false,
+        page: 1, limit: 50, archived: false,
       })
 
       // Migration-only sections exist only for legacy snapshots — never use them
@@ -53,7 +53,7 @@ export const libraryContextService = {
       await Promise.all(
         sections.map(async (section) => {
           const { data: candidates } = await proposalBlockRepository.findMany(workspaceId, {
-            page: 1, limit: 100, sectionKey: section.key, isArchived: false,
+            page: 1, limit: 100, sectionKey: section.key, archived: false,
           })
           if (candidates.length === 0) return
 

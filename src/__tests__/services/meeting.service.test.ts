@@ -6,6 +6,7 @@ vi.mock("@/repositories/client.repository")
 vi.mock("@/repositories/project.repository")
 vi.mock("@/repositories/proposal.repository")
 vi.mock("@/services/automation.service")
+vi.mock("@/services/entityLifecycle.service")
 
 import { meetingService } from "@/services/meeting.service"
 import { meetingRepository } from "@/repositories/meeting.repository"
@@ -13,6 +14,7 @@ import { clientRepository } from "@/repositories/client.repository"
 import { projectRepository } from "@/repositories/project.repository"
 import { proposalRepository } from "@/repositories/proposal.repository"
 import { automationService } from "@/services/automation.service"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 
 const mockMeeting = {
   id: "meeting-1", userId: "user-1", clientId: "client-1", title: "Briefing inicial",
@@ -113,10 +115,10 @@ describe("meetingService.getById / delete — not-found mapping", () => {
     })
   })
 
-  it("delete throws AppError(MEETING_NOT_FOUND) for a cross-tenant id instead of deleting", async () => {
+  it("delete throws AppError(MEETING_NOT_FOUND) for a cross-tenant id instead of archiving", async () => {
     vi.mocked(meetingRepository.findById).mockResolvedValue(null)
 
-    await expect(meetingService.delete("meeting-from-other-workspace", "workspace-B")).rejects.toThrow(AppError)
-    expect(meetingRepository.delete).not.toHaveBeenCalled()
+    await expect(meetingService.delete("meeting-from-other-workspace", "workspace-B", "user-1")).rejects.toThrow(AppError)
+    expect(entityLifecycleService.archive).not.toHaveBeenCalled()
   })
 })

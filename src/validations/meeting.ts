@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const meetingStatusSchema = z.enum([
   "SCHEDULED",
@@ -48,6 +49,7 @@ export const meetingQuerySchema = z.object({
   to:        z.coerce.date().optional(),
   sortBy:    z.enum(["scheduledAt", "createdAt", "updatedAt"]).optional().default("scheduledAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+  archived:  booleanQueryParam.optional(),
 })
 
 export type MeetingStatusType  = z.infer<typeof meetingStatusSchema>

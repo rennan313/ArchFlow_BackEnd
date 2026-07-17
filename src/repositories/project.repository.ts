@@ -56,11 +56,12 @@ export const projectRepository = {
   },
 
   async findMany(workspaceId: string, query: ProjectQueryInput) {
-    const { page, limit, search, status, phase, type, clientId, sortBy, sortOrder } = query
+    const { page, limit, search, status, phase, type, clientId, sortBy, sortOrder, archived } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.ProjectWhereInput = {
       workspaceId,
+      archived: archived ?? false,
       ...(status   && { status }),
       ...(phase    && { phase }),
       ...(type     && { type }),
@@ -103,27 +104,23 @@ export const projectRepository = {
     return prisma.project.updateMany({ where: { id, workspaceId }, data })
   },
 
-  delete(id: string, workspaceId: string) {
-    return prisma.project.deleteMany({ where: { id, workspaceId } })
-  },
-
   phaseStats(workspaceId: string) {
     return prisma.project.groupBy({
       by:     ["phase"],
-      where:  { workspaceId },
+      where:  { workspaceId, archived: false },
       _count: { _all: true },
     })
   },
 
   countOverdue(workspaceId: string) {
     return prisma.project.count({
-      where: { workspaceId, estimatedEndDate: { lt: new Date() }, phase: { not: "DELIVERY" } },
+      where: { workspaceId, archived: false, estimatedEndDate: { lt: new Date() }, phase: { not: "DELIVERY" } },
     })
   },
 
   findOverdue(workspaceId: string) {
     return prisma.project.findMany({
-      where:  { workspaceId, estimatedEndDate: { lt: new Date() }, phase: { not: "DELIVERY" } },
+      where:  { workspaceId, archived: false, estimatedEndDate: { lt: new Date() }, phase: { not: "DELIVERY" } },
       select: { id: true, name: true },
     })
   },

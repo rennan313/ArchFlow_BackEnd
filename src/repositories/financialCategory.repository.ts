@@ -17,7 +17,7 @@ export const financialCategoryRepository = {
     const where: Prisma.FinancialCategoryWhereInput = {
       workspaceId,
       ...(query.direction && { direction: query.direction }),
-      ...(query.includeArchived ? {} : { isArchived: false }),
+      archived: query.archived ?? false,
     }
     return prisma.financialCategory.findMany({ where, orderBy: { name: "asc" } })
   },
@@ -36,6 +36,6 @@ export const financialCategoryRepository = {
   // scopes by workspaceId directly rather than trusting a caller's prior
   // check, and this one shouldn't be the exception.
   countChildren(parentId: string, workspaceId: string) {
-    return prisma.financialCategory.count({ where: { parentId, workspaceId, isArchived: false } })
+    return prisma.financialCategory.count({ where: { parentId, workspaceId, archived: false } })
   },
 }

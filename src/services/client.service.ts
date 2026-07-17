@@ -1,13 +1,13 @@
-import { prisma } from "@/lib/prisma"
-import type { Prisma } from "@prisma/client"
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma"
 import { clientRepository } from "@/repositories/client.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { automationService } from "@/services/automation.service"
 import { financialDocumentService } from "@/modules/financial/financial.module"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { CreateClientInput, UpdateClientInput, ClientQueryInput } from "@/validations/client"
 
-type Db = typeof prisma | Prisma.TransactionClient
+type Db = typeof prisma | PrismaTransactionClient
 
 export const clientService = {
   async list(workspaceId: string, query: ClientQueryInput) {
@@ -58,15 +58,32 @@ export const clientService = {
     return clientRepository.findById(id, workspaceId)
   },
 
-  // RC-2.3 — same reasoning as project.service.ts#delete. Client already
-  // has a natural archive fallback (status: "INACTIVE") — the error
-  // message points callers at it directly.
-  async delete(id: string, workspaceId: string) {
+  // RC-2.3 — Categoria B soft-delete: a Client with linked FinancialDocuments
+  // is never archived (or deleted) while that history exists, since Mongo has
+  // no FK to reassign/cascade it through. This is unrelated to `status`:
+  // Client.archived/archivedAt is a separate pair of fields dedicated to this
+  // delete/restore flow — never conflate it with `status: "INACTIVE"`, which
+  // is a normal, user-selectable CRM pipeline state (see ClientForm and the
+  // client list's "Inativos" tab).
+  async delete(id: string, workspaceId: string, userId: string) {
     await this.getById(id, workspaceId)
-    if (await financialDocumentService.hasDocumentsForClient(id, workspaceId)) {
-      throw new AppError(ErrorCode.CLIENT_HAS_FINANCIAL_HISTORY)
-    }
-    await clientRepository.delete(id, workspaceId)
+    await entityLifecycleService.archive({
+      entity: "Client", id, workspaceId, userId,
+      delegate: prisma.client,
+      guard: async () => {
+        if (await financialDocumentService.hasDocumentsForClient(id, workspaceId)) {
+          throw new AppError(ErrorCode.CLIENT_HAS_FINANCIAL_HISTORY)
+        }
+      },
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "Client", id, workspaceId, userId,
+      delegate: prisma.client,
+    })
+    return clientRepository.findById(id, workspaceId)
   },
 
   async getProposals(clientId: string, workspaceId: string) {

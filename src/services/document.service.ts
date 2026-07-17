@@ -1,9 +1,11 @@
+import { prisma } from "@/lib/prisma"
 import { documentRepository } from "@/repositories/document.repository"
 import { storageService } from "@/services/storage/supabase.service"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
 import { UPLOAD_DOCUMENT_TYPES } from "@/validations/document"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import path from "path"
 import type { DocumentQueryInput, CreateDocumentFolderInput, DocumentFolderQueryInput } from "@/validations/document"
 
@@ -95,16 +97,24 @@ export const documentService = {
     return updated
   },
 
-  async delete(id: string, workspaceId: string) {
-    const document = await this.getById(id, workspaceId)
-    await Promise.all(
-      document.versions.map((v) =>
-        storageService.deleteFile(v.storagePath).catch(() => {
-          /* best-effort cleanup — DB row removal below is the source of truth */
-        }),
-      ),
-    )
-    await documentRepository.delete(id, workspaceId)
+  // Categoria B soft-delete: archiving must stay restorable, so the
+  // underlying storage files are deliberately left untouched here — a
+  // physical delete().versions cleanup would make restore() come back with
+  // dead file links.
+  async delete(id: string, workspaceId: string, userId: string) {
+    await this.getById(id, workspaceId)
+    await entityLifecycleService.archive({
+      entity: "Document", id, workspaceId, userId,
+      delegate: prisma.document,
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "Document", id, workspaceId, userId,
+      delegate: prisma.document,
+    })
+    return this.getById(id, workspaceId)
   },
 
   async createFolder(workspaceId: string, userId: string, input: CreateDocumentFolderInput) {

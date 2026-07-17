@@ -36,8 +36,8 @@ export const proposalAdvisorService = {
     const recommendedSkin = recommendSkin(classification.narrativeProfile, classification.projectTypeCategory, classification.investmentTier)
 
     const [{ data: allSections }, { data: templates }] = await Promise.all([
-      proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 50, isArchived: false }),
-      proposalTemplateRepository.findMany(workspaceId, { page: 1, limit: 50, isArchived: false }),
+      proposalSectionRepository.findMany(workspaceId, { page: 1, limit: 50, archived: false }),
+      proposalTemplateRepository.findMany(workspaceId, { page: 1, limit: 50, archived: false }),
     ])
     // Migration-only sections (Investimento, Riscos, etc.) exist solely for
     // legacy-migration.service.ts to snapshot old proposals into — the
@@ -61,7 +61,7 @@ export const proposalAdvisorService = {
       recommendedSections.push(section.key)
 
       const { data: candidates } = await proposalBlockRepository.findMany(workspaceId, {
-        page: 1, limit: 100, sectionKey: section.key, isArchived: false,
+        page: 1, limit: 100, sectionKey: section.key, archived: false,
       })
 
       const best = pickBestBlock(candidates, classification)

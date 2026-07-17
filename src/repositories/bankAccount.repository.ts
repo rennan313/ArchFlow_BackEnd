@@ -6,9 +6,9 @@ export const bankAccountRepository = {
     return prisma.bankAccount.findFirst({ where: { id, workspaceId } })
   },
 
-  findMany(workspaceId: string, includeInactive: boolean) {
+  findMany(workspaceId: string, archived: boolean) {
     return prisma.bankAccount.findMany({
-      where: { workspaceId, ...(includeInactive ? {} : { isActive: true }) },
+      where: { workspaceId, archived },
       orderBy: { name: "asc" },
     })
   },

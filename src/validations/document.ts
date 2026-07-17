@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const documentTypeSchema = z.enum(["PDF", "JPG", "PNG", "DWG", "DOCX"])
 
@@ -24,6 +25,7 @@ export const documentQuerySchema = z.object({
   folderId:  z.string().optional(),
   sortBy:    z.enum(["name", "createdAt", "updatedAt"]).optional().default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+  archived:  booleanQueryParam.optional(),
 })
 
 export const createDocumentFolderSchema = z.object({

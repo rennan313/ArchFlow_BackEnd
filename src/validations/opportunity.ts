@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { booleanQueryParam } from "./common"
 
 export const OpportunityStageEnum = z.enum([
   "LEAD", "FIRST_CONTACT", "BRIEFING", "PROPOSAL_DRAFT", "PROPOSAL_SENT",
@@ -42,6 +43,7 @@ export const opportunityQuerySchema = z.object({
   clientId:  z.string().optional(),
   sortBy:    z.enum(["createdAt", "updatedAt", "estimatedRevenue", "probability"]).optional().default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+  archived:  booleanQueryParam.optional(),
 })
 
 export type CreateOpportunityInput = z.infer<typeof createOpportunitySchema>

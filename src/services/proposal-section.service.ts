@@ -1,6 +1,8 @@
+import { prisma } from "@/lib/prisma"
 import { proposalSectionRepository } from "@/repositories/proposal-section.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type {
   CreateProposalSectionInput,
   UpdateProposalSectionInput,
@@ -30,9 +32,20 @@ export const proposalSectionService = {
     return proposalSectionRepository.findById(id, workspaceId)
   },
 
-  async delete(id: string, workspaceId: string) {
+  async delete(id: string, workspaceId: string, userId: string) {
     const existing = await this.getById(id, workspaceId)
     if (existing.workspaceId !== workspaceId) throw new AppError(ErrorCode.PROPOSAL_SECTION_NOT_FOUND)
-    await proposalSectionRepository.delete(id, workspaceId)
+    await entityLifecycleService.archive({
+      entity: "ProposalSection", id, workspaceId, userId,
+      delegate: prisma.proposalSection,
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "ProposalSection", id, workspaceId, userId,
+      delegate: prisma.proposalSection,
+    })
+    return this.getById(id, workspaceId)
   },
 }

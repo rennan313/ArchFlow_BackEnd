@@ -14,7 +14,7 @@ export const supplierCategoryRepository = {
   findMany(workspaceId: string, query: SupplierCategoryQueryInput) {
     const where: Prisma.SupplierCategoryWhereInput = {
       workspaceId,
-      ...(query.includeArchived ? {} : { isArchived: false }),
+      archived: query.archived ?? false,
     }
     return prisma.supplierCategory.findMany({ where, orderBy: { name: "asc" } })
   },

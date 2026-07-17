@@ -10,7 +10,7 @@ export const proposalSectionRepository = {
   },
 
   async findMany(workspaceId: string, query: ProposalSectionQueryInput) {
-    const { search, isArchived, limit } = query
+    const { search, archived, limit } = query
 
     const searchFilter: Prisma.ProposalSectionWhereInput = search
       ? { name: { contains: search, mode: "insensitive" } }
@@ -18,12 +18,12 @@ export const proposalSectionRepository = {
 
     const [own, defaults] = await Promise.all([
       prisma.proposalSection.findMany({
-        where: { workspaceId, isArchived: isArchived ?? false, ...searchFilter },
+        where: { workspaceId, archived: archived ?? false, ...searchFilter },
         orderBy: { order: "asc" },
         take: limit ?? 100,
       }),
       prisma.proposalSection.findMany({
-        where: { workspaceId: null, isArchived: false, ...searchFilter },
+        where: { workspaceId: null, archived: false, ...searchFilter },
         orderBy: { order: "asc" },
         take: limit ?? 100,
       }),

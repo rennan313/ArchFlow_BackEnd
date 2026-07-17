@@ -16,11 +16,12 @@ export const opportunityRepository = {
   },
 
   async findMany(workspaceId: string, query: OpportunityQueryInput) {
-    const { page, limit, search, stage, clientId, sortBy, sortOrder } = query
+    const { page, limit, search, stage, clientId, sortBy, sortOrder, archived } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.OpportunityWhereInput = {
       workspaceId,
+      archived: archived ?? false,
       ...(stage    && { stage }),
       ...(clientId && { clientId }),
       ...(search   && {
@@ -56,15 +57,11 @@ export const opportunityRepository = {
     return prisma.opportunity.updateMany({ where: { id, workspaceId }, data })
   },
 
-  delete(id: string, workspaceId: string) {
-    return prisma.opportunity.deleteMany({ where: { id, workspaceId } })
-  },
-
   // Pipeline aggregations
   async pipelineStats(workspaceId: string) {
     return prisma.opportunity.groupBy({
       by:    ["stage"],
-      where: { workspaceId },
+      where: { workspaceId, archived: false },
       _count: { _all: true },
       _sum:   { estimatedRevenue: true },
     })

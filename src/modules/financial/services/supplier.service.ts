@@ -1,7 +1,9 @@
+import { prisma } from "@/lib/prisma"
 import { supplierRepository } from "@/repositories/supplier.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { CreateSupplierInput, UpdateSupplierInput, SupplierQueryInput } from "@/validations/supplier"
 
 export const supplierService = {
@@ -53,9 +55,22 @@ export const supplierService = {
 
   // No physical delete — Supplier participates in financial history
   // (FinancialDocument.supplierId), which must never be able to point at a
-  // vanished row. "Inativo" is the whole lifecycle end-state for this entity.
-  async deactivate(id: string, workspaceId: string) {
+  // vanished row. Archiving (ADR-020) is the whole lifecycle end-state for
+  // this entity, delegated to entityLifecycleService like every other
+  // archivable entity.
+  async delete(id: string, workspaceId: string, userId: string) {
     await this.getById(id, workspaceId)
-    await supplierRepository.update(id, workspaceId, { isActive: false })
+    await entityLifecycleService.archive({
+      entity: "Supplier", id, workspaceId, userId,
+      delegate: prisma.supplier,
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "Supplier", id, workspaceId, userId,
+      delegate: prisma.supplier,
+    })
+    return this.getById(id, workspaceId)
   },
 }

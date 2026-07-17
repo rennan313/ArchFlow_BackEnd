@@ -21,6 +21,7 @@
 | 6 | Retry | `src/lib/transactionRetry.ts` |
 | 7 | Logging | `src/lib/auditLog.ts`, `src/lib/correlationId.ts`, `src/lib/logger.ts` |
 | 8 | Analytics Base | `financialDashboardService`, `projectFinancialSummaryService`, `src/lib/metrics.ts` (a camada de agregação da ADR-009 — precursora do futuro rollup, `PERFORMANCE_GUIDE.md` §3) |
+| 9 | Entity Lifecycle | `src/services/entityLifecycle.service.ts`, extensão `archived`-default de `src/lib/prisma.ts` (ADR-020) |
 
 Billing (`src/modules/billing/`) é deliberadamente **não-Core** nesta versão: é um módulo de produto com um contrato externo (Mercado Pago), com sua dívida técnica própria documentada (Float vs BigInt, Anexo D). Vira candidato a Core quando essa dívida for resolvida via ADR própria.
 
@@ -122,6 +123,22 @@ Billing (`src/modules/billing/`) é deliberadamente **não-Core** nesta versão:
 | **Quem pode depender dele** | Rotas de dashboard/relatório; futuro Centro de Inteligência (leitura); frontend via API |
 | **Eventos publicados** | Nenhum |
 | **Eventos consumidos** | Futuro: eventos de escrita financeira para manter o rollup incremental (quando o gatilho do §3 disparar) |
+
+---
+
+## 9. Entity Lifecycle
+
+**Responsabilidade**: a única implementação de Arquivar/Restaurar/Cancelar/Excluir Físico (ADR-020) — o carimbo `archived`/`archivedAt`/`archivedBy`, a checagem de integridade na restauração, e o evento de auditoria de cada transição. Toda entidade arquivável (15 hoje: Client, Opportunity, Proposal, Project, Meeting, Document, Supplier, SupplierCategory, CostCenter, BankAccount, FinancialCategory, ProposalTemplate, ProposalSection, ProposalBlock, ProposalNarrative) delega a ela em vez de reimplementar seu próprio `updateMany` de arquivamento.
+
+| | |
+|---|---|
+| **Dependências permitidas** | Logging (`auditLog`), `errors` — nenhum model, nenhum module de domínio específico (recebe o delegate Prisma e o `guard`/`integrityCheck` já resolvidos pelo chamador) |
+| **Dependências proibidas** | Qualquer service/repository de módulo de produto ou Finance — Entity Lifecycle não conhece nenhuma entidade por nome, só as duas formas estruturais (`updateMany`/`deleteMany`) que precisa chamar |
+| **Quem pode depender dele** | Todo service de entidade arquivável, em qualquer módulo (Finance incluído) |
+| **Eventos publicados** | `<entidade>_archived`, `<entidade>_restored`, `<entidade>_cancelled` (ou sufixo específico), `<entidade>_deleted` (nível `warn`) — via `auditLog` |
+| **Eventos consumidos** | Nenhum |
+
+**Regra especial**: nenhum módulo novo reimplementa arquivamento/restauração com seu próprio nome de campo ou sua própria lógica de `updateMany` — sempre delega a este serviço (ver ADR-020, seção Anti-patterns).
 
 ---
 

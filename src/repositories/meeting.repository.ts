@@ -13,11 +13,12 @@ export const meetingRepository = {
   },
 
   async findMany(workspaceId: string, query: MeetingQueryInput) {
-    const { page, limit, search, clientId, projectId, status, type, from, to, sortBy, sortOrder } = query
+    const { page, limit, search, clientId, projectId, status, type, from, to, sortBy, sortOrder, archived } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.MeetingWhereInput = {
       workspaceId,
+      archived: archived ?? false,
       ...(clientId  && { clientId }),
       ...(projectId && { projectId }),
       ...(status    && { status }),
@@ -68,7 +69,4 @@ export const meetingRepository = {
     }).then(() => prisma.meeting.findFirst({ where: { id, workspaceId }, include: { client: clientSelect } }))
   },
 
-  delete(id: string, workspaceId: string) {
-    return prisma.meeting.deleteMany({ where: { id, workspaceId } })
-  },
 }

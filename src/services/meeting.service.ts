@@ -1,8 +1,11 @@
+import { prisma } from "@/lib/prisma"
 import { meetingRepository } from "@/repositories/meeting.repository"
+import { clientRepository } from "@/repositories/client.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
 import { automationService } from "@/services/automation.service"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { CreateMeetingInput, UpdateMeetingInput, MeetingQueryInput } from "@/validations/meeting"
 
 export const meetingService = {
@@ -82,8 +85,26 @@ export const meetingService = {
     })
   },
 
-  async delete(id: string, workspaceId: string) {
+  async delete(id: string, workspaceId: string, userId: string) {
     await this.getById(id, workspaceId)
-    await meetingRepository.delete(id, workspaceId)
+    await entityLifecycleService.archive({
+      entity: "Meeting", id, workspaceId, userId,
+      delegate: prisma.meeting,
+    })
+  },
+
+  // ADR-020 — a Meeting always has a Client; restoring it while that Client
+  // is still archived would put it back on the agenda with no reachable parent.
+  async restore(id: string, workspaceId: string, userId: string) {
+    const meeting = await this.getById(id, workspaceId)
+    await entityLifecycleService.restore({
+      entity: "Meeting", id, workspaceId, userId,
+      delegate: prisma.meeting,
+      integrityCheck: async () => {
+        const client = await clientRepository.findById(meeting.clientId, workspaceId)
+        if (client?.archived) throw new AppError(ErrorCode.PARENT_ARCHIVED)
+      },
+    })
+    return this.getById(id, workspaceId)
   },
 }

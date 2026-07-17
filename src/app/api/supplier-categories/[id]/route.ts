@@ -24,10 +24,10 @@ export const PUT = requireWorkspacePermission("manage:financial-settings")(async
 })
 
 // Archives, never physically deletes — see supplierCategory.service.ts#archive.
-export const DELETE = requireWorkspacePermission("manage:financial-settings")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
+export const DELETE = requireWorkspacePermission("manage:financial-settings")(async (_req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
-    await supplierCategoryService.archive(id, workspaceId)
+    await supplierCategoryService.archive(id, workspaceId, user.sub)
     return noContent()
   } catch (error) { return handleServiceError(error) }
 })

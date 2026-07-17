@@ -23,11 +23,11 @@ export const PUT = requireWorkspacePermission("update:financial-documents")(asyn
   } catch (error) { return handleServiceError(error) }
 })
 
-// Deactivates, never physically deletes — see supplierService#deactivate.
-export const DELETE = requireWorkspacePermission("delete:financial-documents")(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
+// Archives, never physically deletes — see supplierService#delete.
+export const DELETE = requireWorkspacePermission("delete:financial-documents")(async (_req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
-    await supplierService.deactivate(id, workspaceId)
+    await supplierService.delete(id, workspaceId, user.sub)
     return noContent()
   } catch (error) { return handleServiceError(error) }
 })

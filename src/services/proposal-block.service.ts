@@ -1,6 +1,8 @@
+import { prisma } from "@/lib/prisma"
 import { proposalBlockRepository } from "@/repositories/proposal-block.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type {
   CreateProposalBlockInput,
   UpdateProposalBlockInput,
@@ -30,9 +32,20 @@ export const proposalBlockService = {
     return proposalBlockRepository.findById(id, workspaceId)
   },
 
-  async delete(id: string, workspaceId: string) {
+  async delete(id: string, workspaceId: string, userId: string) {
     const existing = await this.getById(id, workspaceId)
     if (existing.workspaceId !== workspaceId) throw new AppError(ErrorCode.PROPOSAL_BLOCK_NOT_FOUND)
-    await proposalBlockRepository.delete(id, workspaceId)
+    await entityLifecycleService.archive({
+      entity: "ProposalBlock", id, workspaceId, userId,
+      delegate: prisma.proposalBlock,
+    })
+  },
+
+  async restore(id: string, workspaceId: string, userId: string) {
+    await entityLifecycleService.restore({
+      entity: "ProposalBlock", id, workspaceId, userId,
+      delegate: prisma.proposalBlock,
+    })
+    return this.getById(id, workspaceId)
   },
 }

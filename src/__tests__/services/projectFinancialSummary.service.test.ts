@@ -84,7 +84,7 @@ describe("projectFinancialSummaryService.getSummary", () => {
       expect.objectContaining({ where: expect.objectContaining({ projectId: "proj-1" }) }),
     )
     for (const call of mocked.payment.aggregate.mock.calls) {
-      expect(call[0].where).not.toHaveProperty("installment")
+      expect(call[0]!.where).not.toHaveProperty("installment")
     }
   })
 })
