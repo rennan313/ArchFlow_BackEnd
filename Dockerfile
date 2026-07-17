@@ -6,9 +6,11 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
-# prisma's postinstall (`prisma generate`) validates that env("DATABASE_URL")
-# resolves to *something* even though generate never connects to it — the
-# real value is injected at runtime by Cloud Run, this is build-time only.
+# postinstall runs `prisma generate`, which needs the schema present...
+COPY prisma ./prisma
+# ...and needs env("DATABASE_URL") to resolve to *something*, even though
+# generate never connects to it — the real value is injected at runtime by
+# Cloud Run, this is build-time only.
 ENV DATABASE_URL="mongodb://user:password@localhost:27017/build"
 RUN npm ci
 
