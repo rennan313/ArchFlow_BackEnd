@@ -9,8 +9,11 @@ const enforceStrict = isProd && !isBuildPhase
 
 function required(name: string): string {
   const val = process.env[name]
-  if (!val) throw new Error(`[env] Missing required environment variable: ${name}`)
-  return val
+  if (val) return val
+  // Same build-phase carve-out as requiredInProd/requiredInProdOptional below:
+  // `next build` never has real secrets available, so only enforce at boot.
+  if (isBuildPhase) return ""
+  throw new Error(`[env] Missing required environment variable: ${name}`)
 }
 
 function optional(name: string, fallback: string): string {
