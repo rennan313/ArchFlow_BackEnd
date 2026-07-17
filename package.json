@@ -13,6 +13,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:proposal-library": "tsx prisma/seed-proposal-library.ts",
+    "db:seed:worklog-categories": "tsx prisma/seed-worklog-categories.ts",
     "migrate:supabase-id": "tsx scripts/migrate-supabase-id.ts",
     "migrate:validate": "tsx scripts/validate-migration.ts",
     "migrate:rollback": "tsx scripts/rollback-supabase-id.ts",

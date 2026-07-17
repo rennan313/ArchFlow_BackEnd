@@ -20,6 +20,7 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   serverExternalPackages: ["@prisma/client", "bcryptjs", "@react-pdf/renderer"],
 
   async rewrites() {
