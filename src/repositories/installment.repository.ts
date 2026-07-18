@@ -7,6 +7,7 @@ import { auditLog } from "@/lib/auditLog"
 import { newCorrelationId } from "@/lib/correlationId"
 import { timed, incrementCounter } from "@/lib/metrics"
 import type { InstallmentQueryInput } from "@/validations/installment"
+import { toSkip } from "@/lib/pagination"
 
 const DOCUMENT_SUMMARY = {
   select: {
@@ -63,7 +64,7 @@ export const installmentRepository = {
 
   async findMany(workspaceId: string, query: InstallmentQueryInput) {
     const { page, limit, direction, projectId, clientId, supplierId, categoryId, costCenterId, status, overdue, dueDateFrom, dueDateTo, sortBy, sortOrder } = query
-    const skip = (page - 1) * limit
+    const skip = toSkip(page, limit)
 
     const where: Prisma.InstallmentWhereInput = {
       workspaceId,

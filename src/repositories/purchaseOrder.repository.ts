@@ -8,6 +8,7 @@ import { auditLog } from "@/lib/auditLog"
 import { newCorrelationId } from "@/lib/correlationId"
 import { timed } from "@/lib/metrics"
 import type { PurchaseOrderQueryInput } from "@/validations/purchaseOrder"
+import { toSkip } from "@/lib/pagination"
 
 const PURCHASE_ORDER_INCLUDE = {
   supplier:   { select: { id: true, name: true } },
@@ -55,7 +56,7 @@ export const purchaseOrderRepository = {
 
   async findMany(workspaceId: string, query: PurchaseOrderQueryInput) {
     const { page, limit, status, supplierId, projectId, search, sortBy, sortOrder } = query
-    const skip = (page - 1) * limit
+    const skip = toSkip(page, limit)
 
     const where: Prisma.PurchaseOrderWhereInput = {
       workspaceId,

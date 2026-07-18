@@ -6,6 +6,7 @@ import { auditLog } from "@/lib/auditLog"
 import { newCorrelationId } from "@/lib/correlationId"
 import { timed } from "@/lib/metrics"
 import type { FinancialDocumentQueryInput } from "@/validations/financialDocument"
+import { toSkip } from "@/lib/pagination"
 
 const DOCUMENT_INCLUDE = {
   project:    { select: { id: true, name: true } },
@@ -43,7 +44,7 @@ export const financialDocumentRepository = {
 
   async findMany(workspaceId: string, query: FinancialDocumentQueryInput) {
     const { page, limit, direction, projectId, clientId, supplierId, categoryId, costCenterId, search, includeCancelled, sortBy, sortOrder } = query
-    const skip = (page - 1) * limit
+    const skip = toSkip(page, limit)
 
     const where: Prisma.FinancialDocumentWhereInput = {
       workspaceId,

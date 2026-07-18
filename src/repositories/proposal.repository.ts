@@ -1,6 +1,7 @@
 import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type { ProposalQueryInput } from "@/validations/proposal";
+import { toSkip } from "@/lib/pagination";
 
 // Accepts either the global `prisma` singleton or a transaction client, so
 // creation can run standalone or as part of a larger atomic transaction.
@@ -13,7 +14,7 @@ export const proposalRepository = {
 
   async findMany(workspaceId: string, query: ProposalQueryInput) {
     const { page, limit, search, status, sortBy, sortOrder, archived } = query;
-    const skip = (page - 1) * limit;
+    const skip = toSkip(page, limit);
 
     const where: Prisma.ProposalWhereInput = {
       workspaceId,

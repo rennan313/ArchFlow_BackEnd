@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import type { MeetingQueryInput } from "@/validations/meeting"
+import { toSkip } from "@/lib/pagination"
 
 const clientSelect = { select: { id: true, name: true, company: true } } as const
 
@@ -14,7 +15,7 @@ export const meetingRepository = {
 
   async findMany(workspaceId: string, query: MeetingQueryInput) {
     const { page, limit, search, clientId, projectId, status, type, from, to, sortBy, sortOrder, archived } = query
-    const skip = (page - 1) * limit
+    const skip = toSkip(page, limit)
 
     const where: Prisma.MeetingWhereInput = {
       workspaceId,

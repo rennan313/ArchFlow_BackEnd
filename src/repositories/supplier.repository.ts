@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import type { SupplierQueryInput } from "@/validations/supplier"
+import { toSkip } from "@/lib/pagination"
 
 const INCLUDE_RELATIONS = {
   category: { select: { id: true, name: true } },
@@ -13,7 +14,7 @@ export const supplierRepository = {
 
   async findMany(workspaceId: string, query: SupplierQueryInput) {
     const { page, limit, search, categoryId, archived, sortBy, sortOrder } = query
-    const skip = (page - 1) * limit
+    const skip = toSkip(page, limit)
 
     const where: Prisma.SupplierWhereInput = {
       workspaceId,

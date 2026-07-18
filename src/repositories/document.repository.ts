@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import type { DocumentQueryInput, CreateDocumentFolderInput } from "@/validations/document"
+import { toSkip } from "@/lib/pagination"
 
 const VERSION_INCLUDE = { versions: { orderBy: { version: "desc" as const } } }
 
@@ -14,7 +15,7 @@ export const documentRepository = {
 
   async findMany(workspaceId: string, query: DocumentQueryInput) {
     const { page, limit, search, type, clientId, projectId, folderId, sortBy, sortOrder, archived } = query
-    const skip = (page - 1) * limit
+    const skip = toSkip(page, limit)
 
     const where: Prisma.DocumentWhereInput = {
       workspaceId,

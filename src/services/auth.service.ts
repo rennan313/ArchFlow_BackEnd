@@ -231,56 +231,6 @@ export const authService = {
     emitEvent("auth.email_verification.completed", { userId: user.id, email: user.email })
   },
 
-  async googleSignIn(input: { email: string; name: string; image?: string | null; googleId: string }) {
-    let user = await prisma.user.findUnique({ where: { email: input.email } })
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          email:         input.email,
-          name:          input.name,
-          image:         input.image ?? null,
-          googleId:      input.googleId,
-          provider:      "google",
-          emailVerified: new Date(), // Google has already verified this email
-          lastLogin:     new Date(),
-        },
-      })
-      await workspaceService.createForUser(user.id, user.name)
-      user = await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
-    } else {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          name:          input.name,
-          image:         input.image ?? user.image ?? null,
-          googleId:      user.googleId ?? input.googleId,
-          emailVerified: user.emailVerified ?? new Date(),
-          lastLogin:     new Date(),
-        },
-      })
-      if (!user.workspaceId) {
-        await workspaceService.createForUser(user.id, user.name)
-        user = await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
-      }
-    }
-
-    emitEvent("auth.google.success", { userId: user.id, email: user.email })
-    const accessToken = signAccessToken(buildPayload(user))
-    return {
-      user: {
-        id:            user.id,
-        name:          user.name,
-        email:         user.email,
-        image:         user.image,
-        role:          user.role,
-        workspaceId:   user.workspaceId,
-        workspaceRole: user.workspaceRole,
-      },
-      accessToken,
-    }
-  },
-
   async register(input: CredentialsRegisterInput, meta?: { ip?: string; userAgent?: string }) {
     const existing = await prisma.user.findUnique({ where: { email: input.email } })
 

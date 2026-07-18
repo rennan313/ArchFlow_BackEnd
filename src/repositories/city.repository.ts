@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { toSkip } from '@/lib/pagination'
 
 function normalize(str: string) {
   return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -18,7 +19,7 @@ export const cityRepository = {
   },
 
   searchByState(stateUf: string, q: string, page: number, limit: number) {
-    const skip  = (page - 1) * limit
+    const skip  = toSkip(page, limit)
     const norm  = normalize(q)
     const where = {
       stateUf: stateUf.toUpperCase(),

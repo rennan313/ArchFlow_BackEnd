@@ -1,6 +1,7 @@
 import { prisma, type PrismaTransactionClient } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import type { ClientQueryInput } from "@/validations/client"
+import { toSkip } from "@/lib/pagination"
 
 // Accepts either the global `prisma` singleton or a transaction client
 // (`prisma.$transaction(async (tx) => ...)`), so find-or-create logic can
@@ -25,7 +26,7 @@ export const clientRepository = {
 
   async findMany(workspaceId: string, query: ClientQueryInput) {
     const { page, limit, search, status, state, sortBy, sortOrder, archived } = query
-    const skip = (page - 1) * limit
+    const skip = toSkip(page, limit)
 
     const where: Prisma.ClientWhereInput = {
       workspaceId,

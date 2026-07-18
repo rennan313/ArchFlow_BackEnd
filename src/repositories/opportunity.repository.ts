@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import type { OpportunityQueryInput } from "@/validations/opportunity"
+import { toSkip } from "@/lib/pagination"
 
 const INCLUDE_RELATIONS = {
   client:  { select: { id: true, name: true, email: true, city: true, state: true } },
@@ -17,7 +18,7 @@ export const opportunityRepository = {
 
   async findMany(workspaceId: string, query: OpportunityQueryInput) {
     const { page, limit, search, stage, clientId, sortBy, sortOrder, archived } = query
-    const skip = (page - 1) * limit
+    const skip = toSkip(page, limit)
 
     const where: Prisma.OpportunityWhereInput = {
       workspaceId,

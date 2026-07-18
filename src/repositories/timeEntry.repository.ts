@@ -6,6 +6,7 @@ import { auditLog } from "@/lib/auditLog"
 import { newCorrelationId } from "@/lib/correlationId"
 import { timed } from "@/lib/metrics"
 import type { TimeEntryQueryInput } from "@/validations/timeEntry"
+import { toSkip } from "@/lib/pagination"
 
 const TIME_ENTRY_INCLUDE = {
   project:  { select: { id: true, name: true } },
@@ -72,7 +73,7 @@ export const timeEntryRepository = {
   // optionally filter by query.userId, or see the whole workspace if omitted.
   async findMany(workspaceId: string, query: TimeEntryQueryInput, scopedUserId: string | null) {
     const { page, limit, projectId, clientId, categoryId, from, to, archived, sortBy, sortOrder } = query
-    const skip = (page - 1) * limit
+    const skip = toSkip(page, limit)
     const effectiveUserId = scopedUserId ?? query.userId
 
     const where: Prisma.TimeEntryWhereInput = {
