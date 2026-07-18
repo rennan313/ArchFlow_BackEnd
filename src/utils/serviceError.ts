@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { Prisma } from "@prisma/client";
 import * as Sentry from "@sentry/nextjs";
 import * as R from "@/lib/response";
 import { AppError, ErrorCode } from "@/lib/errors";
@@ -132,6 +133,21 @@ export function parseUnsupportedFileType(error: unknown): string | null {
 
 export function handleServiceError(error: unknown): NextResponse {
   if (error instanceof ZodError) return R.fromZodError(error);
+
+  // P2025 on a nested `connect` almost always means the authenticated
+  // caller's own User/Workspace record (from the JWT) no longer exists in
+  // this database — e.g. a session that outlived a dev-DB reset/reseed, or
+  // an account deleted after the token was issued. Every other referenced
+  // record (client, project, etc.) is already existence-checked explicitly
+  // before use, so this generic write-time failure is the one case worth a
+  // dedicated message: without it, the caller sees an opaque 500 with no
+  // path forward instead of "sign in again".
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2025"
+  ) {
+    return R.unauthorized("Sua sessão não é mais válida. Faça login novamente.");
+  }
 
   if (error instanceof AppError) {
     const handler = SERVICE_ERRORS[error.code];
