@@ -219,7 +219,18 @@ export const proposalSectionInstanceService = {
 
       // Fallback: no generatedText or unpopulated AI content — use advisor-based initialization
       const project = await projectRepository.findByProposalId(proposalId, workspaceId)
-      if (!project) throw new AppError(ErrorCode.PROPOSAL_PROJECT_NOT_LINKED)
+      if (!project) {
+        // No linked project yet — e.g. a proposal saved via "Salvar rascunho"
+        // that was never AI-generated (that path is what normally creates the
+        // linked Project). The advisor needs project context to recommend
+        // sections/template, so there's nothing to base a recommendation on.
+        // Previously this hard-blocked the Builder with a 400
+        // (PROPOSAL_PROJECT_NOT_LINKED), leaving the user with no way to open
+        // a draft proposal at all. Initialize with zero section instances
+        // instead — buildView() still returns a valid (empty) builder view,
+        // and the user can add sections manually from the library.
+        return buildView(proposalId, workspaceId)
+      }
 
       const advice = await proposalAdvisorService.advise(project.id, workspaceId)
 
