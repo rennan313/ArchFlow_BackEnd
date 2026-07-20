@@ -4,7 +4,7 @@ import { AppError, ErrorCode } from "@/lib/errors"
 import { withTransactionRetry } from "@/lib/transactionRetry"
 import { auditLog } from "@/lib/auditLog"
 import { newCorrelationId } from "@/lib/correlationId"
-import { timed } from "@/lib/metrics"
+import { timed, incrementCounter } from "@/lib/metrics"
 import type { TimeEntryQueryInput } from "@/validations/timeEntry"
 import { toSkip } from "@/lib/pagination"
 
@@ -39,6 +39,9 @@ interface StartTimerInput {
   description?: string
   tags?: string[]
   isBillable: boolean
+  // MEL-16 — telemetry-only, never written to TimeEntry (see the schema
+  // comment in validations/timeEntry.ts).
+  startSource?: string
 }
 
 // Mirrors purchaseOrder.repository.ts#isUniqueConstraintViolation — same
@@ -51,6 +54,14 @@ function isUniqueConstraintViolation(error: unknown): boolean {
 function secondsBetween(from: Date, to: Date): number {
   return Math.max(0, Math.round((to.getTime() - from.getTime()) / 1000))
 }
+
+// MEL-16 (observability) — matches the frontend's identical constant
+// (ArchFlow/src/lib/duration.ts#LONG_TIMER_THRESHOLD_SECONDS), which drives
+// the "ajustar ou manter" confirmation before finishing a long timer
+// (MEL-11). Kept in sync manually — the two repos can't share code. Used
+// here only to flag the completed entry in the audit log/metrics; stop()
+// itself never limits or blocks on this (Sprint V2 decision #4).
+const LONG_TIMER_THRESHOLD_SECONDS = 12 * 3600
 
 export const timeEntryRepository = {
   findById(id: string, workspaceId: string) {
@@ -156,7 +167,10 @@ export const timeEntryRepository = {
           include: TIME_ENTRY_INCLUDE,
         })
 
-        auditLog({ ...base, event: "time_entry_started", entityId: entry.id })
+        // MEL-16 — startSource is telemetry-only (see StartTimerInput above),
+        // never part of the `data` written to TimeEntry.
+        if (input.startSource) incrementCounter(`worklog.start.source.${input.startSource}`)
+        auditLog({ ...base, event: "time_entry_started", entityId: entry.id, startSource: input.startSource })
         return entry
       }), { context: base }))
     } catch (error) {
@@ -253,7 +267,13 @@ export const timeEntryRepository = {
       })
       if (cas.count === 0) throw new AppError(ErrorCode.TIMER_NOT_ACTIVE)
 
-      auditLog({ ...base, event: "time_entry_stopped", durationSeconds })
+      // MEL-16 — flags entries finished at/above the same threshold that
+      // triggers the frontend's "ajustar ou manter" prompt (MEL-11), so how
+      // often that actually happens is visible without re-deriving it from
+      // raw durations later. Never blocks/limits stop() itself.
+      const longDuration = durationSeconds >= LONG_TIMER_THRESHOLD_SECONDS
+      if (longDuration) incrementCounter("worklog.stop.long_duration")
+      auditLog({ ...base, event: "time_entry_stopped", durationSeconds, longDuration })
       return tx.timeEntry.findFirstOrThrow({ where: { id }, include: TIME_ENTRY_INCLUDE })
     }), { context: base }))
   },

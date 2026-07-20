@@ -19,6 +19,8 @@
     "migrate:rollback": "tsx scripts/rollback-supabase-id.ts",
     "migrate:workspace-dry-run": "tsx scripts/dry-run-workspace-backfill.ts",
     "migrate:subscriptions": "tsx scripts/backfill-subscriptions.ts",
+    "check:worklog-indexes": "tsx scripts/check-worklog-indexes.ts",
+    "create:worklog-indexes": "tsx scripts/create-worklog-indexes.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

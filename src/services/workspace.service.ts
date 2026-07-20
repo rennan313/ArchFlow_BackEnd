@@ -60,7 +60,21 @@ export const workspaceService = {
   async get(workspaceId: string) {
     return prisma.workspace.findUnique({
       where:  { id: workspaceId },
-      select: { id: true, name: true, slug: true, plan: true, active: true, dashboardLayout: true, createdAt: true },
+      select: { id: true, name: true, slug: true, plan: true, active: true, dashboardLayout: true, timezone: true, createdAt: true },
+    })
+  },
+
+  // Worklog Sprint V2, MEL-01 — the only mutable field today is timezone;
+  // shaped as a settings bag (not updateTimezone(workspaceId, tz)) so future
+  // workspace-level settings can join the same schema/endpoint instead of
+  // spawning a new PATCH route each time, same reasoning as
+  // updateDashboardLayout being its own dedicated method rather than an
+  // ad-hoc prisma.workspace.update() call at the route layer.
+  async updateSettings(workspaceId: string, input: { timezone?: string | null }) {
+    return prisma.workspace.update({
+      where: { id: workspaceId },
+      data:  { ...(input.timezone !== undefined && { timezone: input.timezone }) },
+      select: { id: true, name: true, slug: true, plan: true, active: true, dashboardLayout: true, timezone: true, createdAt: true },
     })
   },
 

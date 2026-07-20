@@ -12,10 +12,13 @@ type Ctx = { params: Promise<{ id: string }> }
 // figure means. Same either-permission-gets-past-the-door shape as
 // GET /api/time-entries — scopedUserId (ADR-022) narrows totals/byUser to
 // the caller's own entries when they lack view:time-entries.
-export const GET = requireAnyWorkspacePermission("create:time-entries", "view:time-entries")(async (_req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
+export const GET = requireAnyWorkspacePermission("create:time-entries", "view:time-entries")(async (req: NextRequest, ctx: Ctx, user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
     const scopedUserId = hasPermission(user.workspaceRole ?? "VIEWER", "view:time-entries") ? null : user.sub
-    return ok(await worklogSummaryService.getProjectSummary(id, workspaceId, scopedUserId))
+    // MEL-01 — optional browser-resolved timezone fallback, used only while
+    // the workspace has none configured yet (resolveTimezone in the service).
+    const clientTimezone = req.nextUrl.searchParams.get("tz")
+    return ok(await worklogSummaryService.getProjectSummary(id, workspaceId, scopedUserId, clientTimezone))
   } catch (error) { return handleServiceError(error) }
 })

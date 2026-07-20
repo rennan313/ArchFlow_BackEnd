@@ -169,3 +169,30 @@ db.time_entries.getIndexes()
   item 12), otherwise the script validates nothing but query-level timing
 - Staging/Production: as part of the Worklog Fase 1 deployment runbook —
   must exist before the first real `start()` in that environment
+
+### Automated verification (MEL-02, Worklog Sprint V2)
+
+`scripts/check-worklog-indexes.ts` (`npm run check:worklog-indexes`) is a
+**read-only** check against whatever database `DATABASE_URL` points to — it
+lists the indexes on `time_entries` and reports whether one exists on
+`activeOwnerId` with `{ unique: true, sparse: true }`. It never creates or
+alters anything (`schema.prisma` intentionally has no `@unique` here — see
+above — and this script must not change that). Exit code is `0` when the
+index is present and correctly shaped, `1` otherwise, so it can be wired into
+a deploy-time gate later without extra parsing.
+
+**Result as of 2026-07-20, `arch-flow-dev`**: was **MISSING** when first
+checked (`time_entries` had only `_id_`,
+`time_entries_workspaceId_userId_archived_idx`, and
+`time_entries_workspaceId_projectId_idx`). Created the same day via
+`scripts/create-worklog-indexes.ts` (`npm run create:worklog-indexes`) —
+same idempotent pattern as `create-billing-indexes.ts` — and re-verified
+with `check:worklog-indexes`: **now present** with
+`{ unique: true, sparse: true }`. The one-active-timer-per-user invariant
+(ADR-021) is protected by the database in `arch-flow-dev` as of this sprint.
+
+**Still required**: run `npm run create:worklog-indexes` (or the manual
+`createIndex` command above) against every other environment — staging and
+production — before Worklog carries any real concurrent load there. This
+check/creation pair was only run against the local dev database as part of
+Worklog Sprint V2, Fase 1 (MEL-02); it has not been run anywhere else yet.

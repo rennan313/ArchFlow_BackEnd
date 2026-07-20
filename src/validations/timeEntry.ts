@@ -14,6 +14,14 @@ export const startTimerSchema = z.object({
   description: z.string().max(2000).optional(),
   tags:        z.array(z.string().min(1).max(50)).max(20).optional(),
   isBillable:  z.boolean().optional().default(true),
+  // MEL-16 (Worklog Sprint V2, observability) — telemetry-only hint of which
+  // UI affordance called start(): the global widget's quick-start, the
+  // Worklog list's "Continuar" (MEL-05), or a project task's "Trabalhar
+  // nesta tarefa". Never persisted on TimeEntry (unrelated to the existing
+  // TimeEntrySource MANUAL/TIMER column) — only flows into the
+  // time_entry_started audit log line and a metrics counter, so usage of
+  // each entry point is visible without a new telemetry tool.
+  startSource: z.enum(["quick_start", "continue", "task"]).optional(),
 })
 
 export const createManualTimeEntrySchema = z

@@ -281,6 +281,16 @@ model Workspace {
   // Shape: {"order": string[], "hidden": string[]}
   dashboardLayout String?
 
+  // Worklog Sprint V2, MEL-01 — IANA zone name (e.g. "America/Sao_Paulo"),
+  // validated against Intl.supportedValuesOf("timeZone") in
+  // validations/workspace.ts. Null until an OWNER/ADMIN sets one explicitly
+  // (update:workspace) — TimeEntry timestamps are always stored in UTC
+  // regardless; this only decides which calendar day/week a given instant
+  // displays under and how worklogSummary.service.ts buckets weekly totals.
+  // Frontend falls back to the browser's resolved timezone while this is
+  // null (WORKLOG_ARCHITECTURE_DECISIONS.md, Sprint V2 addendum).
+  timezone String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -62,8 +62,23 @@ interface DeleteOpts extends BaseOpts {
   guard?: () => Promise<void>
 }
 
+// MEL-13 (Worklog Sprint V2) — was `entity.toLowerCase()` alone, which
+// concatenates multi-word PascalCase entity names with no separator
+// ("TimeEntry" → "timeentry", "ActivityCategory" → "activitycategory").
+// Documented as a known, pre-existing, app-wide bug in
+// WORKLOG_ARCHITECTURE_DECISIONS.md (checklist item 6) before this fix —
+// affects every multi-word entity's archive/restore/cancel/delete audit
+// events, not just Worklog's. Verified before fixing: entityLifecycleService
+// is fully mocked in every service test that exercises it, so no test
+// asserts the old (buggy) literal strings; nothing in either repo queries
+// audit logs by the old names. Single-word entities (Client, Project, ...)
+// are unaffected either way.
+function toSnakeCase(pascalCase: string): string {
+  return pascalCase.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase()
+}
+
 function eventName(entity: string, action: string): string {
-  return `${entity.toLowerCase()}_${action}`
+  return `${toSnakeCase(entity)}_${action}`
 }
 
 export const entityLifecycleService = {

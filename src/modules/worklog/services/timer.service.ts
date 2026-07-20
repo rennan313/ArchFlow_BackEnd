@@ -17,6 +17,7 @@ export const timerService = {
       workspaceId, userId,
       projectId: input.projectId, clientId: input.clientId, taskId: input.taskId, categoryId: input.categoryId,
       description: input.description, tags: input.tags, isBillable: input.isBillable,
+      startSource: input.startSource,
     })
   },
 
