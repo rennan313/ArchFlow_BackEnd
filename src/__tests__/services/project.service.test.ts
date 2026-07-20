@@ -70,6 +70,33 @@ describe("projectService.create", () => {
     ).rejects.toThrow(AppError)
     expect(projectRepository.create).not.toHaveBeenCalled()
   })
+
+  // Kanban Sprint — Fase D (MEL-07): quick-create-in-column can create a
+  // Project already past BRIEFING. Same phase-entry automations as update()
+  // must fire — see the identical guarantee for the Opportunity side in
+  // opportunity.service.test.ts.
+  it("fires onPhaseChanged (creates the matching task) when created directly in EXECUTIVE_DESIGN", async () => {
+    vi.mocked(projectRepository.create).mockResolvedValue({ ...mockProject, phase: "EXECUTIVE_DESIGN" } as never)
+    vi.mocked(automationService.isEnabled).mockResolvedValue(true)
+    vi.mocked(taskRepository.findByProjectAndKey).mockResolvedValue(null)
+    vi.mocked(taskService.createAutomated).mockResolvedValue({ id: "task-1" } as never)
+    vi.mocked(automationService.record).mockResolvedValue({} as never)
+
+    await projectService.create("workspace-1", "user-1", {
+      clientId: "client-1", name: "Casa Jardim", type: "RESIDENTIAL", phase: "EXECUTIVE_DESIGN",
+    } as never)
+
+    expect(taskService.createAutomated).toHaveBeenCalledWith("workspace-1", "proj-1", "user-1", "Desenvolver Projeto Executivo", "TASK_EXECUTIVE_DESIGN")
+  })
+
+  it("does not fire onPhaseChanged when created in the default BRIEFING phase", async () => {
+    vi.mocked(projectRepository.create).mockResolvedValue(mockProject as never)
+
+    await projectService.create("workspace-1", "user-1", { clientId: "client-1", name: "Casa Jardim", type: "RESIDENTIAL" } as never)
+
+    expect(taskService.createAutomated).not.toHaveBeenCalled()
+    expect(automationService.isEnabled).not.toHaveBeenCalled()
+  })
 })
 
 describe("projectService.delete", () => {
@@ -209,6 +236,63 @@ describe("projectService — Automações 02-05 (task per phase) e 10 (post-deli
 
     expect(taskService.createAutomated).not.toHaveBeenCalled()
     expect(followUpRepository.create).not.toHaveBeenCalled()
+  })
+})
+
+// Kanban Sprint — Fase A (MEL-04): optimistic concurrency on update().
+describe("projectService.update — optimistic concurrency (MEL-04)", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("succeeds and never touches the STALE_WRITE path when expectedUpdatedAt is omitted (backward compatible)", async () => {
+    vi.mocked(projectRepository.findById)
+      .mockResolvedValueOnce(mockProject as never)
+      .mockResolvedValueOnce({ ...mockProject, phase: "EXECUTIVE_DESIGN" } as never)
+    vi.mocked(projectRepository.update).mockResolvedValue(undefined as never)
+
+    await expect(
+      projectService.update("proj-1", "workspace-1", { phase: "EXECUTIVE_DESIGN" } as never),
+    ).resolves.toMatchObject({ phase: "EXECUTIVE_DESIGN" })
+  })
+
+  it("throws STALE_WRITE when the record changed since expectedUpdatedAt was read (count=0)", async () => {
+    vi.mocked(projectRepository.findById).mockResolvedValueOnce(mockProject as never)
+    vi.mocked(projectRepository.update).mockResolvedValue({ count: 0 } as never)
+
+    await expect(
+      projectService.update("proj-1", "workspace-1", {
+        phase: "DELIVERY", expectedUpdatedAt: new Date("2020-01-01"),
+      } as never),
+    ).rejects.toMatchObject({ code: ErrorCode.STALE_WRITE })
+
+    expect(automationService.isEnabled).not.toHaveBeenCalled() // onPhaseChanged never runs for the loser
+  })
+
+  it("two concurrent moves into DELIVERY racing the same project: only the winner's write succeeds, and the post-delivery follow-up is created at most once", async () => {
+    vi.mocked(projectRepository.findById)
+      .mockResolvedValueOnce(mockProject as never)                                   // request A's "before"
+      .mockResolvedValueOnce(mockProject as never)                                   // request B's "before"
+      .mockResolvedValueOnce({ ...mockProject, phase: "DELIVERY" } as never)         // request A's "after" (winner only)
+    vi.mocked(automationService.isEnabled).mockResolvedValue(true)
+    vi.mocked(followUpRepository.findByProjectAutomation).mockResolvedValue(null)
+    vi.mocked(followUpRepository.create).mockResolvedValue({ id: "fu-1" } as never)
+    vi.mocked(automationService.record).mockResolvedValue({} as never)
+
+    const sameToken = mockProject.updatedAt
+    vi.mocked(projectRepository.update)
+      .mockResolvedValueOnce({ count: 1 } as never)
+      .mockResolvedValueOnce({ count: 0 } as never)
+
+    const requestA = projectService.update("proj-1", "workspace-1", { phase: "DELIVERY", expectedUpdatedAt: sameToken } as never)
+    const requestB = projectService.update("proj-1", "workspace-1", { phase: "DELIVERY", expectedUpdatedAt: sameToken } as never)
+
+    const [resultA, resultB] = await Promise.allSettled([requestA, requestB])
+
+    expect(resultA.status).toBe("fulfilled")
+    expect(resultB.status).toBe("rejected")
+    if (resultB.status === "rejected") {
+      expect(resultB.reason).toMatchObject({ code: ErrorCode.STALE_WRITE })
+    }
+    expect(followUpRepository.create).toHaveBeenCalledTimes(1)
   })
 })
 

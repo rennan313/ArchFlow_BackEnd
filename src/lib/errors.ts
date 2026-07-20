@@ -95,6 +95,10 @@ export enum ErrorCode {
   TIME_ENTRY_ACTIVE_CANNOT_ARCHIVE = "TIME_ENTRY_ACTIVE_CANNOT_ARCHIVE",
   ACTIVITY_CATEGORY_NOT_FOUND = "ACTIVITY_CATEGORY_NOT_FOUND",
   ACTIVITY_CATEGORY_NAME_TAKEN = "ACTIVITY_CATEGORY_NAME_TAKEN",
+  // Kanban Sprint — Fase A (MEL-04): optimistic concurrency. Thrown when a
+  // caller supplies expectedUpdatedAt and the record was modified by someone
+  // else in the meantime — see opportunity.service.ts/project.service.ts.
+  STALE_WRITE = "STALE_WRITE",
 }
 
 export class AppError extends Error {

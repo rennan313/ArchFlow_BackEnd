@@ -32,7 +32,16 @@ export const createOpportunitySchema = z.object({
 
 export const updateOpportunitySchema = createOpportunitySchema
   .omit({ clientId: true })
-  .extend({ probability: z.number().min(0).max(100).optional() })
+  .extend({
+    probability: z.number().min(0).max(100).optional(),
+    // Kanban Sprint — Fase A (MEL-04). Optional optimistic-concurrency token:
+    // when present, the write only succeeds if the record's current
+    // updatedAt still matches this value — otherwise it's rejected as
+    // STALE_WRITE (409). Omitted by callers not yet updated to send it
+    // (backward compatible — falls back to the pre-existing unconditional
+    // update). The Kanban board sends it on every stage move.
+    expectedUpdatedAt: z.coerce.date().optional(),
+  })
   .partial()
 
 export const opportunityQuerySchema = z.object({

@@ -101,8 +101,14 @@ export const projectRepository = {
     })
   },
 
-  update(id: string, workspaceId: string, data: Prisma.ProjectUpdateInput) {
-    return prisma.project.updateMany({ where: { id, workspaceId }, data })
+  // Kanban Sprint — Fase A (MEL-04): expectedUpdatedAt, when supplied, adds
+  // an optimistic-concurrency guard — see the identical comment in
+  // opportunity.repository.ts for the full rationale.
+  update(id: string, workspaceId: string, data: Prisma.ProjectUpdateInput, expectedUpdatedAt?: Date) {
+    return prisma.project.updateMany({
+      where: { id, workspaceId, ...(expectedUpdatedAt ? { updatedAt: expectedUpdatedAt } : {}) },
+      data,
+    })
   },
 
   phaseStats(workspaceId: string) {

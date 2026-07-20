@@ -45,7 +45,7 @@ export const projectService = {
     // the centralized guard before any write.
     await assertWorkspaceReferences(workspaceId, { clientId: input.clientId, proposalId: input.proposalId })
 
-    return projectRepository.create(workspaceId, userId, {
+    const project = await projectRepository.create(workspaceId, userId, {
       clientId:         input.clientId,
       proposalId:       input.proposalId,
       name:             input.name,
@@ -64,15 +64,55 @@ export const projectService = {
       contractValue:    input.contractValue,
       notes:            input.notes,
     })
+
+    // Kanban Sprint — Fase D (MEL-07). Quick-create-in-column lets a caller
+    // create a Project already past BRIEFING — update() has always fired
+    // onPhaseChanged for that transition, but create() never did (nothing
+    // could reach this path before MEL-07: the frontend never sent `phase`
+    // on create). Mirrored here so "born in a phase" behaves the same as
+    // "moved into a phase" — same automations, same idempotency guards.
+    if (project.phase !== "BRIEFING") {
+      await this.onPhaseChanged(workspaceId, project, project.phase as ProjectPhase)
+    }
+
+    return project
   },
 
+  // Kanban Sprint — Fase A (MEL-01). Side-effect map for Project.phase
+  // transitions (documented per the sprint's pre-implementation requirement):
+  //   * → PRELIMINARY_DESIGN / EXECUTIVE_DESIGN / COMPATIBILIZATION / APPROVAL
+  //     each create one automated Task (Automações 02-05), one task type per
+  //     phase, guarded by taskRepository.findByProjectAndKey.
+  //   * → DELIVERY creates a post-delivery FollowUp (Automação 10), guarded
+  //     by followUpRepository.findByProjectAutomation.
+  //   * → BRIEFING and any transition where the phase doesn't actually
+  //     change has no side effect.
+  //   * Moving backward (e.g. APPROVAL → PRELIMINARY_DESIGN) then forward
+  //     again through the same phase a second time is allowed (no rigid
+  //     workflow, per sprint direction) — the same idempotency guards above
+  //     mean the task/follow-up is NOT recreated the second time through.
+  // Protection strategy (same shape as Opportunity above — no rigid phase
+  // matrix, just closing the concurrency gap around the existing guards):
+  //   1. Idempotency: pre-existing findByProjectAndKey/findByProjectAutomation
+  //      checks, unchanged.
+  //   2. Concurrency: update() now takes an optional expectedUpdatedAt
+  //      (MEL-04) — two concurrent requests moving the same project into the
+  //      same side-effect-triggering phase can no longer both observe
+  //      before.phase as the old value; the second gets STALE_WRITE (409)
+  //      before onPhaseChanged ever runs.
   async update(id: string, workspaceId: string, input: UpdateProjectInput) {
     // clientId is omitted from UpdateProjectInput (validations/project.ts), but
     // proposalId still reaches here from request input and needs the same guard.
     await assertWorkspaceReferences(workspaceId, { proposalId: input.proposalId })
 
     const before = await this.getById(id, workspaceId)
-    await projectRepository.update(id, workspaceId, input as Parameters<typeof projectRepository.update>[2])
+
+    const { expectedUpdatedAt, ...rest } = input
+    const result = await projectRepository.update(id, workspaceId, rest as Parameters<typeof projectRepository.update>[2], expectedUpdatedAt)
+    if (expectedUpdatedAt && result.count === 0) {
+      throw new AppError(ErrorCode.STALE_WRITE)
+    }
+
     const after = await this.getById(id, workspaceId)
 
     if (input.phase && input.phase !== before.phase) {
@@ -84,6 +124,9 @@ export const projectService = {
 
   // Automações 02-05 — Project.phase muda para uma das 4 fases de execução → cria a tarefa correspondente.
   // Automação 10 — Project.phase = DELIVERY → cria follow-up pós-entrega em 30 dias.
+  // Idempotency guards (findByProjectAndKey / findByProjectAutomation, below)
+  // are the primary protection; the concurrency window around them is closed
+  // by update()'s optimistic-concurrency check above (Fase A, MEL-04).
   async onPhaseChanged(workspaceId: string, project: { id: string; name: string; userId: string; clientId: string }, newPhase: ProjectPhase) {
     const taskRule = TASK_ON_PHASE[newPhase]
     if (taskRule && (await automationService.isEnabled(workspaceId, taskRule.key))) {

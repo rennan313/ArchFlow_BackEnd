@@ -49,7 +49,14 @@ export const createProjectSchema = z.object({
   notes:            z.string().max(5000).optional(),
 })
 
-export const updateProjectSchema = createProjectSchema.partial().omit({ clientId: true })
+export const updateProjectSchema = createProjectSchema
+  .partial()
+  .omit({ clientId: true })
+  .extend({
+    // Kanban Sprint — Fase A (MEL-04). See the identical field in
+    // validations/opportunity.ts for the full rationale.
+    expectedUpdatedAt: z.coerce.date().optional(),
+  })
 
 export const projectQuerySchema = z.object({
   page:      z.coerce.number().int().min(1).optional().default(1),

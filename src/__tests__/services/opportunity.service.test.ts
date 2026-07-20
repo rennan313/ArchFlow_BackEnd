@@ -55,6 +55,37 @@ describe("opportunityService.create", () => {
       opportunityService.create("workspace-1", "user-1", { clientId: "missing", title: "x", projectType: "y" } as never),
     ).rejects.toMatchObject({ code: ErrorCode.CROSS_TENANT_REFERENCE })
   })
+
+  // Kanban Sprint — Fase D (MEL-07): quick-create-in-column can create an
+  // Opportunity already in APPROVED. Same automation as update() must fire —
+  // see the identical guarantee for onPhaseChanged/project.service.test.ts.
+  it("fires autoCreateProjectOnApproval when created directly with stage=APPROVED", async () => {
+    vi.mocked(clientRepository.findById).mockResolvedValue({ id: "client-1" } as never)
+    vi.mocked(opportunityRepository.create).mockResolvedValue({ ...mockOpportunity, stage: "APPROVED", probability: 100 } as never)
+    vi.mocked(automationService.isEnabled).mockResolvedValue(true)
+    vi.mocked(projectRepository.findByOpportunityId).mockResolvedValue(null)
+    vi.mocked(projectRepository.create).mockResolvedValue({ id: "proj-1", name: mockOpportunity.title } as never)
+    vi.mocked(automationService.record).mockResolvedValue({} as never)
+
+    await opportunityService.create("workspace-1", "user-1", {
+      clientId: "client-1", title: "Lead já fechado", projectType: "Residencial", stage: "APPROVED",
+    } as never)
+
+    expect(projectRepository.create).toHaveBeenCalledWith("workspace-1", "user-1", expect.objectContaining({
+      clientId: "client-1", opportunityId: "opp-1", phase: "BRIEFING",
+    }))
+  })
+
+  it("does not fire autoCreateProjectOnApproval when created in a non-APPROVED stage", async () => {
+    vi.mocked(clientRepository.findById).mockResolvedValue({ id: "client-1" } as never)
+    vi.mocked(opportunityRepository.create).mockResolvedValue({ ...mockOpportunity, stage: "LEAD" } as never)
+
+    await opportunityService.create("workspace-1", "user-1", {
+      clientId: "client-1", title: "Lead novo", projectType: "Residencial",
+    } as never)
+
+    expect(projectRepository.create).not.toHaveBeenCalled()
+  })
 })
 
 describe("opportunityService.update", () => {
@@ -68,7 +99,7 @@ describe("opportunityService.update", () => {
 
     const result = await opportunityService.update("opp-1", "workspace-1", { stage: "FIRST_CONTACT" } as never)
 
-    expect(opportunityRepository.update).toHaveBeenCalledWith("opp-1", "workspace-1", expect.objectContaining({ stage: "FIRST_CONTACT", probability: 15 }))
+    expect(opportunityRepository.update).toHaveBeenCalledWith("opp-1", "workspace-1", expect.objectContaining({ stage: "FIRST_CONTACT", probability: 15 }), undefined)
     expect(result.stage).toBe("FIRST_CONTACT")
   })
 
@@ -80,7 +111,7 @@ describe("opportunityService.update", () => {
 
     await opportunityService.update("opp-1", "workspace-1", { stage: "FIRST_CONTACT", probability: 40 } as never)
 
-    expect(opportunityRepository.update).toHaveBeenCalledWith("opp-1", "workspace-1", expect.objectContaining({ probability: 40 }))
+    expect(opportunityRepository.update).toHaveBeenCalledWith("opp-1", "workspace-1", expect.objectContaining({ probability: 40 }), undefined)
   })
 })
 
@@ -141,6 +172,84 @@ describe("opportunityService — Automação 01 (auto-create Project on APPROVED
     await opportunityService.update("opp-1", "workspace-1", { stage: "APPROVED", probability: 100 } as never)
 
     expect(projectRepository.create).not.toHaveBeenCalled()
+  })
+})
+
+// Kanban Sprint — Fase A (MEL-04): optimistic concurrency on update().
+describe("opportunityService.update — optimistic concurrency (MEL-04)", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("succeeds and never touches the STALE_WRITE path when expectedUpdatedAt is omitted (backward compatible)", async () => {
+    vi.mocked(opportunityRepository.findById)
+      .mockResolvedValueOnce(mockOpportunity as never)
+      .mockResolvedValueOnce({ ...mockOpportunity, stage: "FIRST_CONTACT" } as never)
+    vi.mocked(opportunityRepository.update).mockResolvedValue(undefined as never) // no .count on the resolved value at all
+
+    await expect(
+      opportunityService.update("opp-1", "workspace-1", { stage: "FIRST_CONTACT" } as never),
+    ).resolves.toMatchObject({ stage: "FIRST_CONTACT" })
+  })
+
+  it("succeeds when expectedUpdatedAt matches the record's current updatedAt (count=1)", async () => {
+    const knownUpdatedAt = mockOpportunity.updatedAt
+    vi.mocked(opportunityRepository.findById)
+      .mockResolvedValueOnce(mockOpportunity as never)
+      .mockResolvedValueOnce({ ...mockOpportunity, stage: "FIRST_CONTACT" } as never)
+    vi.mocked(opportunityRepository.update).mockResolvedValue({ count: 1 } as never)
+
+    const result = await opportunityService.update("opp-1", "workspace-1", {
+      stage: "FIRST_CONTACT", expectedUpdatedAt: knownUpdatedAt,
+    } as never)
+
+    expect(opportunityRepository.update).toHaveBeenCalledWith(
+      "opp-1", "workspace-1", expect.objectContaining({ stage: "FIRST_CONTACT" }), knownUpdatedAt,
+    )
+    expect(result.stage).toBe("FIRST_CONTACT")
+  })
+
+  it("throws STALE_WRITE (not a silent overwrite) when the record changed since expectedUpdatedAt was read (count=0)", async () => {
+    vi.mocked(opportunityRepository.findById).mockResolvedValueOnce(mockOpportunity as never)
+    vi.mocked(opportunityRepository.update).mockResolvedValue({ count: 0 } as never)
+
+    await expect(
+      opportunityService.update("opp-1", "workspace-1", {
+        stage: "APPROVED", expectedUpdatedAt: new Date("2020-01-01"),
+      } as never),
+    ).rejects.toMatchObject({ code: ErrorCode.STALE_WRITE })
+  })
+
+  it("two concurrent approvals racing the same opportunity: only the winner's write succeeds, and autoCreateProjectOnApproval runs at most once — the loser never reaches it", async () => {
+    // Both requests read the SAME pre-write state (before.stage = LEAD) —
+    // this is exactly the race the original code comment flagged as
+    // accepted/unclosed prior to MEL-04.
+    vi.mocked(opportunityRepository.findById)
+      .mockResolvedValueOnce(mockOpportunity as never)                                    // request A's "before"
+      .mockResolvedValueOnce(mockOpportunity as never)                                    // request B's "before"
+      .mockResolvedValueOnce({ ...mockOpportunity, stage: "APPROVED" } as never)           // request A's "after" (only reached by the winner)
+    vi.mocked(automationService.isEnabled).mockResolvedValue(true)
+    vi.mocked(projectRepository.findByOpportunityId).mockResolvedValue(null)
+    vi.mocked(projectRepository.create).mockResolvedValue({ id: "proj-1", name: mockOpportunity.title } as never)
+    vi.mocked(automationService.record).mockResolvedValue({} as never)
+
+    const sameToken = mockOpportunity.updatedAt
+    // Request A's CAS write wins (count=1); request B's CAS write loses (count=0) — simulating A having already advanced updatedAt in the DB by the time B's updateMany runs.
+    vi.mocked(opportunityRepository.update)
+      .mockResolvedValueOnce({ count: 1 } as never)
+      .mockResolvedValueOnce({ count: 0 } as never)
+
+    const requestA = opportunityService.update("opp-1", "workspace-1", { stage: "APPROVED", expectedUpdatedAt: sameToken } as never)
+    const requestB = opportunityService.update("opp-1", "workspace-1", { stage: "APPROVED", expectedUpdatedAt: sameToken } as never)
+
+    const [resultA, resultB] = await Promise.allSettled([requestA, requestB])
+
+    expect(resultA.status).toBe("fulfilled")
+    expect(resultB.status).toBe("rejected")
+    if (resultB.status === "rejected") {
+      expect(resultB.reason).toMatchObject({ code: ErrorCode.STALE_WRITE })
+    }
+    // The decisive assertion: even though both requests observed
+    // before.stage !== "APPROVED", the Project is created exactly once.
+    expect(projectRepository.create).toHaveBeenCalledTimes(1)
   })
 })
 

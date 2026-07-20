@@ -68,20 +68,60 @@ export const opportunityService = {
       stage:           input.stage ?? "LEAD",
       source:          input.source,
     })
-    return withWeightedRevenue(opp)
+    const result = withWeightedRevenue(opp)
+
+    // Kanban Sprint — Fase D (MEL-07). Quick-create-in-column lets a caller
+    // create an Opportunity already in APPROVED — update() has always fired
+    // autoCreateProjectOnApproval for that transition, but create() never
+    // did (nothing could reach this path before MEL-07: the frontend never
+    // sent `stage` on create). Mirrored here so "born approved" behaves the
+    // same as "moved to approved" — same automation, same idempotency guard.
+    if (result.stage === "APPROVED") {
+      await this.autoCreateProjectOnApproval(workspaceId, result)
+    }
+
+    return result
   },
 
+  // Kanban Sprint — Fase A (MEL-01). Side-effect map for Opportunity.stage
+  // transitions (documented per the sprint's pre-implementation requirement
+  // before any transition validation was added):
+  //   * ANY stage → APPROVED (from a non-APPROVED stage) fires
+  //     autoCreateProjectOnApproval below (Automação 01) — creates a Project.
+  //   * Every other transition (including APPROVED → any other stage, i.e.
+  //     "reopening" an approved opportunity) has NO side effect — it's a
+  //     plain field update. Deliberately not blocked: users must be able to
+  //     move cards freely forward/back (sprint direction — no rigid
+  //     workflow), and re-approving later still hits the idempotency guard
+  //     below, so nothing duplicates.
+  // Protection strategy chosen (no rigid transition matrix — not needed,
+  // since only one transition target has a side effect):
+  //   1. Idempotency: autoCreateProjectOnApproval no-ops if a Project already
+  //      exists for this opportunityId (pre-existing guard, unchanged).
+  //   2. Concurrency: the update() call below now takes an optional
+  //      expectedUpdatedAt (MEL-04) — when the caller supplies it (the
+  //      Kanban board does, from Fase B onward), two concurrent "approve"
+  //      requests can no longer BOTH observe before.stage !== "APPROVED":
+  //      only the first's CAS write succeeds; the second gets STALE_WRITE
+  //      (409) and never reaches autoCreateProjectOnApproval at all. This
+  //      closes the residual race the original idempotency-guard comment
+  //      below explicitly flagged as accepted/unclosed.
   async update(id: string, workspaceId: string, input: UpdateOpportunityInput) {
     const before = await this.getById(id, workspaceId)
 
-    const updateData: Record<string, unknown> = { ...input }
+    const { expectedUpdatedAt, ...rest } = input
+    const updateData: Record<string, unknown> = { ...rest }
 
     // Auto-update probability when stage changes (unless manually overridden)
     if (input.stage && input.probability === undefined) {
       updateData.probability = STAGE_PROBABILITY[input.stage]
     }
 
-    await opportunityRepository.update(id, workspaceId, updateData)
+    const result = await opportunityRepository.update(id, workspaceId, updateData, expectedUpdatedAt)
+    if (expectedUpdatedAt && result.count === 0) {
+      throw new AppError(ErrorCode.STALE_WRITE)
+    }
+
     const after = await this.getById(id, workspaceId)
 
     if (input.stage === "APPROVED" && before.stage !== "APPROVED") {
@@ -101,9 +141,11 @@ export const opportunityService = {
     // not create a second Project. Project.opportunityId is deliberately NOT
     // a DB-level unique index (MongoDB's unique-on-optional-field semantics
     // would reject every second project that has no opportunityId at all),
-    // so this read-then-write check is the only guard — a residual race
-    // between two concurrent approvals of the exact same opportunity is
-    // accepted, matching the soft-dedup pattern used by the other automations.
+    // so this read-then-write check is the primary guard. As of Fase A
+    // (MEL-04), the residual race this comment used to accept as unclosed —
+    // two concurrent approvals both passing this check before either writes
+    // — is now closed one layer up in update() via optimistic concurrency,
+    // whenever the caller supplies expectedUpdatedAt.
     const existing = await projectRepository.findByOpportunityId(opportunity.id, workspaceId)
     if (existing) return
 

@@ -99,6 +99,8 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.ENTITY_ALREADY_ARCHIVED]: () => R.conflict("This record is already archived"),
   [ErrorCode.ENTITY_NOT_ARCHIVED]:     () => R.conflict("This record is not archived, there is nothing to restore"),
   [ErrorCode.PARENT_ARCHIVED]:         () => R.conflict("Cannot restore this record while its parent record is archived — restore the parent first"),
+  // Kanban Sprint — Fase A (MEL-04)
+  [ErrorCode.STALE_WRITE]: () => R.conflict("This record was changed by someone else. Refresh and try again."),
   // Legacy string aliases kept for backward compat during migration
   INVALID_TOKEN:     () => R.badRequest("Invalid reset token"),
   TOKEN_ALREADY_USED: () => R.badRequest("Reset token has already been used"),

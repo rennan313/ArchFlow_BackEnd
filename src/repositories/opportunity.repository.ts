@@ -54,8 +54,17 @@ export const opportunityRepository = {
   // NOTE: this previously filtered by { id } only — no userId/workspaceId —
   // a confirmed cross-tenant IDOR (any authenticated caller could update any
   // workspace's opportunity by id). Now scoped like every other write here.
-  update(id: string, workspaceId: string, data: Prisma.OpportunityUpdateInput) {
-    return prisma.opportunity.updateMany({ where: { id, workspaceId }, data })
+  //
+  // Kanban Sprint — Fase A (MEL-04): expectedUpdatedAt, when supplied, adds
+  // an optimistic-concurrency guard to the where clause — the updateMany
+  // matches (and updates) 0 rows if someone else wrote to this record after
+  // the caller last read it, instead of silently overwriting their change.
+  // The caller (opportunity.service.ts) checks result.count to detect this.
+  update(id: string, workspaceId: string, data: Prisma.OpportunityUpdateInput, expectedUpdatedAt?: Date) {
+    return prisma.opportunity.updateMany({
+      where: { id, workspaceId, ...(expectedUpdatedAt ? { updatedAt: expectedUpdatedAt } : {}) },
+      data,
+    })
   },
 
   // Pipeline aggregations
