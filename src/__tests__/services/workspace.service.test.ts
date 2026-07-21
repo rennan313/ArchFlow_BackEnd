@@ -47,6 +47,7 @@ const mockWorkspace = {
   plan:            "STARTER" as const,
   active:          true,
   dashboardLayout: null,
+  timezone:        null,
   createdAt:       new Date(),
   updatedAt:       new Date(),
 }

@@ -35,12 +35,12 @@ describe("taskService.listByProject", () => {
     })
   })
 
-  it("surfaces activeTimerUserId when the task's most recent entry is still RUNNING/PAUSED", async () => {
+  it("surfaces activeTimerUserId when the task's most recent entry is still OPEN", async () => {
     vi.mocked(projectRepository.findById).mockResolvedValue({ id: "proj-1" } as never)
     vi.mocked(taskRepository.findByProject).mockResolvedValue([{ id: "task-1" }] as never)
     vi.mocked(timeEntryRepository.aggregateByTasks).mockResolvedValue({
       totals: [],
-      lastEntries: [{ taskId: "task-1", startedAt: new Date("2026-07-15"), status: "RUNNING", userId: "user-2" }],
+      lastEntries: [{ taskId: "task-1", startedAt: new Date("2026-07-15"), status: "OPEN", userId: "user-2" }],
     } as never)
 
     const result = await taskService.listByProject("proj-1", "workspace-1")

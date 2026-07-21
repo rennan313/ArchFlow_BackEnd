@@ -20,7 +20,9 @@ export const taskService = {
     return tasks.map((task) => {
       const totalSeconds = totals.find((t) => t.taskId === task.id)?._sum.durationSeconds ?? 0
       const lastEntry = lastEntries.find((e) => e.taskId === task.id)
-      const activeEntry = lastEntries.find((e) => e.taskId === task.id && (e.status === "RUNNING" || e.status === "PAUSED"))
+      // ADR-024 — a task-linked Step is "active" while OPEN (was RUNNING/PAUSED
+      // pre-V3; a Step never pauses on its own, see TimeEntryStatus).
+      const activeEntry = lastEntries.find((e) => e.taskId === task.id && e.status === "OPEN")
 
       return {
         ...task,

@@ -324,6 +324,7 @@ model Workspace {
   purchaseOrders      PurchaseOrder[]
 
   timeEntries        TimeEntry[]
+  workSessions       WorkSession[]
   activityCategories ActivityCategory[]
 
   @@map("workspaces")
@@ -389,7 +390,8 @@ model User {
   paymentsCreated           Payment[]
   purchaseOrdersCreated     PurchaseOrder[]
 
-  timeEntries TimeEntry[]
+  timeEntries  TimeEntry[]
+  workSessions WorkSession[]
 
   @@index([workspaceId])
   @@map("users")
@@ -1223,7 +1225,7 @@ model SupplierCategory {
   id          String @id @default(auto()) @map("_id") @db.ObjectId
   workspaceId String @db.ObjectId
 
-  name       String
+  name String
 
   // Categoria B soft-delete (Entity Lifecycle, ADR-020).
   archived   Boolean   @default(false)
@@ -1315,8 +1317,8 @@ model FinancialCategory {
   workspaceId String  @db.ObjectId
   parentId    String? @db.ObjectId
 
-  name       String
-  direction  FinancialDirection
+  name      String
+  direction FinancialDirection
 
   // Categoria B soft-delete (Entity Lifecycle, ADR-020).
   archived   Boolean   @default(false)
@@ -1346,7 +1348,7 @@ model CostCenter {
   id          String @id @default(auto()) @map("_id") @db.ObjectId
   workspaceId String @db.ObjectId
 
-  name       String
+  name String
 
   // Categoria B soft-delete (Entity Lifecycle, ADR-020).
   archived   Boolean   @default(false)
@@ -1852,9 +1854,14 @@ model Instance {
 // Projetos/Clientes/Tasks in one direction only, read-only reference
 // (DOMAIN_GUIDE.md §6/§1) — not a Core module in this phase (ADR-023).
 
+// Worklog V3 (WORKLOG_ARCHITECTURE_DECISIONS.md ADR-024) — a Step (TimeEntry
+// belonging to a WorkSession) is binary: OPEN (endedAt == null, currently the
+// active activity of a RUNNING session) or COMPLETED. It never has its own
+// RUNNING/PAUSED state — pausing the session closes the open Step; resuming
+// opens a new one. MANUAL entries (no WorkSession) are always created
+// COMPLETED directly, same as before.
 enum TimeEntryStatus {
-  RUNNING
-  PAUSED
+  OPEN
   COMPLETED
 }
 
@@ -1863,9 +1870,59 @@ enum TimeEntrySource {
   TIMER
 }
 
+// Worklog V3 (ADR-024) — the "período de trabalho" container. Owns the
+// one-active-per-user invariant and the dominant (total) clock; TimeEntry
+// (Step) owns the per-activity clock. See
+// WORKLOG_ARCHITECTURE_DECISIONS.md ADR-024 for the full rationale.
+enum WorkSessionStatus {
+  RUNNING
+  PAUSED
+  COMPLETED
+}
+
+model WorkSession {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+  userId      String @db.ObjectId
+
+  status WorkSessionStatus @default(RUNNING)
+
+  // Immutable — set once by start(). Mirrors TimeEntry.startedAt's role
+  // pre-V3 (ADR-021), now at the session level.
+  startedAt DateTime
+  endedAt   DateTime?
+
+  // Start of the CURRENT running span — reset on every resume(); null while
+  // PAUSED/COMPLETED. Same shape as the pre-V3 TimeEntry.lastResumedAt.
+  lastResumedAt DateTime?
+
+  // Seconds accumulated across previous RUNNING spans, before the current
+  // pause (or before finish() folds the final span in).
+  pausedAccumSec  Int  @default(0)
+  durationSeconds Int? // set once, by finish() — never accepted from the client
+
+  // ADR-024 — set to `userId` only while status is RUNNING/PAUSED, cleared to
+  // null on finish(). Deliberately NOT @unique here, same reason as the
+  // pre-V3 TimeEntry.activeOwnerId (ADR-021): Prisma's @unique on Mongo is
+  // not sparse. Real constraint is a manually-created sparse unique index —
+  // docs/indexes.md, "Worklog — work_sessions.activeOwnerId Sparse Unique
+  // Index". Must exist in every environment before the first real start().
+  activeOwnerId String? @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps     TimeEntry[]
+
+  @@index([workspaceId, userId])
+  @@map("work_sessions")
+}
+
 model ActivityCategory {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  workspaceId String   @db.ObjectId
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
 
   name      String
   isDefault Boolean @default(false) // seeded default categories (prisma/seed.ts), workspace can still archive them
@@ -1878,7 +1935,7 @@ model ActivityCategory {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   timeEntries TimeEntry[]
 
   @@index([workspaceId, archived])
@@ -1890,6 +1947,13 @@ model TimeEntry {
   workspaceId String @db.ObjectId
   userId      String @db.ObjectId
 
+  // ADR-024 (Worklog V3) — null for source: MANUAL (standalone apontamentos,
+  // never belonged to a session). Set for source: TIMER entries created by
+  // workSessionService.start()/switchContext() — this TimeEntry is then a
+  // "Step" of that WorkSession. Never backfilled for pre-V3 history (DP4).
+  workSessionId String?      @db.ObjectId
+  workSession   WorkSession? @relation(fields: [workSessionId], references: [id])
+
   projectId  String? @db.ObjectId
   clientId   String? @db.ObjectId
   taskId     String? @db.ObjectId
@@ -1898,38 +1962,22 @@ model TimeEntry {
   description String?
   tags        String[]
 
-  status     TimeEntryStatus  @default(COMPLETED)
-  source     TimeEntrySource  @default(MANUAL)
-  isBillable Boolean          @default(true)
+  // ADR-024 — OPEN|COMPLETED only (was RUNNING|PAUSED|COMPLETED pre-V3). A
+  // Step never pauses on its own: workSessionService.pause() closes the open
+  // Step (status → COMPLETED, endedAt = now), resume() opens a new one.
+  status     TimeEntryStatus @default(COMPLETED)
+  source     TimeEntrySource @default(MANUAL)
+  isBillable Boolean         @default(true)
 
-  // Immutable — the original moment the timer/manual entry began, used for
-  // display ("iniciado às...") and reporting. Never overwritten by
-  // pause()/resume(), unlike lastResumedAt below.
+  // Immutable — the original moment the Step/manual entry began, used for
+  // display ("iniciado às...") and reporting.
   startedAt DateTime
   endedAt   DateTime?
 
-  // Start of the CURRENT running span — reset on every resume(). Only
-  // meaningful while status === RUNNING; null while PAUSED/COMPLETED.
-  // Separate from startedAt so the original start time survives any number
-  // of pause/resume cycles for display purposes.
-  lastResumedAt DateTime?
-
-  // Seconds accumulated across previous RUNNING spans, before the current
-  // pause (or before stop() folds the final span in) — never the total by
-  // itself; stop() always computes durationSeconds server-side from this
-  // plus the final RUNNING span (now - lastResumedAt), never trusts a
-  // client-submitted duration.
-  pausedAccumSec  Int  @default(0)
-  durationSeconds Int? // set once, by stop() — immutable after that (manual entries set it at creation)
-
-  // ADR-021 — set to `userId` only while status is RUNNING/PAUSED, cleared to
-  // null on stop(). Deliberately NOT @unique here: Prisma's @unique on Mongo
-  // is not sparse (docs/indexes.md), so every COMPLETED/archived TimeEntry
-  // sharing `null` would collide. The real one-active-timer-per-user
-  // constraint is a manually-created sparse unique index — see
-  // docs/indexes.md, "Worklog — time_entries.activeOwnerId Sparse Unique
-  // Index". Must exist in every environment before the first real start().
-  activeOwnerId String? @db.ObjectId
+  // Set once, when the Step closes (switchContext/pause/finish) or at
+  // creation for manual entries — never accepted from the client, always
+  // computed server-side as endedAt - startedAt.
+  durationSeconds Int?
 
   // Categoria B soft-delete (ADR-020) — delegated entirely to entityLifecycleService.
   archived   Boolean   @default(false)
@@ -1948,5 +1996,6 @@ model TimeEntry {
 
   @@index([workspaceId, userId, archived])
   @@index([workspaceId, projectId])
+  @@index([workspaceId, workSessionId])
   @@map("time_entries")
 }

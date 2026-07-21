@@ -133,6 +133,13 @@ db.purchase_orders.getIndexes()
 
 ## Worklog — time_entries.activeOwnerId Sparse Unique Index
 
+**Superseded by Worklog V3 (ADR-024)**: `TimeEntry.activeOwnerId` no longer
+exists in `schema.prisma` — the one-active-per-user invariant moved to the
+new `WorkSession` entity. See "Worklog V3 — work_sessions.activeOwnerId
+Sparse Unique Index" below for the current index. This section is kept for
+history; `scripts/create-worklog-indexes.ts` now also drops this index if
+still present in an environment that hasn't been migrated yet.
+
 ### Why
 
 Same root cause as `supabaseId`/`financialDocumentId` above — `activeOwnerId`
@@ -196,3 +203,58 @@ with `check:worklog-indexes`: **now present** with
 production — before Worklog carries any real concurrent load there. This
 check/creation pair was only run against the local dev database as part of
 Worklog Sprint V2, Fase 1 (MEL-02); it has not been run anywhere else yet.
+
+## Worklog V3 — work_sessions.activeOwnerId Sparse Unique Index
+
+### Why
+
+Same pattern as the superseded `time_entries.activeOwnerId` index above,
+moved one level up — `WorkSession.activeOwnerId` is null for every
+`COMPLETED` session and only set to the owning `userId` while the session is
+`RUNNING`/`PAUSED` (`WORKLOG_ARCHITECTURE_DECISIONS.md` ADR-024). Declared as
+a plain nullable field in `schema.prisma` (no `@unique`) for the same reason
+as before: Prisma's `@unique` on Mongo is not sparse.
+
+### How to create it
+
+```js
+use ArchFlowDb
+
+db.work_sessions.createIndex(
+  { activeOwnerId: 1 },
+  { unique: true, sparse: true, name: "work_sessions_activeOwnerId_sparse_unique" }
+)
+```
+
+Or `npm run create:worklog-indexes` — idempotent, also drops the superseded
+`time_entries.activeOwnerId` index if still present in that environment.
+
+### Verification
+
+```js
+db.work_sessions.getIndexes()
+// Should show { unique: true, sparse: true } on activeOwnerId
+```
+
+Or `npm run check:worklog-indexes` (`scripts/check-worklog-indexes.ts`) —
+read-only, reports pass/fail without altering anything.
+
+### When to run
+
+- Local development: once, after `prisma db push` for the Worklog V3 schema
+  — **before** exercising `workSessionRepository.start()` concurrently
+  (checklist item 12 equivalent), otherwise a concurrency check validates
+  only query-level timing, not the database constraint.
+- Staging/Production: as part of the Worklog V3 deployment runbook — must
+  exist before the first real `start()` in that environment.
+
+**⚠ Before running against any environment**: confirm `DATABASE_URL` actually
+points at that environment's database, not production — this repo has had a
+duplicate `DATABASE_URL` entry silently point local dev at production Mongo
+before. `create-worklog-indexes.ts` only touches index metadata (never
+document data), but verify the target first regardless.
+
+**Not yet run in any environment** — this section documents the target
+shape for the Worklog V3 Fase 1 rollout; execution against `arch-flow-dev`
+and any other environment is a deployment step, not something done as part
+of writing this schema/code.

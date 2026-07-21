@@ -1,6 +1,6 @@
 # Worklog Architecture Decisions
 
-**Status**: Fase 1 (Fundação) — em desenvolvimento, 2026-07-17
+**Status**: Fase 1 (Fundação) concluída; Worklog V3 (WorkSession/multi-atividade) em decisão — ADR-024 a 028, 2026-07-20
 **Escopo**: decisões arquiteturais do módulo Worklog (`src/modules/worklog/`), a solução nativa de controle de horas do ArchFlow. Segue o formato e a numeração globais definidos em `ARCHITECTURE_GOVERNANCE.md` §1 — cada ADR abaixo é obrigatória antes do código correspondente. Numeração continua de `CORE_ARCHITECTURE_DECISIONS.md` (a mais recente é ADR-020, Entity Lifecycle) — esta ADR usa 021-023.
 
 Worklog é o segundo módulo de produto construído sobre a fundação congelada do Financeiro/Compras, e o primeiro a introduzir estado *ao vivo* (um cronômetro em execução, visível globalmente, persistente entre navegação/refresh) — uma classe de requisito que nenhum módulo anterior teve. Reaproveita três padrões já hardenados (CAS de transição de estado do Compras, Entity Lifecycle do Core, `PERMISSIONS`/RBAC do Financeiro) e resolve um problema novo (concorrência "um cronômetro ativo por usuário" sem lock distribuído).
@@ -12,10 +12,17 @@ Worklog é o segundo módulo de produto construído sobre a fundação congelada
 | [021](#adr-021--um-cronômetro-ativo-por-usuário-via-índice-único-esparso-em-vez-de-lock) | Um cronômetro ativo por usuário via índice único esparso, em vez de lock | Ativo |
 | [022](#adr-022--rbac-com-visibilidade-restrita-tier-financeiro-própria-entrada-sempre-liberada) | RBAC com visibilidade restrita (tier Financeiro), própria entrada sempre liberada | Ativo |
 | [023](#adr-023--worklog-não-entra-na-lista-core-nesta-fase-mesmo-sendo-um-módulo-estratégico) | Worklog não entra na lista Core nesta fase, mesmo sendo um módulo estratégico | Ativo |
+| [024](#adr-024--worksession-como-agregado-pai-transitório-timeentry-vira-step-não-uma-terceira-entidade) | `WorkSession` como agregado pai transitório; `TimeEntry` vira Step, não uma terceira entidade | Ativo (V3) |
+| [025](#adr-025--contexto-totalmente-opcional-e-cliente-sempre-derivado-do-projeto) | Contexto (projeto/cliente/categoria/descrição) totalmente opcional; Cliente sempre derivado do Projeto | Ativo (V3) |
+| [026](#adr-026--atividades-pendentes-é-uma-view-derivada-sobre-timeentry-sem-nova-coleção) | "Atividades Pendentes" é uma view derivada sobre `TimeEntry`, sem nova coleção | Ativo (V3) |
+| [027](#adr-027--sugestões-heurísticas-determinísticas-são-somente-leitura-nunca-escrevem-automaticamente) | Sugestões heurísticas determinísticas são somente-leitura, nunca escrevem automaticamente | Ativo (V3, Fase 2) |
+| [028](#adr-028--sem-auto-pausa-nem-hard-cap-de-duração-nesta-fase-mantém-aviso-não-bloqueante) | Sem auto-pausa nem hard-cap de duração nesta fase — mantém aviso não-bloqueante | Ativo (V3) |
 
 ---
 
 ## ADR-021 — Um cronômetro ativo por usuário via índice único esparso, em vez de lock
+
+**Status**: Parcialmente supersedida por ADR-024 (Worklog V3) — a invariante "um ativo por usuário" e o campo `activeOwnerId` migram de `TimeEntry` para `WorkSession`, mesmo padrão de índice único esparso, novo nome de índice. O restante desta ADR (por que um índice único esparso e não lock/leitura-antes-de-escrever) permanece válido e é a justificativa reaproveitada por ADR-024 — não reescrita aqui, ver a ADR nova para o texto atualizado.
 
 **Problema**: o produto exige que cada usuário tenha **no máximo um** `TimeEntry` com status `RUNNING`/`PAUSED` a qualquer momento — mesma regra que motivou o Timer Global do frontend ("Você já possui um cronômetro em execução. Deseja finalizá-lo e iniciar um novo?"). Sem essa garantia no banco, dois cliques quase simultâneos (duas abas, retry de rede, o widget global e a tela Worklog abertos ao mesmo tempo) podem criar dois `TimeEntry` `RUNNING` para o mesmo usuário — um "cronômetro fantasma" que o widget nunca mais encontra.
 
@@ -75,6 +82,91 @@ Worklog é o segundo módulo de produto construído sobre a fundação congelada
 **Justificativa**: seguir a definição técnica documentada da própria política, em vez de reinterpretar "Core" ad-hoc para este pedido, preserva o valor da lista Core como um sinal confiável ("estes módulos exigem ADR para qualquer mudança estrutural") — se qualquer módulo que o produto considerasse importante entrasse na lista sem o mesmo crivo de estabilização, a lista deixaria de discriminar "infraestrutura testada por incidentes reais" de "prioridade de roadmap", que são perguntas diferentes.
 
 **Impacto futuro**: quando Worklog tiver volume de produção real e passar por pelo menos um ciclo de estabilização (mesmo gatilho que Compras aguarda), a promoção a Core é uma ADR nova, curta, que só precisa apontar para o histórico de estabilidade acumulado — não uma reabertura desta decisão.
+
+---
+
+## ADR-024 — `WorkSession` como agregado pai transitório; `TimeEntry` vira Step, não uma terceira entidade
+
+**Problema**: o produto (Worklog V3, ver `ArchFlow/docs/proposals/worklog-v3-adr.md`) exige que o usuário troque de atividade (projeto/categoria/descrição) sem parar o cronômetro geral — "+ Nova Atividade" encerra a atividade corrente e inicia outra, mas o período de trabalho continua. O modelo V1/V2, onde `TimeEntry` é ao mesmo tempo "o período de trabalho" e "a atividade" (via `status: RUNNING|PAUSED|COMPLETED` e `activeOwnerId`), não separa essas duas coisas — não há onde representar "troquei de atividade, mas o relógio geral não parou" sem inventar um `TimeEntry` `RUNNING` que na verdade já devia estar `COMPLETED`.
+
+**Alternativas consideradas**:
+- Criar uma terceira entidade `Step` (coleção própria, `stepId` referenciando `TimeEntry` como container) — rejeitada por decisão de produto explícita: duplicaria o schema inteiro de `TimeEntry` (descrição, tags, projeto, cliente, categoria, faturável, arquivamento — ADR-020) só para adicionar um `workSessionId`, quando `TimeEntry` já é o aggregate mais simples do sistema (documento único, checklist V1 item 1) e ganhar um campo opcional é a mudança mínima suficiente.
+- Manter tudo em `TimeEntry`, simulando a sessão com um campo `parentEntryId` auto-referenciado — rejeitada: não dá um lugar natural para o estado `RUNNING/PAUSED` do período agregado, forçaria escolher arbitrariamente um `TimeEntry` "mestre" entre os que compõem a sessão.
+- **`WorkSession` como novo agregado pai, `TimeEntry` ganha `workSessionId` opcional e passa a representar um Step quando pertence a uma sessão** — a escolhida.
+
+**Solução escolhida**: nova coleção `work_sessions`, com os mesmos campos de controle de tempo que `TimeEntry` tinha (`status: RUNNING|PAUSED|COMPLETED`, `startedAt` imutável, `lastResumedAt`, `pausedAccumSec`, `durationSeconds`, `activeOwnerId`), agora no nível do período de trabalho em vez da atividade individual. `activeOwnerId` reaproveita **exatamente** o padrão do ADR-021 (índice único esparso criado manualmente, `work_sessions_activeOwnerId_sparse_unique`, `docs/indexes.md` — não `@unique` do Prisma, mesma razão: não-sparse no Mongo). `TimeEntry` ganha `workSessionId String? @db.ObjectId` (`null` para `source: MANUAL`, preenchido para Steps de uma `WorkSession`) e perde `activeOwnerId` e o índice único esparso correspondente — essa invariante migra inteiramente para `WorkSession`. `TimeEntryStatus` encolhe de `RUNNING|PAUSED|COMPLETED` para `OPEN|COMPLETED`: um Step é binário (aberto = `endedAt: null`, fechado = `endedAt` setado) porque não pausa individualmente — pausar a sessão fecha o Step aberto atual; retomar abre um novo Step (mesma fronteira que já motiva o DP3 sobre mesclar através de uma pausa). `switchContext()` ("+ Nova Atividade" na UI) fecha o Step aberto e cria um novo Step na mesma transação (`withTransactionRetry`, ADR-013), sem tocar em `WorkSession.lastResumedAt` — o relógio geral nunca para numa troca de atividade.
+
+**Justificativa**: o mesmo raciocínio do ADR-021 se aplica em um nível acima — "no máximo uma `WorkSession` `RUNNING`/`PAUSED` por usuário" é uma invariante de existência (no máximo um documento), não de estado de um documento específico, então continua sendo resolvida por índice único esparso, não por CAS. Separar "período de trabalho" (`WorkSession`) de "atividade dentro do período" (`TimeEntry`/Step) em duas entidades, em vez de uma só fazendo os dois papéis, é a mesma decisão de modelagem que motivou `WorkSession` ter os campos de controle de tempo que `TimeEntry` tinha antes — eles pertencem ao conceito que efetivamente corre continuamente.
+
+**Impacto futuro**: `TimeEntry`s pré-V3 (todo o histórico) permanecem com `workSessionId: null` para sempre — nenhuma migração retroativa cria sessões para dados antigos (DP4). Qualquer leitura que hoje filtra por `TimeEntry.status: {in: ["RUNNING","PAUSED"]}` para achar "o timer ativo do usuário" precisa migrar para consultar `WorkSession.status` + seu Step aberto (`workSessionId`, `endedAt: null`) — muda o contrato de `GET /api/time-entries/active` (passa a ser `GET /api/work-sessions/active`, retornando a sessão e seu Step aberto).
+
+---
+
+## ADR-025 — Contexto totalmente opcional, e Cliente sempre derivado do Projeto
+
+**Problema**: o produto exige que nenhum campo de contexto (`projectId`, `clientId`, `categoryId`, `description`) bloqueie `start()`/`switchContext()`/`finish()` — o usuário deve poder trabalhar e trocar de atividade indefinidamente sem organizar nada, e organizar depois. Ao mesmo tempo, quando um projeto é escolhido, o cliente deve ser preenchido automaticamente e de forma consistente em todo o módulo, e a auditoria V2 já registrou (`worklog-audit.md` UX-07) que hoje `clientId` é um `<Select>` independente, redundante quando o projeto já tem cliente.
+
+**Alternativas consideradas**:
+- `clientId` permanece um campo que o usuário pode setar livremente mesmo com `projectId` presente — rejeitada: mantém a seleção redundante já identificada como problema de UX, e abre a porta para divergência silenciosa entre o cliente exibido e o cliente real do projeto.
+- `clientId` deixa de ser persistido, sempre resolvido via `join` a partir de `projectId` em tempo de leitura — rejeitada nesta fase: quebraria o caso de uso real e explicitamente aprovado de apontamento **sem projeto, mas com cliente conhecido** (ex.: reunião comercial antes do projeto existir), e exigiria reescrever `aggregateByProject`/`TIME_ENTRY_INCLUDE` e toda leitura que hoje assume `clientId` persistido.
+- **`clientId` permanece persistido (compatibilidade com o fluxo sem projeto), mas o servidor sempre recalcula e sobrescreve `clientId = project.clientId` sempre que `projectId` está presente na escrita**, descartando qualquer `clientId` enviado pelo cliente nesse caso — a escolhida.
+
+**Solução escolhida**: validado contra o schema real (`schema.prisma:1015`) que `Project.clientId` é campo **obrigatório** (`String`, não `String?`) — todo projeto tem exatamente um cliente, sempre; não existe caso real de projeto sem cliente a tratar, então a derivação nunca falha para um `projectId` válido (já garantido existir no workspace por `assertWorkspaceReferences` antes deste ponto). A resolução `clientId = project.clientId` é aplicada identicamente em `start()`, `switchContext()`, `createManual()`, `update()` (edição de Step ou Apontamento) e na associação em lote da tela de revisão/pendentes (ADR-026) — nunca há dois valores concorrentes para o mesmo `TimeEntry`. Quando `projectId` está ausente, `clientId` continua sendo preenchível manualmente, path inalterado. Todos os quatro campos de contexto tornam-se/permanecem opcionais em `StartTimerInput`, no novo `SwitchContextInput` e em `CreateManualInput` (já era) — nenhuma validação de obrigatoriedade é introduzida em nenhum desses pontos.
+
+**Justificativa**: tratar "projeto define cliente" como uma regra de servidor aplicada uniformemente em todo ponto de escrita, em vez de uma conveniência de formulário no frontend, evita que qualquer novo caminho de escrita (ex. a associação em lote da revisão) reintroduza a mesma divergência que motivou esta ADR. A opcionalidade de contexto em toda a superfície é a mesma filosofia que `createManual()` já seguia — apenas estendida a `switchContext()`, que é novo.
+
+**Impacto futuro**: se um caso de uso real exigir um cliente diferente do cliente do projeto (ex. sub-contratação cross-cliente), isso é uma exceção à regra desta ADR e precisa de uma ADR própria — não deve ser resolvido silenciosamente permitindo `clientId` divergente voltar a ser aceito.
+
+---
+
+## ADR-026 — "Atividades Pendentes" é uma view derivada sobre `TimeEntry`, sem nova coleção
+
+**Problema**: o produto pede um conceito de "Atividades Pendentes" (Steps/Apontamentos que ainda precisam de organização) exibido como contador navegável ("Atividades pendentes — 7") e usado também na tela de revisão pós-`finish()` — sem duplicar dados nem introduzir uma tabela `Inbox`.
+
+**Alternativas consideradas**:
+- Nova coleção `Inbox`/`PendingActivity`, populada por trigger/hook a cada escrita de `TimeEntry` — rejeitada: duplicação de dado, exige manter sincronização a cada `create`/`update`/`archive`, exatamente o tipo de complexidade que o pedido original explicitamente veta.
+- Flag persistida `needsOrganization: Boolean` em `TimeEntry`, recalculada a cada escrita — rejeitada: é um dado derivado de dois outros campos já existentes (`projectId`, `categoryId`); persistir a derivação cria uma segunda fonte de verdade que pode dessincronizar (ex. um `update` que limpa `projectId` sem recalcular a flag).
+- **View/filtro computado em tempo de leitura sobre os campos já existentes** — a escolhida.
+
+**Solução escolhida**: critério de pendência = `archived: false AND status: "COMPLETED" AND (projectId IS NULL OR categoryId IS NULL)`. `description` ausente **não** entra no critério — um quick-start legítimo sem descrição não deve inflar a contagem; o que importa para organização financeira/relatório é projeto e categoria. Novo método `timeEntryRepository.findPending(workspaceId, scopedUserId)`, reaproveitando o where-builder de `findMany` (mesma paginação, mesmo `TIME_ENTRY_INCLUDE`) com a cláusula `OR` acima. Endpoints novos: `GET /api/time-entries/pending` (lista paginada) e `GET /api/time-entries/pending/count` (badge). A tela de revisão pós-`finish()` é o mesmo filtro, apenas escopado adicionalmente a `workSessionId` da sessão recém-finalizada.
+
+**Justificativa**: qualquer critério futuro de "o que falta organizar" (ex. adicionar `isBillable` indefinido à lista de campos necessários) é uma mudança de uma cláusula `where`, não uma migração de dado — o custo de manter a derivação correta ao longo do tempo é menor que o custo de manter uma cópia sincronizada.
+
+**Impacto futuro**: se o volume de `TimeEntry` por workspace crescer a ponto de o filtro `OR` sem índice dedicado ficar lento, a resposta é um índice composto (`[workspaceId, userId, archived, status]`, já parcialmente coberto pelo índice existente do V1) — não a introdução de uma tabela derivada.
+
+---
+
+## ADR-027 — Sugestões heurísticas determinísticas são somente-leitura, nunca escrevem automaticamente
+
+**Problema**: o produto pede sugestões (mesclar atividades consecutivas do mesmo projeto, sinalizar microatividades) preparando o terreno para sugestões baseadas em IA no futuro, sem implementar IA generativa nem infraestrutura de IA nesta fase, e sem que qualquer sugestão altere dados sem confirmação explícita do usuário.
+
+**Alternativas consideradas**:
+- Aplicar a heurística diretamente na escrita (ex. `switchContext()` mescla automaticamente se detectar o mesmo projeto da atividade anterior) — rejeitada: viola a exigência explícita do produto de nunca alterar dados automaticamente; também remove a possibilidade de o usuário genuinamente querer duas entradas separadas do mesmo projeto (ex. duas reuniões distintas).
+- Job assíncrono que gera sugestões e as persiste como um novo tipo de notificação — rejeitada nesta fase: complexidade desproporcional ao valor de uma heurística de duas regras simples; nenhuma infraestrutura de fila/job existe hoje no módulo Worklog para justificar o investimento.
+- **Função pura, computada em tempo de leitura, nunca persistida, execução da ação sempre via confirmação explícita do usuário** — a escolhida.
+
+**Solução escolhida**: `suggestMerges(steps: TimeEntry[]): Suggestion[]` — função pura chamada pela tela de revisão/Timeline (Fase 2), sem escrita própria. Duas regras: atividades consecutivas com o mesmo `projectId` (sugestão de mesclar) e atividades com duração abaixo de `MICRO_ACTIVITY_THRESHOLD_SECONDS` (mesmo padrão de constante compartilhada frontend/backend que `LONG_TIMER_THRESHOLD_SECONDS` já usa, `timeEntry.repository.ts:64`). A ação de mesclar só executa via endpoint dedicado, acionado explicitamente pelo usuário — soma durações, mantém o `startedAt` mais antigo e o `endedAt` mais recente, arquiva a entrada absorvida. Se as duas atividades foram separadas por uma pausa da `WorkSession`, o endpoint pergunta explicitamente se o intervalo pausado deve ser absorvido no total (DP3) — nunca silencioso.
+
+**Justificativa**: manter a heurística atrás de uma fronteira pequena e estável (`Suggestion[]`) significa que uma fonte de sugestão futura baseada em IA (projeto recorrente por descrição semelhante, resumo automático do dia) pode substituir ou complementar `suggestMerges` sem mudar o contrato da tela que a consome — a "preparação para IA" pedida pelo produto é essa fronteira, não uma integração adiantada.
+
+**Impacto futuro**: quando uma sugestão baseada em IA for aprovada, ela implementa a mesma assinatura `Suggestion[]` (ou a estende) — não reabre esta ADR, só adiciona uma nova fonte ao lado ou no lugar da heurística determinística.
+
+---
+
+## ADR-028 — Sem auto-pausa nem hard-cap de duração nesta fase; mantém aviso não-bloqueante
+
+**Problema**: a revisão de produto do Worklog V3 avaliou (e rejeitou por ora) introduzir auto-pausa automática após 12h de `WorkSession` `RUNNING` ou um hard-cap de 24h, preferindo preservar o comportamento já validado da V2 sem uma análise adicional de impacto.
+
+**Alternativas consideradas**:
+- Auto-pausa às 12h + hard-cap às 24h, interrompendo o cronômetro sem ação do usuário — rejeitada explicitamente pelo produto nesta revisão: risco de interromper um período de trabalho real (ex. plantão, jornada atípica) sem base em dado real de uso que justifique o limite escolhido.
+- Nenhum tratamento — rejeitada: a V2 já implementa um aviso não-bloqueante para timers longos (`LONG_TIMER_THRESHOLD_SECONDS = 12h`, `timeEntry.repository.ts:64`, MEL-11/MEL-16) — descartar esse sinal existente seria regressão, não neutralidade.
+- **Manter o aviso não-bloqueante já existente na V2, estendido ao relógio dominante (`WorkSession.finish()`) em vez de reavaliado por Step individual** — a escolhida.
+
+**Solução escolhida**: `WorkSession.finish()` reaplica a mesma checagem de `durationSeconds >= LONG_TIMER_THRESHOLD_SECONDS` que `TimeEntry.stop()` já faz hoje, incrementando o mesmo tipo de métrica (`worklog.stop.long_duration` → equivalente `worklog.finish.long_duration`) e permitindo ao frontend mostrar a mesma confirmação "ajustar ou manter" (MEL-11) — nunca bloqueia, nunca pausa/finaliza automaticamente.
+
+**Justificativa**: qualquer limite automático (auto-pausa/hard-cap) exige decidir um valor com base em dado real de uso, que não existe ainda (nenhum volume de produção do Worklog, `WORKLOG_ARCHITECTURE_DECISIONS.md` checklist item 14) — introduzir o limite agora seria uma escolha arbitrária, não uma decisão informada.
+
+**Impacto futuro**: se um volume real de produção mostrar um padrão claro de timers esquecidos (ex. rodando por dias), uma auto-pausa/hard-cap vira uma ADR nova, curta, apontando para esse dado — não uma reabertura desta decisão.
 
 ---
 

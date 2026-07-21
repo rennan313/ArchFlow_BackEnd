@@ -6,24 +6,6 @@ import { booleanQueryParamWithDefault } from "./common"
 // startedAt/endedAt (manual) or from the CAS transitions (timer), same
 // boundary-conversion discipline as purchaseOrder's totalAmountCents.
 
-export const startTimerSchema = z.object({
-  projectId:   z.string().min(1).optional(),
-  clientId:    z.string().min(1).optional(),
-  taskId:      z.string().min(1).optional(),
-  categoryId:  z.string().min(1).optional(),
-  description: z.string().max(2000).optional(),
-  tags:        z.array(z.string().min(1).max(50)).max(20).optional(),
-  isBillable:  z.boolean().optional().default(true),
-  // MEL-16 (Worklog Sprint V2, observability) — telemetry-only hint of which
-  // UI affordance called start(): the global widget's quick-start, the
-  // Worklog list's "Continuar" (MEL-05), or a project task's "Trabalhar
-  // nesta tarefa". Never persisted on TimeEntry (unrelated to the existing
-  // TimeEntrySource MANUAL/TIMER column) — only flows into the
-  // time_entry_started audit log line and a metrics counter, so usage of
-  // each entry point is visible without a new telemetry tool.
-  startSource: z.enum(["quick_start", "continue", "task"]).optional(),
-})
-
 export const createManualTimeEntrySchema = z
   .object({
     projectId:   z.string().min(1).optional(),
@@ -74,7 +56,26 @@ export const timeEntryQuerySchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
 })
 
-export type StartTimerInput            = z.infer<typeof startTimerSchema>
-export type CreateManualTimeEntryInput = z.infer<typeof createManualTimeEntrySchema>
-export type UpdateTimeEntryInput       = z.infer<typeof updateTimeEntrySchema>
-export type TimeEntryQueryInput        = z.infer<typeof timeEntryQuerySchema>
+// ADR-026 — pagination-only; the pending criterion itself (projectId or
+// categoryId null) is hardcoded server-side, not a client-supplied filter.
+export const pendingQuerySchema = z.object({
+  page:  z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+})
+
+// ADR-026 — batch association from the pending-activities / post-finish
+// review screens. A single optional projectId/categoryId/isBillable is
+// applied to every id in `ids`; clientId is never accepted here — it is
+// always derived from projectId server-side (ADR-025) when a project is set.
+export const bulkUpdateTimeEntriesSchema = z.object({
+  ids:        z.array(z.string().min(1)).min(1).max(200),
+  projectId:  z.string().min(1).optional(),
+  categoryId: z.string().min(1).optional(),
+  isBillable: z.boolean().optional(),
+})
+
+export type CreateManualTimeEntryInput  = z.infer<typeof createManualTimeEntrySchema>
+export type UpdateTimeEntryInput        = z.infer<typeof updateTimeEntrySchema>
+export type TimeEntryQueryInput         = z.infer<typeof timeEntryQuerySchema>
+export type PendingQueryInput           = z.infer<typeof pendingQuerySchema>
+export type BulkUpdateTimeEntriesInput  = z.infer<typeof bulkUpdateTimeEntriesSchema>

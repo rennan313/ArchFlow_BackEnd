@@ -1,14 +1,19 @@
 /**
  * check-worklog-indexes.ts
  *
- * MEL-02 (Worklog Sprint V2) — read-only verification that the manually
- * created sparse unique index documented in docs/indexes.md ("Worklog —
- * time_entries.activeOwnerId Sparse Unique Index", ADR-021) actually exists
- * in whichever database DATABASE_URL points to. Does NOT create or alter
+ * Worklog V3 (ADR-024) — read-only verification that the manually created
+ * sparse unique index documented in docs/indexes.md ("Worklog V3 —
+ * work_sessions.activeOwnerId Sparse Unique Index") actually exists in
+ * whichever database DATABASE_URL points to. Does NOT create or alter
  * anything — schema.prisma intentionally has no @unique on activeOwnerId
  * (Prisma's @unique on Mongo isn't sparse) and this script must never change
  * that. If the index is missing, this only reports it clearly so it can be
- * created via the documented mongosh command before it's relied upon.
+ * created via the documented mongosh command (or create-worklog-indexes.ts)
+ * before it's relied upon.
+ *
+ * Superseded target: this used to check time_entries.activeOwnerId
+ * (ADR-021, Worklog V1/V2) — that field no longer exists on TimeEntry as of
+ * ADR-024, the invariant moved to WorkSession.
  *
  * Usage:
  *   npx tsx scripts/check-worklog-indexes.ts
@@ -22,9 +27,9 @@ import { PrismaClient } from "@prisma/client"
 const prisma = new PrismaClient()
 
 const EXPECTED = {
-  collection: "time_entries",
+  collection: "work_sessions",
   field: "activeOwnerId",
-  name: "time_entries_activeOwnerId_sparse_unique",
+  name: "work_sessions_activeOwnerId_sparse_unique",
 }
 
 interface RawIndex {
@@ -47,8 +52,8 @@ async function main() {
   if (!match) {
     console.error(`✗ MISSING — no index found on "${EXPECTED.field}" in "${EXPECTED.collection}".`)
     console.error(`  Existing indexes: ${indexes.map((i) => i.name).join(", ") || "(none)"}`)
-    console.error(`\n  Create it before relying on "one active timer per user" in this`)
-    console.error(`  environment — see docs/indexes.md, "Worklog — time_entries.activeOwnerId`)
+    console.error(`\n  Create it before relying on "one active work session per user" in this`)
+    console.error(`  environment — see docs/indexes.md, "Worklog V3 — work_sessions.activeOwnerId`)
     console.error(`  Sparse Unique Index":\n`)
     console.error(`    db.${EXPECTED.collection}.createIndex(`)
     console.error(`      { ${EXPECTED.field}: 1 },`)
@@ -63,14 +68,14 @@ async function main() {
 
   if (isUnique && isSparse) {
     console.log(`✓ OK — "${match.name}" exists with { unique: true, sparse: true }.`)
-    console.log(`  The one-active-timer-per-user invariant (ADR-021) is protected by the database in this environment.`)
+    console.log(`  The one-active-work-session-per-user invariant (ADR-024) is protected by the database in this environment.`)
     process.exitCode = 0
     return
   }
 
   console.error(`✗ MISALIGNED — an index named "${match.name}" exists on "${EXPECTED.field}" but is not both unique and sparse:`)
   console.error(`  unique: ${match.unique ?? false}, sparse: ${match.sparse ?? false}`)
-  console.error(`\n  This does NOT protect the one-active-timer-per-user invariant. Drop and`)
+  console.error(`\n  This does NOT protect the one-active-work-session-per-user invariant. Drop and`)
   console.error(`  recreate it per docs/indexes.md before relying on it in this environment.`)
   process.exitCode = 1
 }

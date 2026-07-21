@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { AppError, ErrorCode } from "@/lib/errors"
 
 vi.mock("@/repositories/timeEntry.repository")
+vi.mock("@/repositories/project.repository")
 vi.mock("@/lib/tenantGuard")
 vi.mock("@/services/entityLifecycle.service")
 vi.mock("@/lib/pagination", () => ({ buildMeta: vi.fn() }))
 
 import { timeEntryService } from "@/modules/worklog/services/timeEntry.service"
 import { timeEntryRepository } from "@/repositories/timeEntry.repository"
+import { projectRepository } from "@/repositories/project.repository"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
 import { entityLifecycleService } from "@/services/entityLifecycle.service"
 
@@ -21,6 +23,9 @@ describe("timeEntryService.createManual / update — tenant guard", () => {
   it("validates every foreign reference belongs to the workspace before writing anything", async () => {
     vi.mocked(assertWorkspaceReferences).mockResolvedValue(undefined)
     vi.mocked(timeEntryRepository.createManual).mockResolvedValue(mockEntry as never)
+    // ADR-025 — createManual resolves clientId from the project when
+    // projectId is present, so the project lookup needs a shape to resolve.
+    vi.mocked(projectRepository.findById).mockResolvedValue({ clientId: "client-1" } as never)
 
     await timeEntryService.createManual("ws-1", "user-1", {
       projectId: "proj-1", clientId: "client-1", taskId: "task-1", categoryId: "cat-1",
@@ -79,19 +84,11 @@ describe("timeEntryService.update — scopedUserId (ADR-022)", () => {
 describe("timeEntryService.archive — active-timer guard + ownership", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("blocks archiving (TIME_ENTRY_ACTIVE_CANNOT_ARCHIVE) while the entry is RUNNING", async () => {
-    vi.mocked(timeEntryRepository.findById).mockResolvedValue({ ...mockEntry, status: "RUNNING" } as never)
-    vi.mocked(entityLifecycleService.archive).mockImplementation(async (opts) => {
-      if (opts.guard) await opts.guard()
-    })
-
-    await expect(
-      timeEntryService.archive("te-1", "ws-1", "user-1", null),
-    ).rejects.toMatchObject({ code: ErrorCode.TIME_ENTRY_ACTIVE_CANNOT_ARCHIVE })
-  })
-
-  it("blocks archiving (TIME_ENTRY_ACTIVE_CANNOT_ARCHIVE) while the entry is PAUSED", async () => {
-    vi.mocked(timeEntryRepository.findById).mockResolvedValue({ ...mockEntry, status: "PAUSED" } as never)
+  // ADR-024 — a Step is "active" (blocks archiving) while OPEN, the only
+  // active state left on TimeEntry now that RUNNING/PAUSED moved to
+  // WorkSession. switchContext()/pause()/finish() always close it first.
+  it("blocks archiving (TIME_ENTRY_ACTIVE_CANNOT_ARCHIVE) while the Step is OPEN", async () => {
+    vi.mocked(timeEntryRepository.findById).mockResolvedValue({ ...mockEntry, status: "OPEN" } as never)
     vi.mocked(entityLifecycleService.archive).mockImplementation(async (opts) => {
       if (opts.guard) await opts.guard()
     })

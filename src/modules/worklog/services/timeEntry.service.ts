@@ -3,9 +3,10 @@ import { timeEntryRepository } from "@/repositories/timeEntry.repository"
 import { buildMeta } from "@/lib/pagination"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
+import { resolveWorklogContext } from "../resolveClientFromProject"
 import { entityLifecycleService } from "@/services/entityLifecycle.service"
 import type { Prisma } from "@prisma/client"
-import type { CreateManualTimeEntryInput, UpdateTimeEntryInput, TimeEntryQueryInput } from "@/validations/timeEntry"
+import type { CreateManualTimeEntryInput, UpdateTimeEntryInput, TimeEntryQueryInput, BulkUpdateTimeEntriesInput } from "@/validations/timeEntry"
 
 // scopedUserId (ADR-022): non-null when the caller lacks view:time-entries —
 // resolved at the route layer (services never import rbac.ts), forces every
@@ -22,19 +23,16 @@ export const timeEntryService = {
     return entry
   },
 
-  async getActive(workspaceId: string, userId: string) {
-    return timeEntryRepository.findActiveByUser(workspaceId, userId)
-  },
-
   async createManual(workspaceId: string, userId: string, input: CreateManualTimeEntryInput) {
     await assertWorkspaceReferences(workspaceId, {
       projectId: input.projectId, clientId: input.clientId,
       taskId: input.taskId, activityCategoryId: input.categoryId,
     })
+    const { clientId } = await resolveWorklogContext(workspaceId, input.projectId, input.clientId)
 
     return timeEntryRepository.createManual({
       workspaceId, userId,
-      projectId: input.projectId, clientId: input.clientId, taskId: input.taskId, categoryId: input.categoryId,
+      projectId: input.projectId, clientId, taskId: input.taskId, categoryId: input.categoryId,
       description: input.description, tags: input.tags, isBillable: input.isBillable,
       startedAt: input.startedAt, endedAt: input.endedAt,
     })
@@ -45,10 +43,13 @@ export const timeEntryService = {
       projectId: input.projectId, clientId: input.clientId,
       taskId: input.taskId, activityCategoryId: input.categoryId,
     })
+    // ADR-025 — when projectId is being set, the project's own client always
+    // wins over whatever clientId the caller sent alongside it.
+    const { clientId } = await resolveWorklogContext(workspaceId, input.projectId, input.clientId)
 
     const data: Prisma.TimeEntryUpdateInput = {
       ...(input.projectId  !== undefined && { project:  input.projectId  ? { connect: { id: input.projectId } }  : { disconnect: true } }),
-      ...(input.clientId   !== undefined && { client:   input.clientId   ? { connect: { id: input.clientId } }   : { disconnect: true } }),
+      ...(clientId !== undefined && { client:   clientId ? { connect: { id: clientId } } : { disconnect: true } }),
       ...(input.taskId     !== undefined && { task:     input.taskId     ? { connect: { id: input.taskId } }     : { disconnect: true } }),
       ...(input.categoryId !== undefined && { category: input.categoryId ? { connect: { id: input.categoryId } } : { disconnect: true } }),
       ...(input.description !== undefined && { description: input.description }),
@@ -81,7 +82,11 @@ export const timeEntryService = {
         }),
       },
       guard: async () => {
-        if (entry.status === "RUNNING" || entry.status === "PAUSED") {
+        // ADR-024 — a Step is "active" (can't be archived yet) while it's the
+        // OPEN activity of a running WorkSession. switchContext()/pause()/
+        // finish() close it first (status → COMPLETED), same guard shape as
+        // the pre-V3 RUNNING/PAUSED check.
+        if (entry.status === "OPEN") {
           throw new AppError(ErrorCode.TIME_ENTRY_ACTIVE_CANNOT_ARCHIVE)
         }
       },
@@ -102,5 +107,37 @@ export const timeEntryService = {
       },
     })
     return this.getById(id, workspaceId)
+  },
+
+  // ADR-026 — "Atividades Pendentes": entries missing projectId or
+  // categoryId, derived at read time, no separate collection.
+  async listPending(workspaceId: string, scopedUserId: string | null, page: number, limit: number) {
+    const { data, total } = await timeEntryRepository.findPending(workspaceId, scopedUserId, page, limit)
+    return { data, pagination: buildMeta(total, page, limit) }
+  },
+
+  countPending(workspaceId: string, scopedUserId: string | null) {
+    return timeEntryRepository.countPending(workspaceId, scopedUserId)
+  },
+
+  // ADR-026 — batch association from the pending-activities / post-finish
+  // review screens ("associar projeto em lote"). A single optional
+  // projectId/categoryId/isBillable is applied to every id in the same
+  // write; ADR-025's Project → Client rule is resolved once and applied to
+  // all of them together.
+  async bulkUpdate(ids: string[], workspaceId: string, scopedUserId: string | null, input: Omit<BulkUpdateTimeEntriesInput, "ids">) {
+    await assertWorkspaceReferences(workspaceId, {
+      projectId: input.projectId, activityCategoryId: input.categoryId,
+    })
+    const { clientId } = await resolveWorklogContext(workspaceId, input.projectId, undefined)
+
+    const data: Prisma.TimeEntryUpdateInput = {
+      ...(input.projectId  !== undefined && { project:  { connect: { id: input.projectId } } }),
+      ...(clientId   !== undefined && { client:   { connect: { id: clientId } } }),
+      ...(input.categoryId !== undefined && { category: { connect: { id: input.categoryId } } }),
+      ...(input.isBillable !== undefined && { isBillable: input.isBillable }),
+    }
+
+    return timeEntryRepository.bulkUpdate(ids, workspaceId, scopedUserId, data)
   },
 }

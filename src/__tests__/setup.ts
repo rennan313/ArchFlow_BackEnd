@@ -90,4 +90,5 @@ vi.mock("@/repositories/proposal.repository", () => ({
 
 vi.mock("@/lib/pagination", () => ({
   buildMeta: vi.fn(),
+  toSkip: (page: number, limit: number) => (page - 1) * limit,
 }))
