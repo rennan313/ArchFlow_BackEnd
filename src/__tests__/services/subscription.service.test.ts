@@ -357,7 +357,7 @@ describe("subscriptionService.getUsageSummary", () => {
 describe("subscriptionService.createTrialSubscription", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("creates a 30-day trial defaulting to STARTER", async () => {
+  it("creates a 7-day trial defaulting to STARTER", async () => {
     subRepo.findByWorkspace.mockResolvedValue(null)
     subRepo.create.mockResolvedValue({ id: "sub-1" } as never)
 
@@ -373,7 +373,7 @@ describe("subscriptionService.createTrialSubscription", () => {
     const start = data.currentPeriodStart as Date
     const end   = data.trialEndsAt as Date
     const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    expect(diffDays).toBeCloseTo(30, 1)
+    expect(diffDays).toBeCloseTo(7, 1)
   })
 
   it("accepts an explicit non-STARTER plan", async () => {
@@ -662,6 +662,25 @@ describe("subscriptionService.canWrite", () => {
   it.each(["EXPIRED", "CANCELED", "PAST_DUE"])("is false for status=%s", async (status) => {
     subRepo.findByWorkspace.mockResolvedValue({ status } as never)
     expect(await subscriptionService.canWrite("ws-1")).toBe(false)
+  })
+
+  // End-to-end guard for the 7-day change: takes the real trialEndsAt a
+  // live createTrialSubscription() call produces (today + TRIAL_DURATION_DAYS)
+  // and confirms canWrite is still true against it — proves the write-gate
+  // and the creation logic agree on the same window, not just that each
+  // passes its own isolated test. The frozen side reuses the existing
+  // Date.now()-1000 boundary pattern (already covered above), since
+  // isTrialExpired's freeze check is deliberately duration-agnostic — it
+  // only compares trialEndsAt to now, whatever TRIAL_DURATION_DAYS is.
+  it("a freshly created trial is still writable against its own trialEndsAt", async () => {
+    subRepo.findByWorkspace.mockResolvedValueOnce(null)
+    subRepo.create.mockResolvedValueOnce({ id: "sub-1" } as never)
+    const created = await subscriptionService.createTrialSubscription("ws-1")
+    const data = subRepo.create.mock.calls[0]![0]
+
+    subRepo.findByWorkspace.mockResolvedValueOnce({ status: "TRIAL", trialEndsAt: data.trialEndsAt } as never)
+    expect(await subscriptionService.canWrite("ws-1")).toBe(true)
+    expect(created).toMatchObject({ id: "sub-1" })
   })
 })
 

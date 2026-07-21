@@ -25,7 +25,7 @@ export interface LimitCheckResult {
 // only `full` is writable.
 export type AccessLevel = "full" | "limited" | "readonly"
 
-const TRIAL_DURATION_DAYS = 30
+const TRIAL_DURATION_DAYS = 7
 
 export const subscriptionService = {
   async getWorkspacePlan(workspaceId: string): Promise<PlanName> {
@@ -38,7 +38,7 @@ export const subscriptionService = {
 
   /** Resolves which PLAN_LIMITS apply right now. A workspace in an active
    *  trial gets PLAN_LIMITS.STUDIO regardless of its nominal Workspace.plan —
-   *  "all features unlocked" during the 30-day trial, with no free tier to
+   *  "all features unlocked" during the trial (TRIAL_DURATION_DAYS), with no free tier to
    *  fall back to once it lapses. Routes through expireTrialIfNeeded so a
    *  trial whose date has passed is treated as expired even before the lazy
    *  status flip has physically happened. */
@@ -325,7 +325,7 @@ export const subscriptionService = {
    *  state:
    *   1. Self-heals a workspace with no Subscription row at all (legacy data
    *      predating eager creation in workspaceService.createForUser, or any
-   *      gap the Phase 1 backfill missed) by granting it a fresh 30-day
+   *      gap the Phase 1 backfill missed) by granting it a fresh
    *      trial, instead of leaving canWrite/getUsageSummary to disagree about
    *      whether a workspace with no row is blocked.
    *   2. Flips a lapsed trial to EXPIRED. With no free tier, this is *not* a
