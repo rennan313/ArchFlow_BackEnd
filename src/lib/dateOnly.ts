@@ -21,7 +21,7 @@
 // BUSINESS_UTC_OFFSET_HOURS is a fixed constant, not a real IANA timezone
 // lookup, because Brazil has used a single fixed UTC-3 offset nationwide
 // with no DST since 2019 — this is genuinely correct today, not just a
-// convenient shortcut. If Brazil ever reinstates DST, or ArchFlow expands
+// convenient shortcut. If Brazil ever reinstates DST, or Vincel Studio expands
 // outside Brazil, this must move to a real timezone library (date-fns-tz /
 // luxon) — intentionally not added now: no other part of this codebase
 // needs one, and pulling in a dependency for a single fixed-offset

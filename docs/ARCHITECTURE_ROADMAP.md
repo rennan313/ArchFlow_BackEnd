@@ -1,7 +1,7 @@
-# ArchFlow — Architecture Roadmap
+# Vincel Studio — Architecture Roadmap
 
 **Status**: Release 1.0 (Finance Foundation), 2026-07-15
-**Escopo**: evolução arquitetural proposta para os próximos bounded contexts do ArchFlow, cada um justificado tecnicamente a partir da fundação congelada em `FINANCIAL_ARCHITECTURE_DECISIONS.md` e `DOMAIN_GUIDE.md`. Ordem de apresentação não é necessariamente ordem de prioridade de produto — é ordem de dependência técnica (cada módulo é descrito depois dos módulos dos quais ele depende).
+**Escopo**: evolução arquitetural proposta para os próximos bounded contexts do Vincel Studio, cada um justificado tecnicamente a partir da fundação congelada em `FINANCIAL_ARCHITECTURE_DECISIONS.md` e `DOMAIN_GUIDE.md`. Ordem de apresentação não é necessariamente ordem de prioridade de produto — é ordem de dependência técnica (cada módulo é descrito depois dos módulos dos quais ele depende).
 
 ---
 

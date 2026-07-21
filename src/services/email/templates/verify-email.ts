@@ -10,7 +10,7 @@ export function verifyEmailTemplate(params: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Confirme seu e-mail — ArchFlow</title>
+  <title>Confirme seu e-mail — Vincel Studio</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 
@@ -33,7 +33,7 @@ export function verifyEmailTemplate(params: {
                           <span style="color:#ffffff;font-size:18px;font-weight:700;line-height:36px;">A</span>
                         </td>
                         <td style="padding-left:10px;">
-                          <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">ArchFlow</span>
+                          <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Vincel Studio</span>
                         </td>
                       </tr>
                     </table>
@@ -51,7 +51,7 @@ export function verifyEmailTemplate(params: {
                 Confirme seu e-mail
               </p>
               <p style="margin:0 0 28px;font-size:15px;color:#71717a;line-height:1.6;">
-                Olá, <strong style="color:#3f3f46;">${name}</strong>. Confirme seu endereço de e-mail para ativar sua conta ArchFlow.
+                Olá, <strong style="color:#3f3f46;">${name}</strong>. Confirme seu endereço de e-mail para ativar sua conta Vincel Studio.
               </p>
 
               <!-- Button -->
@@ -99,7 +99,7 @@ export function verifyEmailTemplate(params: {
           <tr>
             <td style="background:#fafafa;padding:20px 40px;border-top:1px solid #f4f4f5;">
               <p style="margin:0;font-size:12px;color:#a1a1aa;line-height:1.6;">
-                Se você não criou uma conta na ArchFlow, ignore este e-mail.
+                Se você não criou uma conta na Vincel Studio, ignore este e-mail.
               </p>
             </td>
           </tr>
@@ -108,7 +108,7 @@ export function verifyEmailTemplate(params: {
           <tr>
             <td style="padding:20px 40px;border-top:1px solid #f4f4f5;">
               <p style="margin:0;font-size:12px;color:#d4d4d8;text-align:center;">
-                © ${new Date().getFullYear()} ArchFlow · Todos os direitos reservados
+                © ${new Date().getFullYear()} Vincel Studio · Todos os direitos reservados
               </p>
             </td>
           </tr>
@@ -123,20 +123,20 @@ export function verifyEmailTemplate(params: {
 </body>
 </html>`
 
-  const text = `Confirme seu e-mail — ArchFlow
+  const text = `Confirme seu e-mail — Vincel Studio
 
 Olá, ${name}.
 
-Confirme seu endereço de e-mail para ativar sua conta ArchFlow.
+Confirme seu endereço de e-mail para ativar sua conta Vincel Studio.
 
 Clique no link abaixo para confirmar:
 ${verifyUrl}
 
 Este link expira em ${expiresIn}.
 
-Se você não criou uma conta na ArchFlow, ignore este e-mail.
+Se você não criou uma conta na Vincel Studio, ignore este e-mail.
 
-© ${new Date().getFullYear()} ArchFlow`
+© ${new Date().getFullYear()} Vincel Studio`
 
   return { html, text }
 }

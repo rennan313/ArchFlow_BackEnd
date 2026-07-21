@@ -1,6 +1,6 @@
 # Arquitetura do Módulo Financeiro
 
-Referência técnica do módulo Financeiro (AP/AR do próprio escritório — distinto do billing do SaaS ArchFlow, ver `SPRINT09_BILLING_REPORT.md`). Escrito ao final da Sprint RC-2 ("Production Fixes"), que eliminou os riscos críticos levantados na auditoria RC-1, e atualizado ao final da Sprint RC-3 ("Zero Critical Debt"), que eliminou a race condition residual documentada pela RC-2, denormalizou `projectId` em `Payment` e ampliou observabilidade/testes. Atualizar este documento sempre que o modelo financeiro mudar.
+Referência técnica do módulo Financeiro (AP/AR do próprio escritório — distinto do billing do SaaS Vincel Studio, ver `SPRINT09_BILLING_REPORT.md`). Escrito ao final da Sprint RC-2 ("Production Fixes"), que eliminou os riscos críticos levantados na auditoria RC-1, e atualizado ao final da Sprint RC-3 ("Zero Critical Debt"), que eliminou a race condition residual documentada pela RC-2, denormalizou `projectId` em `Payment` e ampliou observabilidade/testes. Atualizar este documento sempre que o modelo financeiro mudar.
 
 ---
 

@@ -2,7 +2,7 @@
 // suppliers, bank accounts, chart of accounts). Routes import from here, not
 // from internal service files directly, same barrel convention as
 // src/modules/billing/billing.module.ts. Distinct bounded context from
-// billing: this is the workspace's own money, not ArchFlow's SaaS billing.
+// billing: this is the workspace's own money, not Vincel Studio's SaaS billing.
 
 export { supplierCategoryService } from "./services/supplierCategory.service"
 export { supplierService }         from "./services/supplier.service"

@@ -1,7 +1,7 @@
 export default function Home() {
   return (
     <main style={{ fontFamily: "monospace", padding: "2rem" }}>
-      <h1>ArchFlow API</h1>
+      <h1>Vincel Studio API</h1>
       <p>Backend is running. Use the API endpoints to interact with the system.</p>
       <ul>
         <li>POST /api/auth/register</li>

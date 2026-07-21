@@ -51,7 +51,7 @@ function renderBillingEmail(c: BillingEmailContent): { html: string; text: strin
               <td style="background:#7c3aed;border-radius:10px;width:36px;height:36px;text-align:center;vertical-align:middle;">
                 <span style="color:#ffffff;font-size:18px;font-weight:700;line-height:36px;">A</span>
               </td>
-              <td style="padding-left:10px;"><span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">ArchFlow</span></td>
+              <td style="padding-left:10px;"><span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Vincel Studio</span></td>
             </tr></table>
           </td></tr></table>
         </td></tr>
@@ -64,7 +64,7 @@ function renderBillingEmail(c: BillingEmailContent): { html: string; text: strin
         </td></tr>
 
         <tr><td style="padding:20px 40px;border-top:1px solid #f4f4f5;">
-          <p style="margin:0;font-size:12px;color:#d4d4d8;text-align:center;">© ${year} ArchFlow · Todos os direitos reservados</p>
+          <p style="margin:0;font-size:12px;color:#d4d4d8;text-align:center;">© ${year} Vincel Studio · Todos os direitos reservados</p>
         </td></tr>
 
       </table>
@@ -79,7 +79,7 @@ function renderBillingEmail(c: BillingEmailContent): { html: string; text: strin
     ...c.paragraphs.map(stripTags),
     c.highlight ? `\n${stripTags(c.highlight)}` : "",
     c.cta ? `\n${c.cta.label}: ${c.cta.url}` : "",
-    `\n© ${year} ArchFlow`,
+    `\n© ${year} Vincel Studio`,
   ].filter(Boolean).join("\n")
 
   return { html, text }
@@ -93,7 +93,7 @@ function stripTags(s: string): string {
 
 export function subscriptionCreatedTemplate(p: { name: string; planName: string; cycleLabel: string; amount: string; nextBilling: string; portalUrl: string }) {
   return renderBillingEmail({
-    title:    "Assinatura confirmada — ArchFlow",
+    title:    "Assinatura confirmada — Vincel Studio",
     heading:  "Sua assinatura está ativa 🎉",
     paragraphs: [
       `Olá, <strong style="color:#3f3f46;">${p.name}</strong>. Seu plano <strong>${p.planName}</strong> (${p.cycleLabel}) foi ativado com sucesso.`,
@@ -106,11 +106,11 @@ export function subscriptionCreatedTemplate(p: { name: string; planName: string;
 
 export function paymentApprovedTemplate(p: { name: string; planName: string; amount: string; receiptUrl?: string; portalUrl: string }) {
   return renderBillingEmail({
-    title:    "Pagamento aprovado — ArchFlow",
+    title:    "Pagamento aprovado — Vincel Studio",
     heading:  "Pagamento aprovado ✅",
     paragraphs: [
       `Olá, <strong style="color:#3f3f46;">${p.name}</strong>. Recebemos o pagamento do seu plano <strong>${p.planName}</strong>.`,
-      p.receiptUrl ? `Você pode acessar o comprovante <a href="${p.receiptUrl}" style="color:#7c3aed;">aqui</a>.` : "Obrigado por assinar o ArchFlow.",
+      p.receiptUrl ? `Você pode acessar o comprovante <a href="${p.receiptUrl}" style="color:#7c3aed;">aqui</a>.` : "Obrigado por assinar o Vincel Studio.",
     ],
     highlight: `Valor pago: <strong>${p.amount}</strong>`,
     cta: { label: "Ver histórico", url: p.portalUrl },
@@ -119,7 +119,7 @@ export function paymentApprovedTemplate(p: { name: string; planName: string; amo
 
 export function paymentRejectedTemplate(p: { name: string; planName: string; portalUrl: string }) {
   return renderBillingEmail({
-    title:    "Pagamento recusado — ArchFlow",
+    title:    "Pagamento recusado — Vincel Studio",
     heading:  "Não conseguimos processar seu pagamento",
     paragraphs: [
       `Olá, <strong style="color:#3f3f46;">${p.name}</strong>. O pagamento do seu plano <strong>${p.planName}</strong> foi recusado.`,
@@ -131,11 +131,11 @@ export function paymentRejectedTemplate(p: { name: string; planName: string; por
 
 export function subscriptionRenewedTemplate(p: { name: string; planName: string; amount: string; nextBilling: string; receiptUrl?: string; portalUrl: string }) {
   return renderBillingEmail({
-    title:    "Assinatura renovada — ArchFlow",
+    title:    "Assinatura renovada — Vincel Studio",
     heading:  "Sua assinatura foi renovada 🔄",
     paragraphs: [
       `Olá, <strong style="color:#3f3f46;">${p.name}</strong>. Seu plano <strong>${p.planName}</strong> foi renovado automaticamente.`,
-      p.receiptUrl ? `Comprovante disponível <a href="${p.receiptUrl}" style="color:#7c3aed;">aqui</a>.` : "Obrigado por continuar com o ArchFlow.",
+      p.receiptUrl ? `Comprovante disponível <a href="${p.receiptUrl}" style="color:#7c3aed;">aqui</a>.` : "Obrigado por continuar com o Vincel Studio.",
     ],
     highlight: `Valor: <strong>${p.amount}</strong> · Próxima cobrança: <strong>${p.nextBilling}</strong>`,
     cta: { label: "Ver minha assinatura", url: p.portalUrl },
@@ -144,7 +144,7 @@ export function subscriptionRenewedTemplate(p: { name: string; planName: string;
 
 export function subscriptionCanceledTemplate(p: { name: string; planName: string; accessUntil: string; plansUrl: string }) {
   return renderBillingEmail({
-    title:    "Assinatura cancelada — ArchFlow",
+    title:    "Assinatura cancelada — Vincel Studio",
     heading:  "Sua assinatura foi cancelada",
     paragraphs: [
       `Olá, <strong style="color:#3f3f46;">${p.name}</strong>. Seu plano <strong>${p.planName}</strong> foi cancelado.`,
@@ -157,7 +157,7 @@ export function subscriptionCanceledTemplate(p: { name: string; planName: string
 
 export function trialEndingTemplate(p: { name: string; daysLeft: number; plansUrl: string }) {
   return renderBillingEmail({
-    title:    "Seu período de avaliação está acabando — ArchFlow",
+    title:    "Seu período de avaliação está acabando — Vincel Studio",
     heading:  "Seu teste está acabando ⏳",
     paragraphs: [
       `Olá, <strong style="color:#3f3f46;">${p.name}</strong>. Seu período de avaliação termina em <strong>${p.daysLeft} ${p.daysLeft === 1 ? "dia" : "dias"}</strong>.`,
@@ -169,7 +169,7 @@ export function trialEndingTemplate(p: { name: string; daysLeft: number; plansUr
 
 export function trialExpiredTemplate(p: { name: string; plansUrl: string }) {
   return renderBillingEmail({
-    title:    "Seu período de avaliação terminou — ArchFlow",
+    title:    "Seu período de avaliação terminou — Vincel Studio",
     heading:  "Seu teste terminou",
     paragraphs: [
       `Olá, <strong style="color:#3f3f46;">${p.name}</strong>. Seu período de avaliação chegou ao fim e o workspace está em modo somente-leitura.`,

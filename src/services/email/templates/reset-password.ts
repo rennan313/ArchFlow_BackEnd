@@ -10,7 +10,7 @@ export function resetPasswordTemplate(params: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Redefinir senha — ArchFlow</title>
+  <title>Redefinir senha — Vincel Studio</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 
@@ -33,7 +33,7 @@ export function resetPasswordTemplate(params: {
                           <span style="color:#ffffff;font-size:18px;font-weight:700;line-height:36px;">A</span>
                         </td>
                         <td style="padding-left:10px;">
-                          <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">ArchFlow</span>
+                          <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Vincel Studio</span>
                         </td>
                       </tr>
                     </table>
@@ -51,7 +51,7 @@ export function resetPasswordTemplate(params: {
                 Redefinir sua senha
               </p>
               <p style="margin:0 0 28px;font-size:15px;color:#71717a;line-height:1.6;">
-                Olá, <strong style="color:#3f3f46;">${name}</strong>. Recebemos uma solicitação para redefinir a senha da sua conta ArchFlow.
+                Olá, <strong style="color:#3f3f46;">${name}</strong>. Recebemos uma solicitação para redefinir a senha da sua conta Vincel Studio.
               </p>
 
               <!-- Button -->
@@ -108,7 +108,7 @@ export function resetPasswordTemplate(params: {
           <tr>
             <td style="padding:20px 40px;border-top:1px solid #f4f4f5;">
               <p style="margin:0;font-size:12px;color:#d4d4d8;text-align:center;">
-                © ${new Date().getFullYear()} ArchFlow · Todos os direitos reservados
+                © ${new Date().getFullYear()} Vincel Studio · Todos os direitos reservados
               </p>
             </td>
           </tr>
@@ -123,11 +123,11 @@ export function resetPasswordTemplate(params: {
 </body>
 </html>`
 
-  const text = `Redefinir senha — ArchFlow
+  const text = `Redefinir senha — Vincel Studio
 
 Olá, ${name}.
 
-Recebemos uma solicitação para redefinir a senha da sua conta ArchFlow.
+Recebemos uma solicitação para redefinir a senha da sua conta Vincel Studio.
 
 Clique no link abaixo para redefinir sua senha:
 ${resetUrl}
@@ -136,7 +136,7 @@ Este link expira em ${expiresIn}.
 
 Se você não solicitou a redefinição de senha, ignore este e-mail.
 
-© ${new Date().getFullYear()} ArchFlow`
+© ${new Date().getFullYear()} Vincel Studio`
 
   return { html, text }
 }

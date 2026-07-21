@@ -34,7 +34,7 @@ export const emailService = {
 
     await sendMail({
       to:      params.to,
-      subject: "Redefinição de senha — ArchFlow",
+      subject: "Redefinição de senha — Vincel Studio",
       html,
       text,
     })
@@ -51,7 +51,7 @@ export const emailService = {
 
     await sendMail({
       to:      params.to,
-      subject: "Confirme seu e-mail — ArchFlow",
+      subject: "Confirme seu e-mail — Vincel Studio",
       html,
       text,
     })
@@ -82,7 +82,7 @@ export const emailService = {
       name: p.name, planName: p.planName, cycleLabel: cycleLabel(p.cycle),
       amount: fmtBRL(p.amount), nextBilling: fmtDate(p.nextBilling), portalUrl: PORTAL_URL(),
     })
-    await sendMail({ to: p.to, subject: "Sua assinatura ArchFlow está ativa 🎉", html, text })
+    await sendMail({ to: p.to, subject: "Sua assinatura Vincel Studio está ativa 🎉", html, text })
   },
 
   async sendPaymentApproved(p: { to: string; name: string; planName: string; amount: number; receiptUrl?: string | null }): Promise<void> {
@@ -90,12 +90,12 @@ export const emailService = {
       name: p.name, planName: p.planName, amount: fmtBRL(p.amount),
       receiptUrl: p.receiptUrl ?? undefined, portalUrl: PORTAL_URL(),
     })
-    await sendMail({ to: p.to, subject: "Pagamento aprovado — ArchFlow", html, text })
+    await sendMail({ to: p.to, subject: "Pagamento aprovado — Vincel Studio", html, text })
   },
 
   async sendPaymentRejected(p: { to: string; name: string; planName: string }): Promise<void> {
     const { html, text } = paymentRejectedTemplate({ name: p.name, planName: p.planName, portalUrl: PORTAL_URL() })
-    await sendMail({ to: p.to, subject: "Pagamento recusado — ArchFlow", html, text })
+    await sendMail({ to: p.to, subject: "Pagamento recusado — Vincel Studio", html, text })
   },
 
   async sendSubscriptionRenewed(p: { to: string; name: string; planName: string; amount: number; nextBilling: Date | null; receiptUrl?: string | null }): Promise<void> {
@@ -103,24 +103,24 @@ export const emailService = {
       name: p.name, planName: p.planName, amount: fmtBRL(p.amount),
       nextBilling: fmtDate(p.nextBilling), receiptUrl: p.receiptUrl ?? undefined, portalUrl: PORTAL_URL(),
     })
-    await sendMail({ to: p.to, subject: "Assinatura renovada — ArchFlow", html, text })
+    await sendMail({ to: p.to, subject: "Assinatura renovada — Vincel Studio", html, text })
   },
 
   async sendSubscriptionCanceled(p: { to: string; name: string; planName: string; accessUntil: Date | null }): Promise<void> {
     const { html, text } = subscriptionCanceledTemplate({
       name: p.name, planName: p.planName, accessUntil: fmtDate(p.accessUntil), plansUrl: PLANS_URL(),
     })
-    await sendMail({ to: p.to, subject: "Assinatura cancelada — ArchFlow", html, text })
+    await sendMail({ to: p.to, subject: "Assinatura cancelada — Vincel Studio", html, text })
   },
 
   async sendTrialEnding(p: { to: string; name: string; daysLeft: number }): Promise<void> {
     const { html, text } = trialEndingTemplate({ name: p.name, daysLeft: p.daysLeft, plansUrl: PLANS_URL() })
-    await sendMail({ to: p.to, subject: "Seu período de avaliação está acabando — ArchFlow", html, text })
+    await sendMail({ to: p.to, subject: "Seu período de avaliação está acabando — Vincel Studio", html, text })
   },
 
   async sendTrialExpired(p: { to: string; name: string }): Promise<void> {
     const { html, text } = trialExpiredTemplate({ name: p.name, plansUrl: PLANS_URL() })
-    await sendMail({ to: p.to, subject: "Seu período de avaliação terminou — ArchFlow", html, text })
+    await sendMail({ to: p.to, subject: "Seu período de avaliação terminou — Vincel Studio", html, text })
   },
 }
 

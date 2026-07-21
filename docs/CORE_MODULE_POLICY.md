@@ -1,11 +1,11 @@
-# ArchFlow — Core Module Policy
+# Vincel Studio — Core Module Policy
 
 **Status**: VIGENTE — Sprint 1 (Platform Freeze 2.0), 2026-07-15
 **Escopo**: define quais módulos são **fundamentais** (Core) — aqueles cuja mudança estrutural exige processo formal (`ARCHITECTURE_GOVERNANCE.md`) — e as regras de dependência entre eles. Módulos não listados aqui são módulos de produto (CRM, Propostas, Projetos, Reuniões, Documentos, Automações): seguem os mesmos padrões de engenharia (`ENGINEERING_STANDARDS.md`), mas mudanças neles não exigem ADR por padrão.
 
 **Regra de leitura das tabelas**: "Dependências permitidas" = o que este módulo pode importar. "Quem pode depender dele" = quem pode importá-lo. Tudo que não está listado como permitido é proibido — a lista é fechada (allow-list), não aberta.
 
-**Sobre eventos**: ArchFlow não tem barramento de eventos formal (ver `DOMAIN_GUIDE.md` §4). "Eventos publicados" abaixo significa: eventos de auditoria (`auditLog`, ADR-012) e/ou gatilhos do sistema de Automações (`AutomationKey`). "Eventos consumidos" significa: reage a um `AutomationKey` ou lê `AutomationRun`. A maioria dos módulos Core não consome eventos — são folhas ou quase-folhas da árvore de dependências, por design.
+**Sobre eventos**: Vincel Studio não tem barramento de eventos formal (ver `DOMAIN_GUIDE.md` §4). "Eventos publicados" abaixo significa: eventos de auditoria (`auditLog`, ADR-012) e/ou gatilhos do sistema de Automações (`AutomationKey`). "Eventos consumidos" significa: reage a um `AutomationKey` ou lê `AutomationRun`. A maioria dos módulos Core não consome eventos — são folhas ou quase-folhas da árvore de dependências, por design.
 
 ---
 

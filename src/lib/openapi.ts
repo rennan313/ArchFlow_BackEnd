@@ -167,13 +167,13 @@ const paths: Record<string, unknown> = {
 export const openApiSpec = {
   openapi: "3.0.3",
   info: {
-    title:       "ArchFlow API",
+    title:       "Vincel Studio API",
     version:     "2.0.0",
     description: "Revenue Operating System for Architecture Firms — schemas auto-generated from Zod via zod-to-json-schema",
   },
   servers: [
     { url: "http://localhost:3000",       description: "Development" },
-    { url: "https://api.archflowstudio.com", description: "Production"  },
+    { url: "https://api.vincelstudio.com", description: "Production"  },
   ],
   tags: [
     { name:"Auth",          description:"Authentication — email/password + Google OAuth" },

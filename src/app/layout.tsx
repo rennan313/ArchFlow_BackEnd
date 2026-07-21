@@ -1,4 +1,4 @@
-export const metadata = { title: "ArchFlow API" };
+export const metadata = { title: "Vincel Studio API" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

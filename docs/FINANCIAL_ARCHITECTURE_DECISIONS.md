@@ -1,7 +1,7 @@
 # Financial Architecture Decisions
 
 **Status**: CONGELADO — Release 1.0 (Finance Foundation), 2026-07-15
-**Escopo**: decisões arquiteturais do módulo Financeiro (`src/modules/financial/`), promovidas a padrão oficial do ArchFlow para todo módulo futuro.
+**Escopo**: decisões arquiteturais do módulo Financeiro (`src/modules/financial/`), promovidas a padrão oficial do Vincel Studio para todo módulo futuro.
 
 Este documento é um log de Architecture Decision Records (ADR). Cada decisão nasceu de um risco real encontrado ao longo das sprints MVP → RC-1 → RC-2 → RC-3, não de preferência estética. Onde uma decisão foi validada por medição real (não estimativa), a medição está citada.
 
@@ -117,7 +117,7 @@ Este documento é um log de Architecture Decision Records (ADR). Cada decisão n
 
 ## ADR-006 — Workspace-First, sem exceção
 
-**Problema**: ArchFlow é multi-tenant — cada escritório de arquitetura é isolado dos outros. O vetor nº 1 de vazamento cross-tenant em SaaS multi-tenant é uma query que filtra por um `id` de recurso sem também confirmar que esse recurso pertence ao workspace do usuário autenticado (IDOR — Insecure Direct Object Reference).
+**Problema**: Vincel Studio é multi-tenant — cada escritório de arquitetura é isolado dos outros. O vetor nº 1 de vazamento cross-tenant em SaaS multi-tenant é uma query que filtra por um `id` de recurso sem também confirmar que esse recurso pertence ao workspace do usuário autenticado (IDOR — Insecure Direct Object Reference).
 
 **Alternativas consideradas**:
 - Isolamento por schema-per-tenant ou database-per-tenant — mais forte estruturalmente, mas exige provisionamento de infraestrutura por workspace, incompatível com a escala e o estágio atual do produto; reavaliar apenas se um requisito de compliance (ex.: contrato enterprise exigindo isolamento físico) o justificar.
@@ -145,7 +145,7 @@ Este documento é um log de Architecture Decision Records (ADR). Cada decisão n
 
 **Solução escolhida**: RBAC hierárquico (`OWNER > ADMIN > ARCHITECT/DESIGNER > ASSISTANT > VIEWER`, ver `src/middlewares/rbac.ts`) com permissões granulares por string `verbo:recurso` (`view:financial-dashboard`, `create:financial-documents`, `manage:financial-settings`), aplicado no middleware de rota — E, adicionalmente, todo Repository escopa por `workspaceId` (ADR-006) independentemente do que o controller já validou, como segunda linha de defesa que não depende da primeira estar correta.
 
-**Justificativa**: "defesa em profundidade" significa que a falha de uma camada não é catastrófica sozinha. Financeiro é o único domínio do ArchFlow onde `read:*` (leitura universal dentro do workspace, padrão para o resto do produto) não se aplica — visibilidade de margem/lucro do escritório é tratada como mais sensível que dados de cliente/projeto, exigindo `view:financial-*` explícito por role.
+**Justificativa**: "defesa em profundidade" significa que a falha de uma camada não é catastrófica sozinha. Financeiro é o único domínio do Vincel Studio onde `read:*` (leitura universal dentro do workspace, padrão para o resto do produto) não se aplica — visibilidade de margem/lucro do escritório é tratada como mais sensível que dados de cliente/projeto, exigindo `view:financial-*` explícito por role.
 
 **Impacto futuro**: todo módulo novo declara seu mapa de permissões em `PERMISSIONS` (`rbac.ts`) explicitamente — nunca herdar `read:*` por padrão se o domínio tiver alguma razão de negócio para restringir visibilidade (ex.: Compras provavelmente segue o mesmo raciocínio do Financeiro: preço pago a fornecedor é informação sensível). Repository de todo módulo novo replica o padrão do ADR-006 como segunda camada, mesmo que o controller já pareça suficiente.
 
@@ -240,7 +240,7 @@ Nenhum log inclui segredos, tokens, ou números de conta — apenas IDs internos
 
 **Status**: `ACCEPTED` — ratificada em 2026-07-16 após Domain Review, Architecture Review e Final Hardening. **Architecture Freeze**: SIM — princípio arquitetural congelado, não mais específico de Compras (ver "Princípio arquitetural" abaixo). **Breaking Change**: NÃO. **Supersedes**: Nenhuma. **Superseded By**: Nenhuma. **Review Required**: somente se o significado de domínio do Aggregate `FinancialDocument` mudar. Numeração global (ADR-012 a ADR-018 vivem em `CORE_ARCHITECTURE_DECISIONS.md` e `COMPRAS_ARCHITECTURE_DECISIONS.md` — ver `ARCHITECTURE_GOVERNANCE.md` §1, "numeração sequencial, independente do arquivo").
 
-**Princípio arquitetural que esta ADR estabelece** (aplicável a todo o ArchFlow, não só a Compras): *"Quando uma transição de estado de um Aggregate precisa respeitar um compromisso assumido por outro bounded context, essa condição é expressa como dado opaco gravado pelo contexto de origem no único momento em que ele possui acesso de escrita legítimo ao Aggregate — nunca como uma consulta em tempo real a esse contexto. O Aggregate permanece o único responsável por interpretar e impor essa condição sobre si mesmo."* Chamado, para referência futura, de **Princípio da Autoridade Persistida**.
+**Princípio arquitetural que esta ADR estabelece** (aplicável a todo o Vincel Studio, não só a Compras): *"Quando uma transição de estado de um Aggregate precisa respeitar um compromisso assumido por outro bounded context, essa condição é expressa como dado opaco gravado pelo contexto de origem no único momento em que ele possui acesso de escrita legítimo ao Aggregate — nunca como uma consulta em tempo real a esse contexto. O Aggregate permanece o único responsável por interpretar e impor essa condição sobre si mesmo."* Chamado, para referência futura, de **Princípio da Autoridade Persistida**.
 
 **Origem**: achado Crítico da Domain Review do módulo Compras (2026-07-16) — um `PurchaseOrder` aprovado pode ficar apontando para um `FinancialDocument` cancelado, sem detecção, porque nada impede o cancelamento direto do documento pela tela Financeiro.
 
@@ -402,7 +402,7 @@ Nenhum módulo futuro que gere um `FinancialDocument` precisa de uma ADR própri
 - **Portal do Cliente**: se algum dia gerar um `FinancialDocument` diretamente (hoje só lê), usa a mesma primitiva — ortogonal à dimensão de escopo por `clientId` já prevista.
 - **IA**: usa a mesma primitiva, com a convenção (não regra de schema) de nascer com `originLocked: false` até confirmação humana.
 - **Analytics/Dashboard**: nenhuma consequência de comportamento — ganham campos adicionais disponíveis para leitura, se quiserem, nunca uma obrigação.
-- **API Pública** (quando existir, per `ARCHITECTURE_GOVERNANCE.md` §6.3): qualquer integração externa que gere documentos financeiros o faz através de um serviço interno do ArchFlow que já teria acesso de escrita — a mesma primitiva se aplica, mediada pelo mesmo backend que já intermedeia todo acesso externo hoje.
+- **API Pública** (quando existir, per `ARCHITECTURE_GOVERNANCE.md` §6.3): qualquer integração externa que gere documentos financeiros o faz através de um serviço interno do Vincel Studio que já teria acesso de escrita — a mesma primitiva se aplica, mediada pelo mesmo backend que já intermedeia todo acesso externo hoje.
 
 ### Roadmap (sem implementação nesta Sprint)
 
@@ -462,7 +462,7 @@ O ADR-001 (congelado) nomeia explicitamente "faturas de assinatura" como adotant
 - Billing não duplica lógica de arredondamento própria (repassa o valor que vem do Mercado Pago), então não há um segundo "toCents" competindo com a Money Library — é uma lacuna de tipo, não de lógica duplicada.
 - Dois outros pontos fazem arredondamento monetário manual fora da Money Library, ambos sobre dados pré-contrato (estimativas, nunca lançamentos reais): `src/utils/calculations/pricing.ts` (`round2()`, `Math.round(n*100)/100`) e `src/services/opportunity.service.ts` (`withWeightedRevenue`, arredondamento inline de receita ponderada por probabilidade).
 
-**Recomendação**: isto é uma lacuna real entre o que o ADR-001 já declara como padrão e o estado atual do schema de billing — não é uma exceção documentada, é dívida técnica pré-existente. Duas opções para a Sprint de Compras/Billing v2: (1) migrar `BillingHistory`/`BillingPlan` para `BigInt` em centavos como um ADR de módulo próprio (billing não é dinheiro do escritório, é dinheiro do ArchFlow cobrando o escritório — mesma disciplina, aggregate diferente), ou (2) declarar formalmente billing como exceção documentada com justificativa (ex.: valores sempre inteiros em reais, nunca fracionários, tornando Float seguro na prática) — mas a decisão precisa ser explícita, não silenciosa. `pricing.ts`/`opportunity.service.ts` são menor prioridade (dados de estimativa, nunca persistidos como ledger).
+**Recomendação**: isto é uma lacuna real entre o que o ADR-001 já declara como padrão e o estado atual do schema de billing — não é uma exceção documentada, é dívida técnica pré-existente. Duas opções para a Sprint de Compras/Billing v2: (1) migrar `BillingHistory`/`BillingPlan` para `BigInt` em centavos como um ADR de módulo próprio (billing não é dinheiro do escritório, é dinheiro do Vincel Studio cobrando o escritório — mesma disciplina, aggregate diferente), ou (2) declarar formalmente billing como exceção documentada com justificativa (ex.: valores sempre inteiros em reais, nunca fracionários, tornando Float seguro na prática) — mas a decisão precisa ser explícita, não silenciosa. `pricing.ts`/`opportunity.service.ts` são menor prioridade (dados de estimativa, nunca persistidos como ledger).
 
 ### E. Retry transacional — o maior achado desta revisão — **[RESOLVIDO — Sprint 0, ver ADR-013]**
 

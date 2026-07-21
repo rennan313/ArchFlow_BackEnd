@@ -1,13 +1,13 @@
-# ArchFlow — Domain Guide
+# Vincel Studio — Domain Guide
 
 **Status**: Release 1.0 (Finance Foundation), 2026-07-15
-**Escopo**: mapa de domínio de todo o backend ArchFlow — Bounded Contexts, Aggregates, Entidades, Value Objects, Eventos, relacionamentos e fluxo de comunicação entre módulos. O módulo Financeiro é usado como o contexto de referência (o mais maduro, formalizado na Release 1.0) para o vocabulário e os padrões que todo bounded context deve seguir.
+**Escopo**: mapa de domínio de todo o backend Vincel Studio — Bounded Contexts, Aggregates, Entidades, Value Objects, Eventos, relacionamentos e fluxo de comunicação entre módulos. O módulo Financeiro é usado como o contexto de referência (o mais maduro, formalizado na Release 1.0) para o vocabulário e os padrões que todo bounded context deve seguir.
 
 ---
 
 ## 1. Bounded Contexts
 
-ArchFlow é um único banco MongoDB compartilhado (não há schema-per-context), mas os modelos se organizam em contextos com fronteiras conceituais claras — cada um com sua própria linguagem ubíqua, e dependências deliberadamente unidirecionais entre eles (ver §6).
+Vincel Studio é um único banco MongoDB compartilhado (não há schema-per-context), mas os modelos se organizam em contextos com fronteiras conceituais claras — cada um com sua própria linguagem ubíqua, e dependências deliberadamente unidirecionais entre eles (ver §6).
 
 | Bounded Context | Modelos principais (`prisma/schema.prisma`) | Módulo de código |
 |---|---|---|
@@ -21,11 +21,11 @@ ArchFlow é um único banco MongoDB compartilhado (não há schema-per-context),
 | **Financeiro** (AP/AR do escritório) | `SupplierCategory`, `Supplier`, `BankAccount`, `FinancialCategory`, `CostCenter`, `FinancialDocument`, `Installment`, `Payment` | `src/modules/financial/` — **contexto de referência desta Release** |
 | **Compras** (Fase 1 — Fundação) | `PurchaseOrder`, `PurchaseOrderItem` | `src/modules/purchasing/` — depende de Financeiro numa via só (`Supplier`/`FinancialCategory`/`CostCenter` lidos na criação; gera `FinancialDocument` via `approve()`), ver `COMPRAS_ARCHITECTURE_DECISIONS.md` |
 | **Worklog** (Fase 1 — Fundação) | `TimeEntry`, `ActivityCategory` | `src/modules/worklog/` — depende de Projetos/Clientes/Tasks numa via só, só leitura de referência (`projectId`/`clientId`/`taskId` validados via `tenantGuard`, nunca importados como lógica de negócio); não é módulo Core nesta fase, ver `WORKLOG_ARCHITECTURE_DECISIONS.md` ADR-023 |
-| **Billing** (SaaS do ArchFlow cobrando o escritório) | `Subscription`, `PaymentEvent`, `BillingHistory`, `BillingPlan` | `src/modules/billing/` |
+| **Billing** (SaaS do Vincel Studio cobrando o escritório) | `Subscription`, `PaymentEvent`, `BillingHistory`, `BillingPlan` | `src/modules/billing/` |
 | **Localização & Precificação** | `State`, `City`, `RegionalPricing` | `src/services/{location,pricing}.service.ts` — dado de referência público, sem `workspaceId` |
 | **Autenticação (tokens)** | `ResetPasswordToken`, `EmailVerificationToken`, `RefreshToken` | `src/services/auth.service.ts` |
 
-**Financeiro vs. Billing — a distinção mais importante do mapa**: são dois contextos de "dinheiro" completamente distintos que compartilham vocabulário superficial (`Payment`, `amount`) mas nunca devem compartilhar modelo. Financeiro é o dinheiro do escritório de arquitetura (contas a pagar/receber dos próprios clientes e fornecedores do escritório). Billing é o dinheiro do ArchFlow cobrando o escritório pela assinatura do SaaS. Um `FinancialDocument` nunca referencia uma `Subscription`, e vice-versa — mesmo que ambos um dia usem BigInt/centavos (ver ADR-001 e o Anexo de `FINANCIAL_ARCHITECTURE_DECISIONS.md`).
+**Financeiro vs. Billing — a distinção mais importante do mapa**: são dois contextos de "dinheiro" completamente distintos que compartilham vocabulário superficial (`Payment`, `amount`) mas nunca devem compartilhar modelo. Financeiro é o dinheiro do escritório de arquitetura (contas a pagar/receber dos próprios clientes e fornecedores do escritório). Billing é o dinheiro do Vincel Studio cobrando o escritório pela assinatura do SaaS. Um `FinancialDocument` nunca referencia uma `Subscription`, e vice-versa — mesmo que ambos um dia usem BigInt/centavos (ver ADR-001 e o Anexo de `FINANCIAL_ARCHITECTURE_DECISIONS.md`).
 
 ---
 
@@ -93,7 +93,7 @@ PurchaseOrder (raiz do aggregate)
 
 ## 4. Eventos de domínio
 
-ArchFlow não tem um barramento de eventos formal (sem event sourcing, sem fila de mensagens). Dois mecanismos parciais cobrem o espaço de "algo relevante aconteceu":
+Vincel Studio não tem um barramento de eventos formal (sem event sourcing, sem fila de mensagens). Dois mecanismos parciais cobrem o espaço de "algo relevante aconteceu":
 
 ### 4.1 Automações (`Automation`/`AutomationRun`)
 
@@ -167,7 +167,7 @@ Toda entidade deste mapa que participa do ciclo de vida "arquivável" (§2/§3 a
 
 **Os quatro comportamentos, e como não confundi-los**:
 
-- **Arquivar** (`archived`/`archivedAt`/`archivedBy`) — esconde o registro das telas normais, sempre reversível. É o significado de "excluir" na maioria dos botões de UI do ArchFlow hoje (Cliente, Oportunidade, Proposta, Projeto, Reunião, Documento, Fornecedor e toda entidade de referência financeira).
+- **Arquivar** (`archived`/`archivedAt`/`archivedBy`) — esconde o registro das telas normais, sempre reversível. É o significado de "excluir" na maioria dos botões de UI do Vincel Studio hoje (Cliente, Oportunidade, Proposta, Projeto, Reunião, Documento, Fornecedor e toda entidade de referência financeira).
 - **Cancelar** (`isCancelled`/`status: CANCELLED`, específico de cada entidade) — o registro deixa de representar um compromisso de negócio ativo, mas nunca é escondido nem some das telas. `FinancialDocument`/`PurchaseOrder` usam este padrão, não Arquivar, porque cancelamento é sobre o *significado* do registro, não sobre visibilidade.
 - **Excluir fisicamente** — reservado a entidades sem nenhum histórico de terceiros possível no estado em que a exclusão é permitida (hoje: só `PurchaseOrder` em `DRAFT`). Nunca o comportamento padrão de uma entidade nova.
 - **Um valor comum de `status` de negócio** (ex. `ClientStatus.INACTIVE`) nunca é arquivamento — é só mais um valor dentro da própria máquina de estados da entidade, livremente editável.

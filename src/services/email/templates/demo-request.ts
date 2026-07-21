@@ -18,7 +18,7 @@ export function demoRequestTemplate(params: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nova solicitação de demonstração — ArchFlow</title>
+  <title>Nova solicitação de demonstração — Vincel Studio</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 
@@ -30,7 +30,7 @@ export function demoRequestTemplate(params: {
 
           <tr>
             <td style="background:#09090b;padding:32px 40px;">
-              <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">ArchFlow · Novo lead Enterprise</span>
+              <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Vincel Studio · Novo lead Enterprise</span>
             </td>
           </tr>
 
@@ -62,7 +62,7 @@ export function demoRequestTemplate(params: {
           <tr>
             <td style="padding:20px 40px;border-top:1px solid #f4f4f5;">
               <p style="margin:0;font-size:12px;color:#d4d4d8;text-align:center;">
-                © ${new Date().getFullYear()} ArchFlow · Formulário de demonstração (/pricing)
+                © ${new Date().getFullYear()} Vincel Studio · Formulário de demonstração (/pricing)
               </p>
             </td>
           </tr>
@@ -76,7 +76,7 @@ export function demoRequestTemplate(params: {
 </body>
 </html>`
 
-  const text = `Novo lead Enterprise — ArchFlow
+  const text = `Novo lead Enterprise — Vincel Studio
 
 Nome: ${name}
 E-mail: ${email}

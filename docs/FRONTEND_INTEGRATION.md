@@ -1,6 +1,6 @@
-# ArchFlow API — Frontend Integration Guide
+# Vincel Studio API — Frontend Integration Guide
 
-Complete reference for connecting your frontend to the ArchFlow backend.
+Complete reference for connecting your frontend to the Vincel Studio backend.
 
 ---
 
@@ -160,7 +160,7 @@ Create a new account.
 ```json
 {
   "name":     "Ana Souza",
-  "email":    "ana@archflow.com",
+  "email":    "ana@vincel.com",
   "password": "Secure123"
 }
 ```
@@ -178,7 +178,7 @@ Create a new account.
   "data": {
     "id":        "6650a1b2c3d4e5f678901234",
     "name":      "Ana Souza",
-    "email":     "ana@archflow.com",
+    "email":     "ana@vincel.com",
     "role":      "USER",
     "createdAt": "2025-05-27T18:00:00.000Z",
     "updatedAt": "2025-05-27T18:00:00.000Z"
@@ -214,7 +214,7 @@ Authenticate and receive tokens.
 **Body:**
 ```json
 {
-  "email":    "ana@archflow.com",
+  "email":    "ana@vincel.com",
   "password": "Secure123"
 }
 ```
@@ -228,7 +228,7 @@ Authenticate and receive tokens.
     "user": {
       "id":        "6650a1b2c3d4e5f678901234",
       "name":      "Ana Souza",
-      "email":     "ana@archflow.com",
+      "email":     "ana@vincel.com",
       "role":      "USER",
       "createdAt": "2025-05-27T18:00:00.000Z",
       "updatedAt": "2025-05-27T18:00:00.000Z"
@@ -291,7 +291,7 @@ Request a password reset link.
 **Body:**
 ```json
 {
-  "email": "ana@archflow.com"
+  "email": "ana@vincel.com"
 }
 ```
 
@@ -366,7 +366,7 @@ Get the currently logged-in user.
   "data": {
     "id":        "6650a1b2c3d4e5f678901234",
     "name":      "Ana Souza",
-    "email":     "ana@archflow.com",
+    "email":     "ana@vincel.com",
     "role":      "USER",
     "createdAt": "2025-05-27T18:00:00.000Z",
     "updatedAt": "2025-05-27T18:00:00.000Z"

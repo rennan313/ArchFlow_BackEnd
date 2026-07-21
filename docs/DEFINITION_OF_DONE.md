@@ -1,4 +1,4 @@
-# ArchFlow — Definition of Done
+# Vincel Studio — Definition of Done
 
 **Status**: VIGENTE — Sprint 1 (Platform Freeze 2.0), 2026-07-15
 **Escopo**: quando uma sprint (ou um módulo) pode ser declarada encerrada. Formaliza o que as sprints RC-2/RC-3/Sprint 0 já praticavam implicitamente — a partir de agora, é critério explícito, não conhecimento tribal.

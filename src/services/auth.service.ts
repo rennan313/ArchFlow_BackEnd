@@ -323,7 +323,7 @@ export const authService = {
 
     emitEvent("auth.google.success", { userId: user.id, email: user.email })
 
-    // 4. Issue ArchFlow JWT pair — Google token is never forwarded
+    // 4. Issue Vincel Studio JWT pair — Google token is never forwarded
     const payload      = buildPayload(user)
     const accessToken  = signAccessToken(payload)
     const refreshToken = await issueRefreshToken(user.id, payload, meta)

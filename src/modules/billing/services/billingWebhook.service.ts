@@ -146,7 +146,7 @@ async function applySubscription(sub: Subscription, remote: GatewaySubscription)
 }
 
 async function applyPayment(provider: BillingGatewayProvider, sub: Subscription, remote: GatewayPayment): Promise<void> {
-  const description = `Assinatura ArchFlow — ${sub.plan}`
+  const description = `Assinatura Vincel Studio — ${sub.plan}`
 
   if (remote.status === "approved") {
     // Pre-event status distinguishes the very first payment (activation) from a

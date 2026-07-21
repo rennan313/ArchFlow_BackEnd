@@ -1,4 +1,4 @@
-# ArchFlow — Architecture Governance
+# Vincel Studio — Architecture Governance
 
 **Status**: VIGENTE — Sprint 1 (Platform Freeze 2.0), 2026-07-15
 **Escopo**: o processo formal que rege mudanças arquiteturais a partir desta sprint. Complementa `CORE_MODULE_POLICY.md` (o *quê* é protegido) com o *como* mudar. O princípio central, herdado da Release 1.0: **nenhuma decisão registrada é alterada silenciosamente** — precedente já exercido na prática pela Sprint 0 (ADR-012 a 015 generalizaram ADRs do Financeiro criando registros novos, nunca editando os originais).
@@ -35,7 +35,7 @@ Uma ADR **não** é necessária para: bug fix sem mudança de contrato, teste no
 
 ## 3. Quando uma mudança pode quebrar compatibilidade
 
-Compatibilidade tem três superfícies no ArchFlow, com regras distintas:
+Compatibilidade tem três superfícies no Vincel Studio, com regras distintas:
 
 **a) API HTTP (backend ↔ frontend)** — os dois deploys não são atômicos; uma janela onde o frontend antigo fala com o backend novo sempre existe. Regra: mudanças aditivas (campo novo na resposta, parâmetro opcional novo) são livres; remover/renomear campo ou tornar parâmetro obrigatório exige ou (a) fase de transição em duas releases (adicionar novo → migrar frontend → remover velho), ou (b) janela de deploy coordenado explicitamente anotada no PR. Precedente real: a migração BigInt (RC-2.2) mudou `*Cents` de `number` para `string` na resposta — foi tratada como breaking change coordenada, com o frontend migrado no mesmo ciclo.
 
@@ -62,7 +62,7 @@ Referência: `DOMAIN_GUIDE.md` §2. Regras:
 
 ## 6. Como evoluir APIs públicas
 
-"Pública" hoje = consumida pelo frontend ArchFlow; no futuro (Portal do Cliente, Mobile, API externa do roadmap) = consumida por clientes que não controlamos e não fazem deploy conosco.
+"Pública" hoje = consumida pelo frontend Vincel Studio; no futuro (Portal do Cliente, Mobile, API externa do roadmap) = consumida por clientes que não controlamos e não fazem deploy conosco.
 
 1. **Aditivo por padrão** (§3a). Resposta de API é um contrato — campos nunca mudam de tipo ou semântica silenciosamente.
 2. **Validação Zod é a fronteira**: parâmetro novo entra como `.optional()` primeiro; vira obrigatório só depois que todos os chamadores enviam.

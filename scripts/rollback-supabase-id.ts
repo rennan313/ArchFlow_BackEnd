@@ -122,7 +122,7 @@ async function verifyRollback(db: Db): Promise<void> {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log("\n⚠️   ArchFlow — supabaseId ROLLBACK\n");
+  console.log("\n⚠️   Vincel Studio — supabaseId ROLLBACK\n");
   console.log(`    Environment: ${process.env.NODE_ENV ?? "development"}`);
   console.log("    This will remove supabaseId from all user documents.");
 

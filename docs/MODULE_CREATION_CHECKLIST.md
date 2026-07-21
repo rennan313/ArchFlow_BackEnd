@@ -1,4 +1,4 @@
-# ArchFlow — Module Creation Checklist
+# Vincel Studio — Module Creation Checklist
 
 **Status**: VIGENTE — Sprint 1 (Platform Freeze 2.0), 2026-07-15
 **Escopo**: as 14 perguntas que todo módulo novo responde **por escrito** antes de ser considerado concluído. Não é burocracia decorativa — cada pergunta existe porque a ausência da resposta correspondente virou um risco crítico real em alguma sprint do Financeiro (a referência entre parênteses aponta o incidente/decisão de origem).

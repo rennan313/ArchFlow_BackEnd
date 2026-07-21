@@ -1,7 +1,7 @@
-# ArchFlow — Engineering Standards
+# Vincel Studio — Engineering Standards
 
 **Status**: Release 1.0 (Finance Foundation), 2026-07-15
-**Escopo**: como construir qualquer módulo novo no backend ArchFlow, extraído e formalizado a partir do módulo Financeiro. Todo exemplo abaixo aponta para código real do Financeiro — leia o exemplo antes de escrever o seu.
+**Escopo**: como construir qualquer módulo novo no backend Vincel Studio, extraído e formalizado a partir do módulo Financeiro. Todo exemplo abaixo aponta para código real do Financeiro — leia o exemplo antes de escrever o seu.
 
 Este documento assume familiaridade com `FINANCIAL_ARCHITECTURE_DECISIONS.md` (o "porquê") — aqui é o "como", passo a passo.
 

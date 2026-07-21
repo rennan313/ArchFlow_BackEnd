@@ -18,7 +18,7 @@ import type { ProjectTypeCategory, InvestmentTier, NarrativeProfile } from "@/ty
 
 const prisma = new PrismaClient()
 
-const SYSTEM_USER_EMAIL = "system-library@archflow.internal"
+const SYSTEM_USER_EMAIL = "system-library@vincel.internal"
 
 const SECTIONS = [
   { key: "executive-summary", name: "Resumo Executivo", order: 0 },
@@ -338,7 +338,7 @@ async function getOrCreateSystemUser() {
   if (existing) return existing
   return prisma.user.create({
     data: {
-      name:     "ArchFlow Library",
+      name:     "Vincel Studio Library",
       email:    SYSTEM_USER_EMAIL,
       provider: "system",
       role:     "ADMIN",

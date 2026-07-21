@@ -70,7 +70,7 @@ Ausência = billing desabilitado (checkout 500, webhook 200-ack) — não quebra
 1. **Suas integrações → Criar aplicação** (produto: Assinaturas/CheckoutPro).
 2. **Credenciais** (teste e produção) → `ACCESS_TOKEN` + `PUBLIC_KEY`.
 3. **Contas de teste** → criar um usuário **comprador** (sandbox exige pagador que seja test user).
-4. **Webhooks** → URL `https://archflow-backend-production.up.railway.app/api/webhooks/mercadopago`; eventos: **Pagamentos** + **Assinaturas/Preapproval**; copiar a **assinatura secreta** → `WEBHOOK_SECRET`.
+4. **Webhooks** → URL `https://vincel-backend-production.up.railway.app/api/webhooks/mercadopago`; eventos: **Pagamentos** + **Assinaturas/Preapproval**; copiar a **assinatura secreta** → `WEBHOOK_SECRET`.
 5. (Opcional) criar **preapproval plans** mensal/anual por tier e preencher `BillingPlan.mpPreapprovalPlanId*` — hoje usamos preapproval dinâmico (funciona sem isso).
 
 ## 6. Verificação

@@ -1,4 +1,4 @@
-# ArchFlow — Performance Guide
+# Vincel Studio — Performance Guide
 
 **Status**: Release 1.0 (Finance Foundation), 2026-07-15
 **Escopo**: quando usar (e quando NÃO usar) desnormalização, índices, materialized views, caching, CQRS e eventos — com números reais medidos no módulo Financeiro, não estimativas.
@@ -53,7 +53,7 @@ Se as duas condições valem, a cópia nunca pode divergir do original — não 
 
 **O que é**: uma coleção separada, pré-computada, atualizada incrementalmente a cada escrita relevante (ou por job periódico), que a leitura consulta em vez de agregar em tempo real.
 
-**Status atual**: **não implementado em nenhum lugar do ArchFlow** — decisão deliberada da RC-2/RC-3, não uma lacuna esquecida. As 11 agregações do dashboard e o resumo por projeto continuam calculando em tempo real a cada leitura.
+**Status atual**: **não implementado em nenhum lugar do Vincel Studio** — decisão deliberada da RC-2/RC-3, não uma lacuna esquecida. As 11 agregações do dashboard e o resumo por projeto continuam calculando em tempo real a cada leitura.
 
 **Quando usar** (gatilho documentado, não implementado preventivamente):
 - Quando o volume de `Payment`/`Installment` **por workspace individual** (não a soma entre todos os tenants — cada query já é `workspaceId`-scoped, então o que importa é o pior caso de um único workspace) começar a ultrapassar a ordem de dezenas de milhares de linhas, **e**

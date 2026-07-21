@@ -1,6 +1,6 @@
-# ArchFlow — Backend API
+# Vincel Studio — Backend API
 
-Backend for **ArchFlow**, a Micro SaaS that helps architects manage client proposals and monitor infrastructure instances.
+Backend for **Vincel Studio**, a Micro SaaS that helps architects manage client proposals and monitor infrastructure instances.
 
 ## Stack
 
@@ -34,7 +34,7 @@ cp .env.example .env
 Edit `.env` with your values:
 
 ```env
-DATABASE_URL="mongodb+srv://<user>:<password>@cluster.mongodb.net/archflow"
+DATABASE_URL="mongodb+srv://<user>:<password>@cluster.mongodb.net/vincel"
 
 JWT_SECRET="your-secret"
 JWT_REFRESH_SECRET="your-refresh-secret"

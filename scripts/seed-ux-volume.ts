@@ -66,7 +66,7 @@ async function main() {
     const u = await prisma.user.create({
       data: {
         name: `${first} ${last}`,
-        email: `uxvol-${i}-${Date.now()}@archflow.test`,
+        email: `uxvol-${i}-${Date.now()}@vincel.test`,
         provider: 'credentials',
         workspaceId,
         workspaceRole: WORKSPACE_ROLES[i % WORKSPACE_ROLES.length],

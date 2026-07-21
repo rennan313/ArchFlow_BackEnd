@@ -1,4 +1,4 @@
-# ArchFlow — Pull Request Guide
+# Vincel Studio — Pull Request Guide
 
 **Status**: VIGENTE — Sprint 1 (Platform Freeze 2.0), 2026-07-15
 **Escopo**: o checklist obrigatório de todo PR. Consolida e substitui o checklist informal de `ENGINEERING_STANDARDS.md` §8 (que passa a apontar para cá). Dois níveis: itens **bloqueantes** (revisão pede mudança, sem exceção) e itens **de julgamento** (revisor avalia proporcionalidade).

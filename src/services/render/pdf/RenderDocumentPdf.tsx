@@ -247,7 +247,7 @@ function VisualRefsPage({
 export function RenderDocumentPdf({ doc, theme }: { doc: RenderDocument; theme: ThemeTokens } & DocumentProps) {
   ensureFonts()
   const styles = buildStyles(theme)
-  const footerLabel = `${doc.footer.officeName ?? "ArchFlow"} · ${doc.footer.code}`
+  const footerLabel = `${doc.footer.officeName ?? "Vincel Studio"} · ${doc.footer.code}`
   // Premium cover-kind sections enrich page 1 (hero/logo, resolved by the
   // mapper into doc.cover) instead of rendering as a body page — exclude
   // them from the body loop so the cover never appears twice.
@@ -256,10 +256,10 @@ export function RenderDocumentPdf({ doc, theme }: { doc: RenderDocument; theme: 
   return (
     <Document
       title={doc.cover.title}
-      author={doc.cover.architectName ?? doc.footer.officeName ?? "ArchFlow"}
+      author={doc.cover.architectName ?? doc.footer.officeName ?? "Vincel Studio"}
       subject={`Proposta — ${doc.cover.clientName}`}
-      creator="ArchFlow"
-      producer="ArchFlow PDF Engine"
+      creator="Vincel Studio"
+      producer="Vincel Studio PDF Engine"
     >
       {/* Cover — full-bleed, layout depends on theme.coverLayout (fix #3) */}
       <Page size="A4" style={styles.pageCover}>
@@ -334,7 +334,7 @@ export function RenderDocumentPdf({ doc, theme }: { doc: RenderDocument; theme: 
         </View>
         <View style={{ marginTop: 40, alignItems: "center" }}>
           <Text style={{ fontSize: 7, color: "#C9C4B8", letterSpacing: 0.5 }}>
-            {doc.metadata.code} · Gerado em {fmtDate(doc.cover.createdAt)} · ArchFlow
+            {doc.metadata.code} · Gerado em {fmtDate(doc.cover.createdAt)} · Vincel Studio
           </Text>
         </View>
         <Footer label={footerLabel} page={allSections.length + (doc.visualRefs?.length ? 3 : 2)} dark={false} styles={styles} />

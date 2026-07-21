@@ -1,9 +1,9 @@
-# ArchFlow — Financial Foundation, Release 1.0
+# Vincel Studio — Financial Foundation, Release 1.0
 
 **Data**: 2026-07-15
 **Escopo**: módulo Financeiro (AP/AR do escritório) — MVP → RC-1 (auditoria) → RC-2 (correções críticas) → RC-3 (zero dívida crítica) → esta Release (congelamento arquitetural).
 
-> **Nota de escopo**: este documento cobre exclusivamente o módulo Financeiro do backend (`ArchFlow_BackEnd`). Para as release notes do produto ArchFlow como um todo (autenticação, CRM, propostas, projetos — lançado em 2026-07-09), ver `ArchFlow/RELEASE_NOTES_v1.0.md` no repositório do frontend — são dois documentos distintos, este não o substitui nem o atualiza.
+> **Nota de escopo**: este documento cobre exclusivamente o módulo Financeiro do backend (`ArchFlow_BackEnd`). Para as release notes do produto Vincel Studio como um todo (autenticação, CRM, propostas, projetos — lançado em 2026-07-09), ver `ArchFlow/RELEASE_NOTES_v1.0.md` no repositório do frontend — são dois documentos distintos, este não o substitui nem o atualiza.
 
 ---
 
@@ -69,7 +69,7 @@ Nenhuma mudança de contrato de API nesta Release (RC-3 → Release 1.0 é docum
 - Sem rateio de despesas indiretas na margem por projeto — "margem direta" é deliberadamente contratado menos previsto, sem alocação de custo fixo/overhead.
 - Sem conciliação bancária automática (OFX/Open Finance), sem emissão de NF-e, sem boleto/PIX automatizado — todos fora de escopo desde o MVP original, endereçados no roadmap (`ARCHITECTURE_ROADMAP.md` §7).
 - `withTransactionRetry` (o mecanismo de retry sob conflito transacional) é usado só pelo módulo Financeiro — outras escritas multi-coleção do app (ex.: mudança de plano de assinatura disparada por webhook de pagamento real) ainda não têm a mesma proteção; documentado como achado de prioridade alta no Anexo de `FINANCIAL_ARCHITECTURE_DECISIONS.md`.
-- Billing (assinatura SaaS do próprio ArchFlow) ainda usa `Float` para valores monetários, não `BigInt`/centavos — tensão não resolvida com o ADR-001, documentada como dívida técnica de prioridade baixa.
+- Billing (assinatura SaaS do próprio Vincel Studio) ainda usa `Float` para valores monetários, não `BigInt`/centavos — tensão não resolvida com o ADR-001, documentada como dívida técnica de prioridade baixa.
 
 ## Próximos passos
 

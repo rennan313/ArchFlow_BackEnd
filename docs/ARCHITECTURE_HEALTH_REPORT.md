@@ -1,4 +1,4 @@
-# ArchFlow — Architecture Health Report
+# Vincel Studio — Architecture Health Report
 
 **Data**: 2026-07-15 — Sprint 1 (Platform Freeze 2.0)
 **Escopo**: Partes 6 (mapa de dependências) e 7 (auditoria de saúde) da Sprint 1. Verificado contra o código real via busca de imports — não de memória.

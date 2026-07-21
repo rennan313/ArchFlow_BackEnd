@@ -16,7 +16,7 @@ const ROLE_RANK: Record<string, number> = {
 
 // ─── Permission map ───────────────────────────────────────────────────────────
 //
-// Mirrors the RBAC matrix (ArchFlow RBAC audit). `read:*` stays universal —
+// Mirrors the RBAC matrix (Vincel Studio RBAC audit). `read:*` stays universal —
 // every workspace member can see workspace data; what differs by role is
 // who can create/update/delete/approve it.
 //

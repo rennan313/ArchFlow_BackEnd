@@ -53,7 +53,7 @@ export const billingCheckoutService = {
     const payerEmail = await resolveOwnerEmail(input.workspaceId)
 
     const result = await provider.createSubscription({
-      reason:            `ArchFlow ${plan.name} (${input.cycle === "ANNUAL" ? "Anual" : "Mensal"})`,
+      reason:            `Vincel Studio ${plan.name} (${input.cycle === "ANNUAL" ? "Anual" : "Mensal"})`,
       amount,
       currency:          "BRL",
       cycle:             input.cycle,

@@ -131,7 +131,7 @@ async function printSummary(db: Db): Promise<void> {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log("\n🚀  ArchFlow — supabaseId migration\n");
+  console.log("\n🚀  Vincel Studio — supabaseId migration\n");
   console.log(`    Environment: ${process.env.NODE_ENV ?? "development"}`);
   console.log(`    Database:    ${DATABASE_URL!.replace(/\/\/.*@/, "//***@")}`);
 

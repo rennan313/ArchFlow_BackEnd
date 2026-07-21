@@ -187,7 +187,7 @@ async function checkStats(db: Db) {
 
 function printReport(): boolean {
   console.log("\n" + "═".repeat(62));
-  console.log("  ArchFlow — supabaseId migration validation report");
+  console.log("  Vincel Studio — supabaseId migration validation report");
   console.log("═".repeat(62));
 
   for (const r of results) {
