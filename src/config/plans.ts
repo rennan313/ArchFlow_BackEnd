@@ -107,15 +107,20 @@ export const PLAN_LABELS: Record<PlanName, string> = {
   ENTERPRISE:   "Enterprise",
 }
 
-// PROFESSIONAL and STUDIO prices carry over from the frontend's old
-// pricing.ts (starter R$59, professional R$99, business→STUDIO R$199).
-// ENTERPRISE has never had a confirmed price anywhere in the codebase —
-// null here means "contact sales," not "free."
+// STARTER/PROFESSIONAL updated to the Vincel commercial pricing (was the
+// old ArchFlow-era R$59/R$99). Annual keeps the same ~15% discount policy
+// the old figures used (STARTER 50/59≈15.25% off, PROFESSIONAL 84/99≈15.15%
+// off) — see VINCEL_LANDING_AUDIT.md §E for the full pricing-sync chain
+// (this file → prisma/seed-billing-plans.ts → BillingPlan table → Mercado
+// Pago Preapproval Plan, which does NOT read this value and must be updated
+// separately or the amount charged won't match what's displayed).
+// STUDIO carries over unchanged — not part of the new Starter/Professional/
+// Enterprise commercial narrative, no new price given for it.
 export const PLAN_PRICING: Record<PlanName, PlanPricing> = {
-  STARTER:      { monthlyPrice: 59,  annualTotal: 600,  annualMonthlyEquiv: 50 },
-  PROFESSIONAL: { monthlyPrice: 99,  annualTotal: 1008, annualMonthlyEquiv: 84 },
-  STUDIO:       { monthlyPrice: 199, annualTotal: 2028, annualMonthlyEquiv: 169 },
-  ENTERPRISE:   { monthlyPrice: null, annualTotal: null, annualMonthlyEquiv: null },
+  STARTER:      { monthlyPrice: 99.9, annualTotal: 1018.8, annualMonthlyEquiv: 84.9 },
+  PROFESSIONAL: { monthlyPrice: 140,  annualTotal: 1428,   annualMonthlyEquiv: 119 },
+  STUDIO:       { monthlyPrice: 199,  annualTotal: 2028,   annualMonthlyEquiv: 169 },
+  ENTERPRISE:   { monthlyPrice: null, annualTotal: null,   annualMonthlyEquiv: null },
 }
 
 export function unlimited(n: number) { return n === -1 }
