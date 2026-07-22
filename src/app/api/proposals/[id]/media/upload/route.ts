@@ -2,8 +2,7 @@ import { type NextRequest } from "next/server"
 import { requireAnyWorkspacePermission } from "@/middlewares/rbac"
 import { mediaService } from "@/services/media.service"
 import { proposalService } from "@/services/proposal.service"
-import { subscriptionService } from "@/services/subscription.service"
-import { created, badRequest, forbidden } from "@/lib/response"
+import { created, badRequest } from "@/lib/response"
 import { handleServiceError, parseUnsupportedFileType } from "@/utils/serviceError"
 import type { JwtPayload } from "@/lib/jwt"
 
@@ -24,11 +23,9 @@ export const POST = requireAnyWorkspacePermission("upload:media", "update:propos
       return badRequest('Field "file" is required and must be a file')
     }
 
-    // Check storage limit before uploading
-    const sizeMb    = file.size / (1024 * 1024)
-    const limitCheck = await subscriptionService.canUploadFile(workspaceId, sizeMb)
-    if (!limitCheck.allowed) return forbidden(limitCheck.reason ?? "Storage limit reached")
-
+    // Entitlements Sprint — redundant pre-check removed, see the matching
+    // comment in documents/route.ts. mediaService.upload reserves real
+    // storage before touching Supabase.
     const media = await mediaService.upload(id, workspaceId, file)
     return created(media, "Media uploaded successfully")
   } catch (error) {

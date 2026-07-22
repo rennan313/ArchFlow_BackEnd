@@ -2,9 +2,8 @@ import { type NextRequest } from "next/server"
 import { withWorkspace } from "@/middlewares/auth"
 import { requireAnyWorkspacePermission } from "@/middlewares/rbac"
 import { documentService } from "@/services/document.service"
-import { subscriptionService } from "@/services/subscription.service"
 import { documentQuerySchema } from "@/validations/document"
-import { ok, created, badRequest, forbidden } from "@/lib/response"
+import { ok, created, badRequest } from "@/lib/response"
 import { handleServiceError, parseUnsupportedFileType } from "@/utils/serviceError"
 import type { JwtPayload } from "@/lib/jwt"
 
@@ -33,10 +32,13 @@ export const POST = requireAnyWorkspacePermission("create:documents")(async (req
       return badRequest('Field "file" is required and must be a file')
     }
 
-    const sizeMb     = file.size / (1024 * 1024)
-    const limitCheck = await subscriptionService.canUploadFile(workspaceId, sizeMb)
-    if (!limitCheck.allowed) return forbidden(limitCheck.reason ?? "Storage limit reached")
-
+    // Entitlements Sprint "close the debts" (2026-07) — the storage-limit
+    // pre-check that used to live here (subscriptionService.canUploadFile,
+    // stale MB-based estimate) is now redundant: documentService.create
+    // itself reserves real storage (storageUsageService.reserve) and throws
+    // BILLING_STORAGE_LIMIT_EXCEEDED (caught by handleServiceError below)
+    // BEFORE touching Supabase — same fail-fast benefit, correct live
+    // numbers, one source of truth instead of two that could disagree.
     const document = await documentService.create(workspaceId, user.sub, file, {
       name:      typeof name === "string" ? name : undefined,
       clientId:  typeof clientId === "string" && clientId ? clientId : undefined,

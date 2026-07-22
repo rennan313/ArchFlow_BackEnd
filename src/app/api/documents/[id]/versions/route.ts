@@ -1,8 +1,7 @@
 import { type NextRequest } from "next/server"
 import { requireAnyWorkspacePermission } from "@/middlewares/rbac"
 import { documentService } from "@/services/document.service"
-import { subscriptionService } from "@/services/subscription.service"
-import { created, badRequest, forbidden } from "@/lib/response"
+import { created, badRequest } from "@/lib/response"
 import { handleServiceError, parseUnsupportedFileType } from "@/utils/serviceError"
 import type { JwtPayload } from "@/lib/jwt"
 
@@ -18,10 +17,9 @@ export const POST = requireAnyWorkspacePermission("update:documents")(async (req
       return badRequest('Field "file" is required and must be a file')
     }
 
-    const sizeMb     = file.size / (1024 * 1024)
-    const limitCheck = await subscriptionService.canUploadFile(workspaceId, sizeMb)
-    if (!limitCheck.allowed) return forbidden(limitCheck.reason ?? "Storage limit reached")
-
+    // Entitlements Sprint — redundant pre-check removed, see the matching
+    // comment in documents/route.ts. documentService.addVersion reserves
+    // real storage before touching Supabase.
     const document = await documentService.addVersion(id, workspaceId, user.sub, file)
     return created(document, "New version uploaded successfully")
   } catch (error) {
