@@ -51,18 +51,23 @@ interface PlanVersionSeed {
   features: FeatureKey[]
   status: PlanVersionStatus
   order: number
-  // Deliberately false for every v1 row, even the ones with status:ACTIVE.
-  // `active` is the LEGACY display flag still read by the pre-Entitlements-
-  // Sprint code that may still be the deployed production build when this
-  // script runs (billingPlan.repository.ts#findActive filters on `active:
-  // true`, with NO knowledge of `status`/`version`, and expects the OLD
-  // field names — limitProjects/limitUsers/etc — which v1 rows don't have).
-  // If a v1 row is left `active:true`, the OLD deployed code's
-  // `findMany({where:{active:true}})` hydrates it and throws (missing
-  // required OLD fields), breaking GET /api/billing/plans for whatever old
-  // build is still live. Flip this to true only in the same deploy that
-  // ships the new status-based billingPlanRepository (Entitlements Sprint
-  // Phase 3/4) — never before.
+  // `active` is the LEGACY display flag. It mattered while the OLD (pre-
+  // Entitlements-Sprint) backend build was still deployed — that code's
+  // billingPlan.repository.ts#findActive filtered on `active:true` with no
+  // knowledge of `status`/`version`, and expected the OLD field names
+  // (limitProjects/limitUsers/etc) that v1 rows never had, so a v1 row left
+  // `active:true` before that old build was replaced would hydrate-crash
+  // GET /api/billing/plans. The new status-based billingPlan.repository.ts
+  // (which reads `status`, not `active`, for filtering) is deployed as of
+  // 2026-07-22 — but billingPlan.service.ts#getSellablePlan STILL checks
+  // `plan.active` as an independent sellability guard (in addition to
+  // priceMonthly > 0), so a sellable v1 row now needs `active:true`, or
+  // checkout breaks with BILLING_PLAN_NOT_SELLABLE for a real customer.
+  // (Caught and fixed live in production the same day this deployed —
+  // `active:false` on STARTER/PROFESSIONAL v1 briefly broke checkout right
+  // after deploy, corrected within minutes.) Set true for every version
+  // that should be self-serve checkout-able (STARTER/PROFESSIONAL), false
+  // for anything that should not (ENTERPRISE — contact-sales, DRAFT status).
   active: boolean
 }
 
@@ -80,7 +85,7 @@ const PLAN_VERSIONS: PlanVersionSeed[] = [
     priceMonthly: 99.9, priceAnnual: 1018.8,
     limitSeats: 4, limitActiveProjects: 10, limitProposalsPerCycle: 20, limitAiCreditsPerCycle: 20,
     limitStorageBytes: BigInt(500 * MB),
-    features: STARTER_FEATURES, status: "ACTIVE", order: 0, active: false,
+    features: STARTER_FEATURES, status: "ACTIVE", order: 0, active: true,
   },
   {
     key: "PROFESSIONAL", name: "Professional",
@@ -88,7 +93,7 @@ const PLAN_VERSIONS: PlanVersionSeed[] = [
     priceMonthly: 139.9, priceAnnual: 1428,
     limitSeats: 10, limitActiveProjects: 200, limitProposalsPerCycle: 150, limitAiCreditsPerCycle: 80,
     limitStorageBytes: BigInt(5 * GB),
-    features: PROFESSIONAL_FEATURES, status: "ACTIVE", order: 1, active: false,
+    features: PROFESSIONAL_FEATURES, status: "ACTIVE", order: 1, active: true,
   },
   {
     key: "ENTERPRISE", name: "Enterprise",
