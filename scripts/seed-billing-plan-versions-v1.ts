@@ -51,6 +51,19 @@ interface PlanVersionSeed {
   features: FeatureKey[]
   status: PlanVersionStatus
   order: number
+  // Deliberately false for every v1 row, even the ones with status:ACTIVE.
+  // `active` is the LEGACY display flag still read by the pre-Entitlements-
+  // Sprint code that may still be the deployed production build when this
+  // script runs (billingPlan.repository.ts#findActive filters on `active:
+  // true`, with NO knowledge of `status`/`version`, and expects the OLD
+  // field names — limitProjects/limitUsers/etc — which v1 rows don't have).
+  // If a v1 row is left `active:true`, the OLD deployed code's
+  // `findMany({where:{active:true}})` hydrates it and throws (missing
+  // required OLD fields), breaking GET /api/billing/plans for whatever old
+  // build is still live. Flip this to true only in the same deploy that
+  // ships the new status-based billingPlanRepository (Entitlements Sprint
+  // Phase 3/4) — never before.
+  active: boolean
 }
 
 const STARTER_FEATURES: FeatureKey[] = ["CRM", "AGENDA", "PROJECTS", "FINANCE", "PURCHASES", "WORKLOG", "PDF_EXPORT", "BRANDING_BASIC"]
@@ -67,7 +80,7 @@ const PLAN_VERSIONS: PlanVersionSeed[] = [
     priceMonthly: 99.9, priceAnnual: 1018.8,
     limitSeats: 4, limitActiveProjects: 10, limitProposalsPerCycle: 20, limitAiCreditsPerCycle: 20,
     limitStorageBytes: BigInt(500 * MB),
-    features: STARTER_FEATURES, status: "ACTIVE", order: 0,
+    features: STARTER_FEATURES, status: "ACTIVE", order: 0, active: false,
   },
   {
     key: "PROFESSIONAL", name: "Professional",
@@ -75,7 +88,7 @@ const PLAN_VERSIONS: PlanVersionSeed[] = [
     priceMonthly: 139.9, priceAnnual: 1428,
     limitSeats: 10, limitActiveProjects: 200, limitProposalsPerCycle: 150, limitAiCreditsPerCycle: 80,
     limitStorageBytes: BigInt(5 * GB),
-    features: PROFESSIONAL_FEATURES, status: "ACTIVE", order: 1,
+    features: PROFESSIONAL_FEATURES, status: "ACTIVE", order: 1, active: false,
   },
   {
     key: "ENTERPRISE", name: "Enterprise",
@@ -83,7 +96,7 @@ const PLAN_VERSIONS: PlanVersionSeed[] = [
     priceMonthly: 0, priceAnnual: 0,
     limitSeats: -1, limitActiveProjects: -1, limitProposalsPerCycle: -1, limitAiCreditsPerCycle: 200,
     limitStorageBytes: -1n,
-    features: ENTERPRISE_FEATURES, status: "DRAFT", order: 2,
+    features: ENTERPRISE_FEATURES, status: "DRAFT", order: 2, active: false,
   },
 ]
 
