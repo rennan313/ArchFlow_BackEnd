@@ -36,9 +36,22 @@ function limitReachedResult(current: number, limit: number, label: string): Limi
   }
 }
 
-// Shadow-mode gate — wraps every method that can return allowed:false. If
-// enforcement is disabled (globally or for this workspace), the real result
-// is still computed and logged, but the caller always sees allowed:true.
+// Shadow-mode gate — wraps every NET-NEW check (project limit, feature
+// flags, AI credits — nothing enforced this before the Entitlements
+// Sprint). If enforcement is disabled (globally or for this workspace), the
+// real result is still computed and logged, but the caller always sees
+// allowed:true.
+//
+// Seat/proposal/storage skip this wrapper entirely (see their own
+// functions below) — they're LEGACY-PARITY checks: seat/proposal counts and
+// the storage estimate were already being enforced for real before this
+// sprint (subscriptionService.canAddUser/canCreateProposal/canUploadFile),
+// just sourced from the stale config/plans.ts numbers. Routing them through
+// the shadow gate would SILENTLY DISABLE a real limit customers already
+// experience (e.g. Starter's seat cap) until the global flag flips —
+// backwards from the intent of this migration, which is to fix the
+// numbers, not turn enforcement off. Only genuinely new restrictions get
+// the shadow-mode soak period the blueprint asked for.
 async function withShadowMode(workspaceId: string, result: LimitCheckResult, event: string): Promise<LimitCheckResult> {
   if (result.allowed) return result
 
@@ -59,10 +72,11 @@ export const limitService = {
     if (limits.seats === -1) return { allowed: true }
 
     const current = await prisma.user.count({ where: { workspaceId } })
-    const result = current >= limits.seats
+    // Legacy-parity check — always enforced for real, no shadow-mode
+    // wrapper. See the comment on withShadowMode above.
+    return current >= limits.seats
       ? limitReachedResult(current, limits.seats, "seat(s)")
       : { allowed: true, current, limit: limits.seats }
-    return withShadowMode(workspaceId, result, "seat_limit")
   },
 
   // Counts ACTIVE (non-archived) projects only — archiving a project frees a
@@ -97,25 +111,30 @@ export const limitService = {
     const current = await prisma.proposal.count({
       where: { workspaceId, createdAt: { gte: cycleStart }, archived: undefined },
     })
-    const result = current >= limits.proposalsPerCycle
+    // Legacy-parity check — always enforced for real, no shadow-mode
+    // wrapper. See the comment on withShadowMode above.
+    return current >= limits.proposalsPerCycle
       ? limitReachedResult(current, limits.proposalsPerCycle, "proposal(s) this cycle")
       : { allowed: true, current, limit: limits.proposalsPerCycle }
-    return withShadowMode(workspaceId, result, "proposal_limit")
   },
 
   // Pre-flight only — reads the running WorkspaceUsage counter, does not
-  // reserve. The real, race-safe reservation happens inside the upload's own
-  // transaction via storageUsageService.reserveAndIncrement.
+  // reserve. The real, race-safe reservation happens inside the upload
+  // itself (documentService.create/addVersion, mediaService.upload, via
+  // storageUsageService.reserve — already a real, unconditional enforcement,
+  // never shadow-gated). This pre-flight is legacy-parity for the same
+  // reason (storage was already being checked pre-Sprint) AND for UX
+  // consistency: shadow-gating just this cheap check while the real upload
+  // still hard-fails would show "allowed" then fail anyway.
   async canUploadFile(workspaceId: string, fileSizeBytes: number): Promise<LimitCheckResult> {
     const { limits } = await planService.getEntitlements(workspaceId)
     if (limits.storageBytes === -1n) return { allowed: true }
 
     const current = await storageUsageService.getUsedBytes(workspaceId)
     const projected = current + BigInt(fileSizeBytes)
-    const result = projected > limits.storageBytes
+    return projected > limits.storageBytes
       ? { allowed: false, current: Number(current), limit: Number(limits.storageBytes), reason: `Storage limit of ${limits.storageBytes} bytes reached. Upgrade to upload more files.` }
       : { allowed: true, current: Number(current), limit: Number(limits.storageBytes) }
-    return withShadowMode(workspaceId, result, "storage_limit")
   },
 
   async canUseFeature(workspaceId: string, key: FeatureKey): Promise<LimitCheckResult> {

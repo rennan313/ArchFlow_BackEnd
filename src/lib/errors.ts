@@ -66,6 +66,12 @@ export enum ErrorCode {
   // throw. This only fires when two concurrent uploads both pass the
   // pre-flight and race for the last bytes of quota.
   BILLING_STORAGE_LIMIT_EXCEEDED = "BILLING_STORAGE_LIMIT_EXCEEDED",
+  // Thrown by workspaceService.acceptInvite — the invite-SEND route already
+  // pre-checks the seat limit (limitService.canAddSeat, workspace/invite/
+  // route.ts), but a seat can fill up between an invite being sent and it
+  // being accepted (other members joined meanwhile), so accept needs its
+  // own check too.
+  SEAT_LIMIT_REACHED = "SEAT_LIMIT_REACHED",
   // Financial (office-level AP/AR — distinct from Billing/Subscription above)
   SUPPLIER_CATEGORY_NOT_FOUND = "SUPPLIER_CATEGORY_NOT_FOUND",
   SUPPLIER_CATEGORY_NAME_TAKEN = "SUPPLIER_CATEGORY_NAME_TAKEN",

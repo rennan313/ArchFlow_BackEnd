@@ -5,6 +5,10 @@ import { withTransactionRetry } from "@/lib/transactionRetry"
 import { auditLog } from "@/lib/auditLog"
 import { automationService } from "@/services/automation.service"
 import { subscriptionService } from "@/services/subscription.service"
+// Workspace already has an accepted historical dependency on Subscription
+// (trial creation, CORE_MODULE_POLICY.md §2) — limitService extends that
+// same direction for the seat check below, not a new dependency category.
+import { limitService } from "@/services/billing/limit.service"
 import type { WorkspaceRole } from "@prisma/client"
 
 function slugify(name: string): string {
@@ -135,6 +139,14 @@ export const workspaceService = {
     if (user.workspaceId) {
       throw new AppError(ErrorCode.ALREADY_IN_WORKSPACE, "You are already a member of a workspace")
     }
+
+    // Entitlements Sprint "close the debts" (2026-07) — the invite-SEND
+    // route already pre-checks the seat limit, but a seat can fill up
+    // between an invite being sent and it being accepted (other invites
+    // accepted meanwhile) — accept needs its own check too, or the
+    // workspace could exceed its plan's seat count.
+    const seatCheck = await limitService.canAddSeat(invite.workspaceId)
+    if (!seatCheck.allowed) throw new AppError(ErrorCode.SEAT_LIMIT_REACHED, seatCheck.reason)
 
     // CORE-6 (Sprint 0) — was array-form $transaction([...]) with no retry
     // hook, same class of gap CORE-1 fixed in subscription.service.ts: a

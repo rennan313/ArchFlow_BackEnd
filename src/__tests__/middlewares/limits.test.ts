@@ -2,15 +2,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { NextRequest } from "next/server"
 import { signAccessToken, buildPayload, type JwtPayload } from "@/lib/jwt"
 
+// canWrite is checked by withWorkspace itself (unchanged, still
+// subscriptionService). canCreateProposal moved to limitService
+// (Entitlements Sprint, 2026-07 — live BillingPlan instead of the stale
+// config/plans.ts numbers) — mocked separately at its own boundary.
 vi.mock("@/services/subscription.service", () => ({
-  subscriptionService: { canWrite: vi.fn(), canCreateProposal: vi.fn() },
+  subscriptionService: { canWrite: vi.fn() },
+}))
+vi.mock("@/services/billing/limit.service", () => ({
+  limitService: { canCreateProposal: vi.fn() },
 }))
 
 import { requireProposalLimit } from "@/middlewares/limits"
 import { subscriptionService } from "@/services/subscription.service"
+import { limitService } from "@/services/billing/limit.service"
 
 const canWrite          = vi.mocked(subscriptionService.canWrite)
-const canCreateProposal = vi.mocked(subscriptionService.canCreateProposal)
+const canCreateProposal = vi.mocked(limitService.canCreateProposal)
 
 function tokenFor(workspaceId: string | null = "ws-1"): string {
   const payload: JwtPayload = buildPayload({
@@ -44,7 +52,7 @@ describe("requireProposalLimit — must run the trial/subscription write-gate", 
 
   it("blocks with 403 + exact message when the workspace is read-only, even if the proposal limit would allow it", async () => {
     canWrite.mockResolvedValue(false)
-    canCreateProposal.mockResolvedValue({ allowed: true, plan: "STARTER" })
+    canCreateProposal.mockResolvedValue({ allowed: true })
 
     const res  = await handler(requestWith("POST", tokenFor()), ctx)
     const body = await res.json()
@@ -56,7 +64,7 @@ describe("requireProposalLimit — must run the trial/subscription write-gate", 
 
   it("passes through to the plan-limit check when the workspace can write", async () => {
     canWrite.mockResolvedValue(true)
-    canCreateProposal.mockResolvedValue({ allowed: true, plan: "STARTER" })
+    canCreateProposal.mockResolvedValue({ allowed: true })
 
     const res = await handler(requestWith("POST", tokenFor()), ctx)
     expect(res.status).toBe(200)
@@ -65,7 +73,7 @@ describe("requireProposalLimit — must run the trial/subscription write-gate", 
 
   it("still blocks via the plan limit when the workspace can write but is over quota", async () => {
     canWrite.mockResolvedValue(true)
-    canCreateProposal.mockResolvedValue({ allowed: false, plan: "STARTER", reason: "Plan STARTER allows 20 proposals/month." })
+    canCreateProposal.mockResolvedValue({ allowed: false, reason: "Plan STARTER allows 20 proposals/month." })
 
     const res = await handler(requestWith("POST", tokenFor()), ctx)
     expect(res.status).toBe(403)

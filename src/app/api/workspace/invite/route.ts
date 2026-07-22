@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server"
 import { workspaceService } from "@/services/workspace.service"
-import { subscriptionService } from "@/services/subscription.service"
+import { limitService } from "@/services/billing/limit.service"
 import { inviteUserSchema } from "@/validations/workspace"
 import { created, forbidden, badRequest } from "@/lib/response"
 import { handleServiceError } from "@/utils/serviceError"
@@ -10,8 +10,13 @@ import { env } from "@/lib/env"
 
 export const POST = requireWorkspaceRole("ADMIN")(async (req: NextRequest, _ctx: { params: Promise<Record<string, string>> }, user: JwtPayload, workspaceId: string) => {
   try {
-    // Check user seat limit before sending invite
-    const limitCheck = await subscriptionService.canAddUser(workspaceId)
+    // Entitlements Sprint "close the debts" (2026-07) — swapped from
+    // subscriptionService.canAddUser (read the stale config/plans.ts
+    // numbers — Starter capped at 1 seat even after the public pricing page
+    // started selling 4) to limitService.canAddSeat (reads the live
+    // BillingPlan). Always enforced for real, no shadow-mode — see the
+    // comment on limit.service.ts's withShadowMode.
+    const limitCheck = await limitService.canAddSeat(workspaceId)
     if (!limitCheck.allowed) return forbidden(limitCheck.reason ?? "User limit reached")
 
     const body  = await req.json()

@@ -1,10 +1,11 @@
 import type { NextRequest } from "next/server"
 import { withWorkspace, type WithWorkspaceHandler, type RouteHandler } from "./auth"
-import { subscriptionService } from "@/services/subscription.service"
+import { limitService } from "@/services/billing/limit.service"
 import { forbidden } from "@/lib/response"
 import type { JwtPayload } from "@/lib/jwt"
+import type { FeatureKey } from "@prisma/client"
 
-function limitExceeded(result: Awaited<ReturnType<typeof subscriptionService.canAddUser>>) {
+function limitExceeded(result: Awaited<ReturnType<typeof limitService.canAddSeat>>) {
   return forbidden(result.reason ?? "Plan limit reached")
 }
 
@@ -20,10 +21,17 @@ function limitExceeded(result: Awaited<ReturnType<typeof subscriptionService.can
 // returned 201). Routing through withWorkspace closes that gap the same way
 // every other domain route is already closed, with no new logic to keep
 // in sync.
+//
+// Entitlements Sprint (2026-07) — repointed from subscriptionService (stale
+// config/plans.ts numbers) to limitService (live BillingPlan). Seat/
+// proposal/storage checks below are legacy-parity — limitService enforces
+// them for real, never shadow-gated (see limit.service.ts's withShadowMode
+// comment). requireFeature is the one genuinely NEW gate here — it inherits
+// limitService.canUseFeature's shadow-mode behavior automatically.
 
 export function requireProposalLimit(handler: WithWorkspaceHandler): RouteHandler {
   return withWorkspace(async (req: NextRequest, ctx, user: JwtPayload, workspaceId: string) => {
-    const check = await subscriptionService.canCreateProposal(workspaceId)
+    const check = await limitService.canCreateProposal(workspaceId)
     if (!check.allowed) return limitExceeded(check)
     return handler(req, ctx, user, workspaceId)
   })
@@ -31,7 +39,7 @@ export function requireProposalLimit(handler: WithWorkspaceHandler): RouteHandle
 
 export function requireUserLimit(handler: WithWorkspaceHandler): RouteHandler {
   return withWorkspace(async (req: NextRequest, ctx, user: JwtPayload, workspaceId: string) => {
-    const check = await subscriptionService.canAddUser(workspaceId)
+    const check = await limitService.canAddSeat(workspaceId)
     if (!check.allowed) return limitExceeded(check)
     return handler(req, ctx, user, workspaceId)
   })
@@ -40,17 +48,17 @@ export function requireUserLimit(handler: WithWorkspaceHandler): RouteHandler {
 export function requireStorageLimit(fileSizeMb: number) {
   return (handler: WithWorkspaceHandler): RouteHandler => {
     return withWorkspace(async (req: NextRequest, ctx, user: JwtPayload, workspaceId: string) => {
-      const check = await subscriptionService.canUploadFile(workspaceId, fileSizeMb)
+      const check = await limitService.canUploadFile(workspaceId, fileSizeMb * 1024 * 1024)
       if (!check.allowed) return limitExceeded(check)
       return handler(req, ctx, user, workspaceId)
     })
   }
 }
 
-export function requireFeature(feature: "canCustomBranding" | "canExportPdf" | "canApiAccess") {
+export function requireFeature(feature: FeatureKey) {
   return (handler: WithWorkspaceHandler): RouteHandler => {
     return withWorkspace(async (req: NextRequest, ctx, user: JwtPayload, workspaceId: string) => {
-      const check = await subscriptionService.canUseFeature(workspaceId, feature)
+      const check = await limitService.canUseFeature(workspaceId, feature)
       if (!check.allowed) return limitExceeded(check)
       return handler(req, ctx, user, workspaceId)
     })
@@ -64,9 +72,9 @@ export function requireDynamicStorageLimit(handler: WithWorkspaceHandler): Route
     const clone    = req.clone()
     const formData = await clone.formData().catch(() => null)
     const file     = formData?.get("file")
-    const sizeMb   = file instanceof File ? file.size / (1024 * 1024) : 0
+    const sizeBytes = file instanceof File ? file.size : 0
 
-    const check = await subscriptionService.canUploadFile(workspaceId, sizeMb)
+    const check = await limitService.canUploadFile(workspaceId, sizeBytes)
     if (!check.allowed) return limitExceeded(check)
     return handler(req, ctx, user, workspaceId)
   })

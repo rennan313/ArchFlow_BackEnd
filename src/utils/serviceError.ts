@@ -62,6 +62,7 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.ENTITLEMENT_OVERRIDE_NOT_FOUND]: () => R.notFound("Entitlement override not found"),
   [ErrorCode.WORKSPACE_FROZEN]: () => R.forbidden("This workspace is frozen due to a billing issue. Reactivate your subscription to continue."),
   [ErrorCode.BILLING_STORAGE_LIMIT_EXCEEDED]: () => R.forbidden("Storage limit reached. Upgrade your plan to upload more files."),
+  [ErrorCode.SEAT_LIMIT_REACHED]: () => R.forbidden("This workspace has reached its seat limit. Ask an admin to upgrade the plan."),
   // Financial
   [ErrorCode.SUPPLIER_CATEGORY_NOT_FOUND]:   () => R.notFound("Supplier category not found"),
   [ErrorCode.SUPPLIER_CATEGORY_NAME_TAKEN]:  () => R.conflict("A supplier category with this name already exists"),

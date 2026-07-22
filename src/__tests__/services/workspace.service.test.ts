@@ -28,10 +28,19 @@ vi.mock("@/services/automation.service", () => ({
 vi.mock("@/services/subscription.service", () => ({
   subscriptionService: { createTrialSubscription: vi.fn().mockResolvedValue({ id: "sub-1", status: "TRIAL" }) },
 }))
+// Entitlements Sprint — acceptInvite now checks the seat limit via
+// limitService (mocked at this boundary, not by deepening the
+// subscriptionService mock above — canAddSeat reaches through
+// planService.getEntitlements -> subscriptionService.expireTrialIfNeeded,
+// which this file was never set up to mock).
+vi.mock("@/services/billing/limit.service", () => ({
+  limitService: { canAddSeat: vi.fn().mockResolvedValue({ allowed: true }) },
+}))
 
 import { workspaceService } from "@/services/workspace.service"
 import { prisma } from "@/lib/prisma"
 import { subscriptionService } from "@/services/subscription.service"
+import { limitService } from "@/services/billing/limit.service"
 
 const mockPrisma = prisma as unknown as {
   workspace: { findUnique: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> }
@@ -175,6 +184,19 @@ describe("workspaceService.acceptInvite", () => {
       where: { id: "invite-1", accepted: false },
       data:  { accepted: true },
     })
+  })
+
+  // Entitlements Sprint "close the debts" — a seat can fill up between an
+  // invite being sent and it being accepted; accept must re-check, not just
+  // trust the send-time check in workspace/invite/route.ts.
+  it("throws SEAT_LIMIT_REACHED if the workspace filled its last seat between invite and accept, without joining the user", async () => {
+    vi.mocked(prisma.workspaceInvite.findUnique).mockResolvedValue(mockInvite)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockInvitee as never)
+    vi.mocked(limitService.canAddSeat).mockResolvedValueOnce({ allowed: false, reason: "Plan allows 4 seat(s). You have 4." })
+
+    await expect(workspaceService.acceptInvite("valid-token-abc", "user-2"))
+      .rejects.toMatchObject({ code: ErrorCode.SEAT_LIMIT_REACHED })
+    expect(prisma.user.update).not.toHaveBeenCalled()
   })
 
   it("throws NOT_FOUND for unknown token", async () => {
