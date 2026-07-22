@@ -42,6 +42,14 @@ vi.mock("@/services/email/email.service", () => ({
 vi.mock("@/utils/workspaceOwner", () => ({
   resolveOwnerContact: vi.fn().mockResolvedValue({ name: "Owner", email: "owner@test.com" }),
 }))
+vi.mock("@/repositories/aiCreditPurchase.repository", () => ({
+  aiCreditPurchaseRepository: {
+    findById: vi.fn(), markApproved: vi.fn(), markRejected: vi.fn(), markCancelled: vi.fn(),
+  },
+}))
+vi.mock("@/services/billing/aiCredit.service", () => ({
+  aiCreditService: { purchaseCredits: vi.fn() },
+}))
 
 import { billingWebhookService } from "@/modules/billing/services/billingWebhook.service"
 import { billingService } from "@/services/billing.service"
@@ -49,12 +57,16 @@ import { subscriptionService } from "@/services/subscription.service"
 import { subscriptionRepository } from "@/repositories/subscription.repository"
 import { billingPlanRepository } from "@/repositories/billingPlan.repository"
 import { emailService } from "@/services/email/email.service"
+import { aiCreditPurchaseRepository } from "@/repositories/aiCreditPurchase.repository"
+import { aiCreditService } from "@/services/billing/aiCredit.service"
 
 const bs       = vi.mocked(billingService)
 const ss       = vi.mocked(subscriptionService)
 const subRepo  = vi.mocked(subscriptionRepository)
 const planRepo = vi.mocked(billingPlanRepository)
 const email    = vi.mocked(emailService)
+const purchaseRepo = vi.mocked(aiCreditPurchaseRepository)
+const aiCredit      = vi.mocked(aiCreditService)
 
 const SUB = {
   id: "sub-1", workspaceId: "ws-1", plan: "PROFESSIONAL", billingCycle: "MONTHLY",
@@ -74,6 +86,105 @@ beforeEach(() => {
   subRepo.update.mockResolvedValue({} as never)
   ss.changePlan.mockResolvedValue({} as never)
   fakeProvider.getSubscription.mockResolvedValue({ status: "authorized", nextPaymentDate: NEXT, raw: {} })
+  purchaseRepo.markApproved.mockResolvedValue({ alreadyApproved: false } as never)
+})
+
+const PURCHASE = {
+  id: "purch-1", workspaceId: "ws-9", userId: "user-9", packageId: "150",
+  credits: 150, amount: 99.9, currency: "BRL", status: "PENDING",
+  externalReference: "AI_CREDIT_PURCHASE:purch-1", idempotencyKey: "ai-credit-purchase:purch-1",
+  gatewayPaymentId: null,
+}
+
+describe("billingWebhookService — AI credit purchase events (never the subscription path)", () => {
+  it("grants credits exactly once on an approved credit-purchase payment, and never touches the subscription domain", async () => {
+    fakeProvider.getPayment.mockResolvedValue({
+      status: "approved", amount: 99.9, currency: "BRL", providerPaymentId: "mp-pay-1",
+      raw: { external_reference: "AI_CREDIT_PURCHASE:purch-1" },
+    })
+    purchaseRepo.findById.mockResolvedValue({ ...PURCHASE } as never)
+
+    await billingWebhookService.process(paymentRef, "{}")
+
+    expect(aiCredit.purchaseCredits).toHaveBeenCalledWith("ws-9", 150, "ai-credit-purchase:purch-1")
+    expect(purchaseRepo.markApproved).toHaveBeenCalledWith("purch-1", "mp-pay-1")
+    // The two financial domains never cross — no subscription-domain side effect fires.
+    expect(bs.recordPaymentEvent).not.toHaveBeenCalled()
+    expect(ss.changePlan).not.toHaveBeenCalled()
+    expect(subRepo.findById).not.toHaveBeenCalled()
+  })
+
+  it("a duplicate webhook delivery (2nd and 3rd time) still only grants credits via the idempotent ledger call, never twice in effect", async () => {
+    fakeProvider.getPayment.mockResolvedValue({
+      status: "approved", amount: 99.9, currency: "BRL", providerPaymentId: "mp-pay-1",
+      raw: { external_reference: "AI_CREDIT_PURCHASE:purch-1" },
+    })
+    purchaseRepo.findById.mockResolvedValue({ ...PURCHASE, status: "APPROVED" } as never)
+    purchaseRepo.markApproved.mockResolvedValue({ alreadyApproved: true } as never)
+
+    await billingWebhookService.process(paymentRef, "{}")
+    await billingWebhookService.process(paymentRef, "{}")
+    await billingWebhookService.process(paymentRef, "{}")
+
+    // purchaseCredits is called every time (it's the idempotent primitive —
+    // AiCreditLedgerEntry.idempotencyKey @unique is what actually prevents a
+    // duplicate grant at the database level); this asserts the webhook path
+    // routes every delivery through it with the SAME deterministic key.
+    expect(aiCredit.purchaseCredits).toHaveBeenCalledTimes(3)
+    for (const call of aiCredit.purchaseCredits.mock.calls) {
+      expect(call).toEqual(["ws-9", 150, "ai-credit-purchase:purch-1"])
+    }
+  })
+
+  it("does not grant credits and marks the purchase rejected on a declined payment", async () => {
+    fakeProvider.getPayment.mockResolvedValue({
+      status: "rejected", amount: 99.9, currency: "BRL", providerPaymentId: "mp-pay-2",
+      raw: { external_reference: "AI_CREDIT_PURCHASE:purch-1" },
+    })
+    purchaseRepo.findById.mockResolvedValue({ ...PURCHASE } as never)
+
+    await billingWebhookService.process(paymentRef, "{}")
+
+    expect(aiCredit.purchaseCredits).not.toHaveBeenCalled()
+    expect(purchaseRepo.markRejected).toHaveBeenCalledWith("purch-1", "mp-pay-2")
+  })
+
+  it("does not grant credits on a cancelled checkout", async () => {
+    fakeProvider.getPayment.mockResolvedValue({
+      status: "cancelled", amount: 99.9, currency: "BRL", providerPaymentId: "mp-pay-3",
+      raw: { external_reference: "AI_CREDIT_PURCHASE:purch-1" },
+    })
+    purchaseRepo.findById.mockResolvedValue({ ...PURCHASE } as never)
+
+    await billingWebhookService.process(paymentRef, "{}")
+
+    expect(aiCredit.purchaseCredits).not.toHaveBeenCalled()
+    expect(purchaseRepo.markCancelled).toHaveBeenCalledWith("purch-1")
+  })
+
+  it("refuses to grant credits when the gateway amount/currency does not match the purchase snapshot", async () => {
+    fakeProvider.getPayment.mockResolvedValue({
+      status: "approved", amount: 1.0, currency: "BRL", providerPaymentId: "mp-pay-4",
+      raw: { external_reference: "AI_CREDIT_PURCHASE:purch-1" },
+    })
+    purchaseRepo.findById.mockResolvedValue({ ...PURCHASE } as never)
+
+    await billingWebhookService.process(paymentRef, "{}")
+
+    expect(aiCredit.purchaseCredits).not.toHaveBeenCalled()
+    expect(purchaseRepo.markApproved).not.toHaveBeenCalled()
+  })
+
+  it("acks an unknown purchase id without throwing", async () => {
+    fakeProvider.getPayment.mockResolvedValue({
+      status: "approved", amount: 99.9, currency: "BRL", providerPaymentId: "mp-pay-5",
+      raw: { external_reference: "AI_CREDIT_PURCHASE:does-not-exist" },
+    })
+    purchaseRepo.findById.mockResolvedValue(null)
+
+    await expect(billingWebhookService.process(paymentRef, "{}")).resolves.toBeUndefined()
+    expect(aiCredit.purchaseCredits).not.toHaveBeenCalled()
+  })
 })
 
 describe("billingWebhookService — subscription events", () => {

@@ -2,10 +2,11 @@ import { env } from "@/lib/env"
 import type {
   BillingGatewayProvider, CreateSubscriptionParams, GatewaySubscription, GatewayPayment,
   GatewaySubscriptionStatus, GatewayPaymentStatus, GatewayEventRef, WebhookSignatureInput,
+  CreateOneOffPaymentParams, GatewayCheckoutIntent,
 } from "../gateway.interface"
 import { mpClient } from "./mpClient"
 import { verifyMercadoPagoSignature } from "../../utils/signature"
-import type { MpPreapproval, MpPayment, MpWebhookBody } from "./mp.types"
+import type { MpPreapproval, MpPayment, MpPreference, MpWebhookBody } from "./mp.types"
 
 const SUB_STATUS: Record<string, GatewaySubscriptionStatus> = {
   pending:    "pending",
@@ -97,6 +98,35 @@ export const mercadoPagoProvider: BillingGatewayProvider = {
 
   async getPayment(id: string): Promise<GatewayPayment> {
     return mapPayment(await mpClient.getPayment<MpPayment>(id))
+  },
+
+  // Checkout Pro one-off payment (AI credit packs) — never a preapproval.
+  // Idempotency key namespaced "pref_" so a retried checkout POST for the
+  // same purchase never creates a second preference (mirrors the "sub_"
+  // convention in createSubscription above).
+  async createOneOffPayment(params: CreateOneOffPaymentParams): Promise<GatewayCheckoutIntent> {
+    const body = {
+      external_reference: params.externalReference,
+      payer:              { email: params.payerEmail },
+      back_urls: {
+        success: params.backUrl,
+        pending: params.backUrl,
+        failure: params.backUrl,
+      },
+      auto_return: "approved",
+      items: [{
+        title:       params.description,
+        quantity:    1,
+        currency_id: params.currency,
+        unit_price:  params.amount,
+      }],
+    }
+    const created = await mpClient.createPreference<MpPreference>(body, `pref_${params.externalReference}`)
+    return {
+      providerPreferenceId: created.id,
+      initPoint:            created.init_point,
+      raw:                  created,
+    }
   },
 
   verifyWebhookSignature(input: WebhookSignatureInput): boolean {

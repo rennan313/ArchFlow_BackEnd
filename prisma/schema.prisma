@@ -283,6 +283,18 @@ enum CreditLedgerReason {
   EXPIRE
 }
 
+// AI Credit Purchase sprint (resumed) — one-off gateway payment lifecycle for
+// an AiCreditPurchase, distinct from CreditLedgerReason (which records the
+// resulting ledger movement once a purchase reaches APPROVED).
+enum AiCreditPurchaseStatus {
+  CREATED // row exists, no gateway checkout created yet (should be instantaneous in practice)
+  PENDING // checkout created, awaiting gateway payment confirmation
+  APPROVED // gateway confirmed payment; credits granted via aiCreditService.purchaseCredits
+  REJECTED // gateway declined the payment; no credits granted
+  CANCELLED // user abandoned/cancelled checkout; no credits granted
+  EXPIRED // checkout link expired unused; no credits granted
+}
+
 // ─── Financial Domain ─────────────────────────────────────────────────────────
 // Tenant-office bookkeeping (the architecture office's own AP/AR) — distinct
 // bounded context from Subscription/BillingPlan/PaymentEvent/BillingHistory
@@ -364,6 +376,7 @@ model Workspace {
   entitlementOverrides EntitlementOverride[]
   aiCreditLedger       AiCreditLedgerEntry[]
   aiCreditBalances     AiCreditBalance[]
+  aiCreditPurchases    AiCreditPurchase[]
   usage                WorkspaceUsage?
 
   proposalTemplates  ProposalTemplate[]
@@ -1939,6 +1952,54 @@ model AiCreditBalance {
 
   @@unique([workspaceId, bucket])
   @@map("ai_credit_balances")
+}
+
+// One-off Mercado Pago purchase of an AI-credit add-on pack. Distinct from
+// the subscription/PaymentEvent domain on purpose (that model requires a
+// subscriptionId and represents recurring preapproval billing) — this is a
+// single non-recurring gateway payment. `credits`/`amount`/`currency` are an
+// immutable SNAPSHOT taken from config/aiCreditPackages.ts at creation time:
+// if the package's price changes later, in-flight or historical purchases
+// must not change retroactively (see aiCreditPurchase.service.ts).
+model AiCreditPurchase {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+  // Audit reference only (who initiated the purchase) — deliberately not a
+  // declared Prisma relation, same convention as other audit-only foreign
+  // keys in this schema (e.g. AiCreditLedgerEntry.relatedEntityId).
+  userId String @db.ObjectId
+
+  packageId String // key into config/aiCreditPackages.ts, e.g. "50" | "150" | "500"
+  credits   Int
+  amount    Float
+  currency  String @default("BRL")
+
+  status AiCreditPurchaseStatus @default(CREATED)
+  gateway String @default("mercadopago") // free string, same convention as PaymentEvent.provider
+
+  // "AI_CREDIT_PURCHASE:<this.id>" — the exact string sent to the gateway as
+  // external_reference. The webhook parses this prefix to deterministically
+  // route to the credit-purchase handler instead of the subscription
+  // handler, never by inferring from amount/credits/plan (see
+  // billingWebhookService.resolveFromPayment).
+  externalReference String  @unique
+  gatewayPaymentId  String? // set once the gateway payment resource exists
+
+  // Deterministic key passed to aiCreditService.purchaseCredits — always
+  // "ai-credit-purchase:<this.id>". The ledger's own idempotencyKey @unique
+  // (AiCreditLedgerEntry) is what actually prevents a duplicated webhook
+  // delivery from granting credits twice; this column exists so the key is
+  // computable from the purchase row alone during support/debug/replay.
+  idempotencyKey String @unique
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  approvedAt  DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("ai_credit_purchases")
 }
 
 // Running storage-usage counter, updated in the SAME transaction as every

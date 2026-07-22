@@ -331,4 +331,15 @@ export const aiCreditRepository = {
       throw error
     }
   },
+
+  // AI Credit Purchase sprint (resumed) — read-only history for the
+  // /assinatura/creditos screen. Reuses the append-only ledger directly
+  // (the auditable source of truth) rather than a parallel history table.
+  listHistory(workspaceId: string, limit = 50) {
+    return prisma.aiCreditLedgerEntry.findMany({
+      where:   { workspaceId },
+      orderBy: { createdAt: "desc" },
+      take:    limit,
+    })
+  },
 }

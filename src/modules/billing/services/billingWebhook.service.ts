@@ -3,6 +3,8 @@ import { billingService } from "@/services/billing.service"
 import { subscriptionService } from "@/services/subscription.service"
 import { subscriptionRepository } from "@/repositories/subscription.repository"
 import { billingPlanRepository } from "@/repositories/billingPlan.repository"
+import { aiCreditPurchaseRepository } from "@/repositories/aiCreditPurchase.repository"
+import { aiCreditService } from "@/services/billing/aiCredit.service"
 import { emailService } from "@/services/email/email.service"
 import { resolveOwnerContact, type OwnerContact } from "@/utils/workspaceOwner"
 import { PLAN_LABELS, type PlanName } from "@/config/plans"
@@ -31,6 +33,19 @@ function planLabel(plan: string): string {
 
 type Resolved = { subscription: Subscription; remote: GatewaySubscription | GatewayPayment }
 
+// AI Credit Purchase sprint (resumed) — the exact prefix
+// aiCreditPurchase.service.ts#createCheckout puts on every credit-purchase
+// external_reference. Checking this FIRST and unconditionally is what keeps
+// the two financial domains (subscription vs. one-off credit pack) fully
+// separated — routing is by this persisted, caller-controlled reference,
+// never by amount/credits/plan/heuristics.
+const CREDIT_PURCHASE_REF_PREFIX = "AI_CREDIT_PURCHASE:"
+
+function parseCreditPurchaseId(externalReference: string | undefined): string | null {
+  if (!externalReference?.startsWith(CREDIT_PURCHASE_REF_PREFIX)) return null
+  return externalReference.slice(CREDIT_PURCHASE_REF_PREFIX.length)
+}
+
 // The billing state machine (Stories 6/7/8/12). Turns a normalized gateway
 // event into Subscription/Payment/Workspace updates. Every transition is
 // idempotent and reentrant: the same event re-run must converge to the same
@@ -39,6 +54,23 @@ type Resolved = { subscription: Subscription; remote: GatewaySubscription | Gate
 export const billingWebhookService = {
   async process(ref: GatewayEventRef, rawBody: string): Promise<void> {
     const provider = getBillingProvider()
+
+    // Credit-purchase payments never enter the subscription resolution path
+    // below (never resolveFromPayment, never applyPayment/changePlan) — a
+    // one-off Checkout Pro payment for a credit pack falling into the
+    // subscription-renewal handler would be a serious billing bug, so this
+    // check runs first and unconditionally for every payment-type event.
+    // (One extra provider.getPayment call is paid on ordinary subscription
+    // payments too — an acceptable cost for keeping resolveFromPayment/
+    // applyPayment below completely untouched by this sprint.)
+    if (ref.type === "payment") {
+      const payment    = await provider.getPayment(ref.resourceId)
+      const purchaseId = parseCreditPurchaseId((payment.raw as MpPayment).external_reference)
+      if (purchaseId) {
+        await processCreditPurchasePayment(purchaseId, payment)
+        return
+      }
+    }
 
     const resolved = ref.type === "subscription"
       ? await resolveFromSubscription(provider, ref)
@@ -208,4 +240,68 @@ async function applyPayment(provider: BillingGatewayProvider, sub: Subscription,
   }
 
   // pending / cancelled payment statuses: nothing actionable yet.
+}
+
+// ─── AI Credit Purchase (resumed sprint) ───────────────────────────────────
+
+// Deliberately does NOT go through billingService.recordPaymentEvent
+// (PaymentEvent.subscriptionId is required — this payment has no
+// subscription). Idempotency instead comes from two layers, per the approved
+// sprint plan: (1) AiCreditPurchase.status only ever transitions out of
+// CREATED/PENDING once (markApproved's conditional updateMany), and (2)
+// aiCreditService.purchaseCredits' own ledger idempotencyKey @unique — the
+// layer that actually guarantees "N webhook deliveries, credits granted
+// exactly once", even if this function runs concurrently or is retried.
+async function processCreditPurchasePayment(purchaseId: string, remote: GatewayPayment): Promise<void> {
+  const purchase = await aiCreditPurchaseRepository.findById(purchaseId)
+  if (!purchase) {
+    logger.warn({ purchaseId }, "[billing] credit purchase webhook for unknown purchase — acked, not processed")
+    return
+  }
+
+  if (remote.status === "approved") {
+    // Security: credits/workspace ALWAYS come from the purchase row (set at
+    // checkout time from config/aiCreditPackages.ts), never from the gateway
+    // payload or a frontend value. amount/currency from the gateway are only
+    // compared against the purchase's own immutable snapshot as a fraud/
+    // misconfiguration backstop — a real mismatch should never happen and is
+    // left for manual investigation rather than guessed at automatically.
+    if (remote.amount !== purchase.amount || remote.currency !== purchase.currency) {
+      logger.error(
+        { purchaseId, expected: { amount: purchase.amount, currency: purchase.currency }, received: { amount: remote.amount, currency: remote.currency } },
+        "[billing] credit purchase amount/currency mismatch — refusing to grant credits",
+      )
+      return
+    }
+
+    const { alreadyApproved } = await aiCreditPurchaseRepository.markApproved(purchase.id, remote.providerPaymentId)
+    await aiCreditService.purchaseCredits(purchase.workspaceId, purchase.credits, purchase.idempotencyKey)
+
+    logger.info(
+      { purchaseId, workspaceId: purchase.workspaceId, credits: purchase.credits, duplicate: alreadyApproved },
+      alreadyApproved ? "[billing] duplicate credit purchase webhook — credits already granted, no-op" : "[billing] credit purchase approved — credits granted",
+    )
+    return
+  }
+
+  if (remote.status === "rejected") {
+    await aiCreditPurchaseRepository.markRejected(purchase.id, remote.providerPaymentId)
+    logger.info({ purchaseId }, "[billing] credit purchase rejected")
+    return
+  }
+
+  if (remote.status === "cancelled") {
+    await aiCreditPurchaseRepository.markCancelled(purchase.id)
+    logger.info({ purchaseId }, "[billing] credit purchase cancelled")
+    return
+  }
+
+  if (remote.status === "refunded" || remote.status === "charged_back") {
+    // Out of scope for this sprint (documented pendency) — purchased credits
+    // are not auto-reversed; logged for manual follow-up.
+    logger.warn({ purchaseId, status: remote.status }, "[billing] credit purchase refunded/charged_back — credits NOT reversed (out of scope this sprint)")
+    return
+  }
+
+  // pending: nothing actionable yet, awaiting a future approved/rejected event.
 }

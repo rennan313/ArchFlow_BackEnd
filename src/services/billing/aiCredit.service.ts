@@ -106,4 +106,10 @@ export const aiCreditService = {
   async purchaseCredits(workspaceId: string, amount: number, idempotencyKey: string) {
     return aiCreditRepository.purchaseCredits({ workspaceId, amount, idempotencyKey })
   },
+
+  // Read-only ledger history for the /assinatura/creditos screen — reuses
+  // the append-only ledger directly, no parallel history table.
+  listHistory(workspaceId: string, limit?: number) {
+    return aiCreditRepository.listHistory(workspaceId, limit)
+  },
 }

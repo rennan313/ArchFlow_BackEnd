@@ -76,4 +76,7 @@ export const mpClient = {
   getPreapproval:     <T>(id: string) => request<T>({ method: "GET", path: `/preapproval/${id}` }),
   updatePreapproval:  <T>(id: string, body: unknown) => request<T>({ method: "PUT", path: `/preapproval/${id}`, body }),
   getPayment:         <T>(id: string) => request<T>({ method: "GET", path: `/v1/payments/${id}` }),
+  // Checkout Pro one-off payment preference (AI credit packs) — distinct from
+  // /preapproval above, which is only for recurring subscriptions.
+  createPreference:   <T>(body: unknown, idempotencyKey: string) => request<T>({ method: "POST", path: "/checkout/preferences", body, idempotencyKey }),
 }

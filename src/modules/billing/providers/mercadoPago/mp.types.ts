@@ -23,6 +23,14 @@ export interface MpPayment {
   transaction_details?: { external_resource_url?: string | null }
 }
 
+// Checkout Pro preference (one-off payment) — created for AI credit packs.
+export interface MpPreference {
+  id:                   string
+  init_point?:          string
+  sandbox_init_point?:  string
+  external_reference?:  string
+}
+
 // Body Mercado Pago POSTs to the webhook. `type`/`topic` + `data.id` vary by
 // notification channel (Webhooks v2 uses `type`, IPN uses `topic`).
 export interface MpWebhookBody {

@@ -66,6 +66,9 @@ export enum ErrorCode {
   // throw. This only fires when two concurrent uploads both pass the
   // pre-flight and race for the last bytes of quota.
   BILLING_STORAGE_LIMIT_EXCEEDED = "BILLING_STORAGE_LIMIT_EXCEEDED",
+  // AI Credit Purchase sprint (resumed) — aiCreditPurchase.service.ts
+  AI_CREDIT_PACKAGE_NOT_FOUND = "AI_CREDIT_PACKAGE_NOT_FOUND",
+  AI_CREDIT_PURCHASE_NOT_FOUND = "AI_CREDIT_PURCHASE_NOT_FOUND",
   // Thrown by workspaceService.acceptInvite — the invite-SEND route already
   // pre-checks the seat limit (limitService.canAddSeat, workspace/invite/
   // route.ts), but a seat can fill up between an invite being sent and it
