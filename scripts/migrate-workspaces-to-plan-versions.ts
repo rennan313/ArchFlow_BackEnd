@@ -74,22 +74,36 @@ async function main() {
   const enterprisePlan = await prisma.billingPlan.findUniqueOrThrow({ where: { id: enterpriseId } })
   const professionalPlan = await prisma.billingPlan.findUniqueOrThrow({ where: { id: professionalId } })
 
-  const subscriptions = await prisma.subscription.findMany({
-    where: { planVersionId: null },
+  // `where: { planVersionId: null }` does NOT match documents where the
+  // field is structurally absent (every pre-Entitlements-Sprint Subscription
+  // row) — confirmed against production: the same Prisma-on-Mongo filter-
+  // translation gap already hit in scripts/seed-billing-plan-versions-v1.ts
+  // (a `select` read correctly normalizes an absent field to `null`, but a
+  // `where` filter does not treat absent-vs-null as equivalent the way raw
+  // Mongo would). The collection is small (tens of workspaces, not
+  // thousands) — fetching all and filtering in JS sidesteps the bug
+  // entirely instead of fighting the query translator again.
+  const allSubscriptions = await prisma.subscription.findMany({
     include: { workspace: { select: { id: true, plan: true } } },
   })
+  const subscriptions = allSubscriptions.filter((s) => s.planVersionId === null)
 
-  console.log(`Found ${subscriptions.length} subscription(s) without planVersionId.`)
+  console.log(`Found ${subscriptions.length} subscription(s) without planVersionId (of ${allSubscriptions.length} total).`)
 
   let skippedPaying = 0
   let migratedStudio = 0
   let migratedCourtesy = 0
 
   for (const sub of subscriptions) {
-    const isRealPayingCustomer = sub.status === "ACTIVE" && !!sub.mpSubscriptionId
-    if (isRealPayingCustomer) {
+    // ANY real Mercado Pago linkage — not just status:ACTIVE — is left
+    // untouched. A workspace can have mpSubscriptionId set while still
+    // TRIAL (checkout started, webhook authorization hasn't landed yet);
+    // silently courtesy-assigning it would risk stamping the wrong
+    // currentPeriodEnd right before the real webhook activates it for real.
+    const hasRealGatewayLink = !!sub.mpSubscriptionId
+    if (hasRealGatewayLink) {
       skippedPaying++
-      console.log(`SKIP (real paying subscription): workspace ${sub.workspaceId}, plan ${sub.workspace.plan}`)
+      console.log(`SKIP (has a real Mercado Pago subscription, status=${sub.status}): workspace ${sub.workspaceId}, plan ${sub.workspace.plan}`)
       continue
     }
 
