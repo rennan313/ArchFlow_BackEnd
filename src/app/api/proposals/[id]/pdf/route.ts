@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { withWorkspace } from "@/middlewares/auth"
 import { proposalRendererService } from "@/services/render/proposal-renderer.service"
+import { limitService } from "@/services/billing/limit.service"
 import { RenderError } from "@/types/proposal-render-model"
 import { handleServiceError } from "@/utils/serviceError"
+import { forbidden } from "@/lib/response"
 import { logger } from "@/lib/logger"
 import type { JwtPayload } from "@/lib/jwt"
 
@@ -18,6 +20,15 @@ type Ctx = { params: Promise<{ id: string }> }
 export const GET = withWorkspace(async (_req: NextRequest, ctx: Ctx, _user: JwtPayload, workspaceId: string) => {
   try {
     const { id } = await ctx.params
+
+    // Entitlements Sprint Phase 3 — PDF_EXPORT was never gated by plan
+    // before (audited: `withWorkspace` only, no feature check at all).
+    // Shadow-mode by default (BILLING_ENFORCEMENT_DEFAULT=false) — this is
+    // net-new enforcement, so it can only ever ADD a restriction, never
+    // regress something that was already blocking, unlike seat/proposal/
+    // storage checks (left untouched in this phase — see plan notes).
+    const featureCheck = await limitService.canUseFeature(workspaceId, "PDF_EXPORT")
+    if (!featureCheck.allowed) return forbidden(featureCheck.reason ?? "PDF export is not available on your plan")
 
     const { buffer, doc } = await proposalRendererService.renderToPdf(id, workspaceId)
 
