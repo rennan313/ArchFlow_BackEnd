@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma"
 import { AppError, ErrorCode } from "@/lib/errors"
 import { workspaceUsageRepository, StorageLimitExceededError } from "@/repositories/workspaceUsage.repository"
 import type { PrismaTransactionClient } from "@/lib/prisma"
@@ -30,6 +31,23 @@ export const storageUsageService = {
 
   decrement(tx: PrismaTransactionClient, workspaceId: string, deltaBytes: number): Promise<void> {
     return workspaceUsageRepository.decrement(tx, workspaceId, BigInt(deltaBytes))
+  },
+
+  // Standalone convenience wrappers for callers that aren't already inside a
+  // transaction of their own (documentService.create/addVersion,
+  // mediaService.upload/delete) — wraps its own single-purpose
+  // prisma.$transaction so those callers never need to import `prisma` or
+  // know this is transactional at all. Prefer reserveAndIncrement/decrement
+  // directly when the caller already has its own `tx` to compose into
+  // (keeps the reservation atomic with whatever else that transaction does).
+  async reserve(workspaceId: string, deltaBytes: number, limitBytes: bigint): Promise<void> {
+    // reserveAndIncrement (above) already converts StorageLimitExceededError
+    // to AppError — nothing further to translate here.
+    await prisma.$transaction((tx) => this.reserveAndIncrement(tx, workspaceId, deltaBytes, limitBytes))
+  },
+
+  async release(workspaceId: string, deltaBytes: number): Promise<void> {
+    await prisma.$transaction((tx) => this.decrement(tx, workspaceId, deltaBytes))
   },
 
   // Nightly cron backstop (Phase 3/4 wiring) — real SUM, corrects drift.

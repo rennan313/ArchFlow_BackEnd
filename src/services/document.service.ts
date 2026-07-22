@@ -6,6 +6,12 @@ import { AppError, ErrorCode } from "@/lib/errors"
 import { assertWorkspaceReferences } from "@/lib/tenantGuard"
 import { UPLOAD_DOCUMENT_TYPES } from "@/validations/document"
 import { entityLifecycleService } from "@/services/entityLifecycle.service"
+import { planService } from "@/services/billing/plan.service"
+import { storageUsageService } from "@/services/billing/storageUsage.service"
+// storageUsageService.reserve/release are the standalone (self-transacting)
+// wrappers — used here rather than reserveAndIncrement/decrement directly,
+// since document creation isn't already inside its own transaction to
+// compose a `tx` into.
 import path from "path"
 import type { DocumentQueryInput, CreateDocumentFolderInput, DocumentFolderQueryInput } from "@/validations/document"
 
@@ -66,6 +72,15 @@ export const documentService = {
 
     const type     = resolveType(file.name)
     const isImage  = type === "JPG" || type === "PNG"
+
+    // Entitlements Sprint "close the debts" (2026-07) — real storage
+    // reservation, fails before touching Supabase (same fail-fast-before-
+    // external-call spirit as the tenant-reference check above). See the
+    // matching comment in media.service.ts#upload for why this isn't fully
+    // atomic with the upload itself.
+    const { limits } = await planService.getEntitlements(workspaceId)
+    await storageUsageService.reserve(workspaceId, file.size, limits.storageBytes)
+
     const uploaded = await storageService.uploadDocument(workspaceId, file, isImage)
 
     return documentRepository.create(
@@ -84,6 +99,12 @@ export const documentService = {
     if (type !== document.type) {
       throw new Error(`VALIDATION:new version must be the same file type (${document.type})`)
     }
+
+    // A new version adds bytes on top of every prior version — the whole
+    // history stays retrievable (documentRepository.addVersion never drops
+    // old versions), so it's a pure addition to storage, never a swap.
+    const { limits } = await planService.getEntitlements(workspaceId)
+    await storageUsageService.reserve(workspaceId, file.size, limits.storageBytes)
 
     const uploaded = await storageService.uploadDocument(workspaceId, file, isImage)
     const updated  = await documentRepository.addVersion(

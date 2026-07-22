@@ -2,6 +2,8 @@ import { mediaRepository } from "@/repositories/media.repository"
 import { storageService, type UploadCategory } from "@/services/storage/supabase.service"
 import { logger } from "@/lib/logger"
 import { AppError, ErrorCode } from "@/lib/errors"
+import { planService } from "@/services/billing/plan.service"
+import { storageUsageService } from "@/services/billing/storageUsage.service"
 import {
   UPLOAD_MEDIA_TYPES,
   getYouTubeThumbnail,
@@ -48,6 +50,17 @@ export const mediaService = {
       category === "gif" ? "GIF" :
       category === "video" ? "VIDEO" : "IMAGE"
 
+    // Entitlements Sprint Phase "close the debts" (2026-07) — real storage
+    // reservation, fails BEFORE touching Supabase storage (same
+    // fail-fast-before-external-call pattern documentService.create already
+    // uses for tenant references). Not fully atomic with the Supabase
+    // upload/ProposalMedia create below (those aren't in this transaction)
+    // — nightly reconciliation (storageUsageService.reconcileWorkspace) is
+    // the correctness backstop for any drift, same as everywhere else this
+    // service is used.
+    const { limits } = await planService.getEntitlements(workspaceId)
+    await storageUsageService.reserve(workspaceId, file.size, limits.storageBytes)
+
     const result = await storageService.uploadFile(proposalId, file, category)
     const order  = count
 
@@ -57,6 +70,7 @@ export const mediaService = {
       url:         result.url,
       storagePath: result.storagePath,
       thumbnail:   result.thumbnail,
+      sizeBytes:   file.size,
       order,
     })
   },
@@ -105,6 +119,14 @@ export const mediaService = {
     }
 
     await mediaRepository.delete(mediaId, proposalId, workspaceId)
+
+    // No limit check on free — see storageUsage.service.ts#decrement.
+    // media.sizeBytes is null for anything uploaded before this sprint
+    // (backfill's documented, accepted undercount) — decrementing by 0 is a
+    // safe no-op rather than corrupting the counter with a guessed value.
+    if (media.sizeBytes) {
+      await storageUsageService.release(workspaceId, media.sizeBytes)
+    }
   },
 
   async reorder(proposalId: string, workspaceId: string, input: ReorderMediaInput) {

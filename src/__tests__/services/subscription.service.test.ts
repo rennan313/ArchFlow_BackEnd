@@ -17,10 +17,24 @@ vi.mock("@/lib/prisma", () => {
     project:       { count: vi.fn() },
     proposalMedia: { count: vi.fn() },
     subscription:  { update: vi.fn() },
+    // Entitlements Sprint — createTrialSubscription looks up the ACTIVE
+    // Professional BillingPlan version to size the initial AI credit grant.
+    // Default (unmocked) resolves to undefined, which the service already
+    // treats as "skip the grant" — no per-test setup needed unless a test
+    // specifically wants to assert the grant happened.
+    billingPlan:   { findFirst: vi.fn() },
     $transaction:  vi.fn((cb: (tx: unknown) => unknown) => cb(mock)),
   }
   return { prisma: mock }
 })
+
+// grantCycle talks to its own repository (aiCreditBalance/aiCreditLedgerEntry
+// collections, not mocked here) — mocked as a no-op so a test that DOES stub
+// billingPlan.findFirst to return a real plan doesn't crash trying to reach
+// collections this file was never set up to mock.
+vi.mock("@/services/billing/aiCredit.service", () => ({
+  aiCreditService: { grantCycle: vi.fn().mockResolvedValue(undefined) },
+}))
 
 vi.mock("@/repositories/subscription.repository", () => ({
   subscriptionRepository: {

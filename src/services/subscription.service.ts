@@ -7,6 +7,10 @@ import { auditLog } from "@/lib/auditLog"
 import { withTransactionRetry } from "@/lib/transactionRetry"
 import { emailService } from "@/services/email/email.service"
 import { resolveOwnerContact } from "@/utils/workspaceOwner"
+// aiCreditService only (never planService) — planService imports
+// subscriptionService (expireTrialIfNeeded), so importing it back here
+// would create a circular dependency. aiCreditService has no such import.
+import { aiCreditService } from "@/services/billing/aiCredit.service"
 import type { Subscription } from "@prisma/client"
 
 export interface LimitCheckResult {
@@ -227,7 +231,7 @@ export const subscriptionService = {
     const now         = new Date()
     const trialEndsAt = new Date(now.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000)
 
-    return subscriptionRepository.create({
+    const sub = await subscriptionRepository.create({
       workspaceId,
       plan,
       status:             "TRIAL",
@@ -237,6 +241,36 @@ export const subscriptionService = {
       currentPeriodStart: now,
       currentPeriodEnd:   trialEndsAt,
     })
+
+    // Entitlements Sprint "close the debts" (2026-07) — a TRIAL workspace's
+    // entitlements always resolve to Professional's limits regardless of
+    // nominal plan (planService.getEntitlements), so it needs a real
+    // Professional-sized AI credit grant here, or aiCreditService.debit()
+    // would reject every AI call for a brand-new signup with a correct
+    // entitlement but a zero actual balance. Reads the ACTIVE Professional
+    // BillingPlan version directly (not via planService, to avoid a
+    // circular import — see the import comment above) — never hardcodes
+    // the credit amount here, so it always tracks whatever
+    // scripts/seed-billing-plan-versions-v1.ts currently has seeded.
+    const professionalPlan = await prisma.billingPlan.findFirst({
+      where:   { key: "PROFESSIONAL", status: "ACTIVE" },
+      orderBy: { version: "desc" },
+    })
+    if (professionalPlan && professionalPlan.limitAiCreditsPerCycle > 0) {
+      await aiCreditService.grantCycle({
+        workspaceId, subscriptionId: sub.id,
+        amount: professionalPlan.limitAiCreditsPerCycle,
+        periodStart: now, periodEnd: trialEndsAt,
+      }).catch((err) => {
+        // Non-fatal — same fire-and-forget-on-non-critical-path spirit as
+        // the trial-expired email below. A workspace that somehow ends up
+        // with zero AI credits is a degraded experience, not a broken
+        // signup; never let this throw block account creation.
+        logger.error({ workspaceId, err: String(err) }, "[billing] initial AI credit grant failed (non-fatal)")
+      })
+    }
+
+    return sub
   },
 
   /** Changes the plan immediately, keeping Subscription and Workspace.plan in

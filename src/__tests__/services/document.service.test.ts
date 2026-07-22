@@ -5,12 +5,23 @@ vi.mock("@/repositories/document.repository")
 vi.mock("@/repositories/client.repository")
 vi.mock("@/repositories/project.repository")
 vi.mock("@/services/storage/supabase.service")
+// Entitlements Sprint — document.service.ts now checks a real storage
+// reservation before every upload. Mocked at the SERVICE boundary
+// (plan.service/storageUsage.service), not by extending the global prisma
+// mock in setup.ts — this keeps the entitlements chain (which reaches
+// through subscriptionService/subscriptionRepository/BillingPlan) out of
+// document-service tests entirely, same "mock at the boundary you actually
+// call" convention already used for storageService/documentRepository here.
+vi.mock("@/services/billing/plan.service")
+vi.mock("@/services/billing/storageUsage.service")
 
 import { documentService } from "@/services/document.service"
 import { documentRepository } from "@/repositories/document.repository"
 import { clientRepository } from "@/repositories/client.repository"
 import { projectRepository } from "@/repositories/project.repository"
 import { storageService } from "@/services/storage/supabase.service"
+import { planService } from "@/services/billing/plan.service"
+import { storageUsageService } from "@/services/billing/storageUsage.service"
 
 function fakeFile(name = "plant.pdf") {
   return { name, type: "application/pdf", size: 1024 } as unknown as File
@@ -22,6 +33,8 @@ describe("documentService.create", () => {
     vi.mocked(clientRepository.findById).mockResolvedValue({ id: "client-1" } as never)
     vi.mocked(storageService.uploadDocument).mockResolvedValue({ url: "https://x/y.pdf", storagePath: "y.pdf" } as never)
     vi.mocked(documentRepository.create).mockResolvedValue({ id: "doc-1" } as never)
+    vi.mocked(planService.getEntitlements).mockResolvedValue({ limits: { storageBytes: -1n } } as never)
+    vi.mocked(storageUsageService.reserve).mockResolvedValue(undefined)
   })
 
   it("uploads and creates the document when clientId belongs to the workspace", async () => {
