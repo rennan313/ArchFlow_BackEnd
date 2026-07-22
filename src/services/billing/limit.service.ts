@@ -4,6 +4,7 @@ import { auditLog } from "@/lib/auditLog"
 import { planService } from "./plan.service"
 import { aiCreditService } from "./aiCredit.service"
 import { storageUsageService } from "./storageUsage.service"
+import { subscriptionService } from "@/services/subscription.service"
 import { subscriptionRepository } from "@/repositories/subscription.repository"
 import type { FeatureKey } from "@prisma/client"
 
@@ -138,10 +139,17 @@ export const limitService = {
     return withShadowMode(workspaceId, result, "ai_credit_limit")
   },
 
-  // Feeds the settings/billing 5-bar usage widget — replaces
-  // subscriptionService.getUsageSummary.
+  // Feeds the settings/billing page — a superset of the old
+  // subscriptionService.getUsageSummary shape (same `plan`/`subscription.*`
+  // fields BillingClient.tsx already reads — status, cancelAtPeriodEnd,
+  // daysLeft, currentPeriodEnd, billingCycle, isReadOnly — so swapping the
+  // route to this method is a pure read-side upgrade, not a breaking
+  // change), PLUS the new per-limit usage (seats/activeProjects/
+  // proposalsThisCycle/aiCredits/storage) the 5-bar widget needs. `features`
+  // changes shape (FeatureKey[] instead of the old 3-boolean object) — safe,
+  // nothing in the frontend reads the old `features` field today.
   async getUsageSummary(workspaceId: string) {
-    const [{ limits, planKey, planVersion, features }, sub] = await Promise.all([
+    const [{ limits, planKey, features }, sub] = await Promise.all([
       planService.getEntitlements(workspaceId),
       subscriptionRepository.findByWorkspace(workspaceId),
     ])
@@ -156,8 +164,7 @@ export const limitService = {
     ])
 
     return {
-      plan: { key: planKey, version: planVersion },
-      subscription: sub ? { status: sub.status, currentPeriodEnd: sub.currentPeriodEnd, cancelAtPeriodEnd: sub.cancelAtPeriodEnd, trialEndsAt: sub.trialEndsAt } : null,
+      plan: planKey,
       usage: {
         seats: { current: seatCount, limit: limits.seats, unlimited: limits.seats === -1 },
         activeProjects: { current: projectCount, limit: limits.activeProjects, unlimited: limits.activeProjects === -1 },
@@ -166,6 +173,17 @@ export const limitService = {
         storage: { currentBytes: storageUsed.toString(), limitBytes: limits.storageBytes.toString(), unlimited: limits.storageBytes === -1n },
       },
       features: Array.from(features),
+      subscription: sub ? {
+        status:            sub.status,
+        accessLevel:       subscriptionService.getAccessLevel(sub),
+        billingCycle:      sub.billingCycle,
+        trialStartedAt:    sub.trialStartedAt,
+        trialEndsAt:       sub.trialEndsAt,
+        currentPeriodEnd:  sub.currentPeriodEnd,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+        daysLeft:          subscriptionService.daysLeftInTrial(sub),
+        isReadOnly:        !(sub.status === "ACTIVE" || sub.status === "TRIAL"),
+      } : null,
     }
   },
 }
