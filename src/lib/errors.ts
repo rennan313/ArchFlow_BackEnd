@@ -49,6 +49,23 @@ export enum ErrorCode {
   BILLING_PLAN_NOT_SELLABLE = "BILLING_PLAN_NOT_SELLABLE",
   BILLING_PROVIDER_ERROR   = "BILLING_PROVIDER_ERROR",
   WEBHOOK_SIGNATURE_INVALID = "WEBHOOK_SIGNATURE_INVALID",
+  // Entitlements Sprint (2026-07) — plan.service.ts / limit.service.ts /
+  // aiCredit.service.ts / entitlementOverride.service.ts. Note: the four
+  // *_LIMIT_REACHED-style outcomes below are NOT thrown as AppError in the
+  // hot path — limitService/aiCreditService return a structured
+  // LimitCheckResult/DebitResult ({allowed:false, reason}) instead, same
+  // convention as the pre-existing canAddUser/canCreateProposal. These codes
+  // exist for the genuinely exceptional paths (missing plan version, override
+  // not found) where throwing is correct.
+  BILLING_PLAN_VERSION_NOT_FOUND = "BILLING_PLAN_VERSION_NOT_FOUND",
+  ENTITLEMENT_OVERRIDE_NOT_FOUND = "ENTITLEMENT_OVERRIDE_NOT_FOUND",
+  WORKSPACE_FROZEN         = "WORKSPACE_FROZEN",
+  // Thrown only by the race-condition backstop inside the upload transaction
+  // (storageUsageService.reserveAndIncrement) — the normal path is
+  // limitService.canUploadFile's pre-flight LimitCheckResult, which doesn't
+  // throw. This only fires when two concurrent uploads both pass the
+  // pre-flight and race for the last bytes of quota.
+  BILLING_STORAGE_LIMIT_EXCEEDED = "BILLING_STORAGE_LIMIT_EXCEEDED",
   // Financial (office-level AP/AR — distinct from Billing/Subscription above)
   SUPPLIER_CATEGORY_NOT_FOUND = "SUPPLIER_CATEGORY_NOT_FOUND",
   SUPPLIER_CATEGORY_NAME_TAKEN = "SUPPLIER_CATEGORY_NAME_TAKEN",

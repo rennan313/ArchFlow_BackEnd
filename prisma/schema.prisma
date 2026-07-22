@@ -224,6 +224,12 @@ enum SubscriptionStatus {
   // is limited (read-only writes) but the subscription is not terminated — a
   // resumed preapproval flips it back to ACTIVE without a new checkout.
   PAUSED
+  // Entitlements Sprint (2026-07): dunning-exhausted (D+7 with no payment
+  // recovery) — distinct from PAUSED (gateway-driven, resumable) and from
+  // EXPIRED (trial lapsed, never paid). Read-only + export allowed; AI,
+  // creation, invites, and credit purchases blocked. See AccessLevel in
+  // subscription.service.ts.
+  FROZEN
   CANCELED
   EXPIRED
 }
@@ -231,6 +237,50 @@ enum SubscriptionStatus {
 enum BillingCycle {
   MONTHLY
   ANNUAL
+}
+
+// ─── Billing Entitlements (Entitlements Sprint, 2026-07) ─────────────────────
+// Closed catalog — module gating and paid-tier feature flags. Adding a value
+// here is additive/safe; the acceptance bar for this sprint is zero
+// `plan === "X"` string checks anywhere outside plan.service.ts.
+enum FeatureKey {
+  CRM
+  AGENDA
+  PROJECTS
+  FINANCE
+  PURCHASES
+  WORKLOG
+  PDF_EXPORT
+  BRANDING_BASIC
+  CUSTOM_BRANDING
+  WHITE_LABEL
+  AUTOMATIONS
+  RBAC
+  MOODBOARDS
+  API
+  ANALYTICS
+}
+
+// A commercial plan change is always a NEW version row, never an UPDATE to a
+// version with active subscribers (grandfathering) — see BillingPlan below.
+enum PlanVersionStatus {
+  DRAFT // not yet sellable, e.g. ENTERPRISE (contact-sales, no self-serve checkout)
+  ACTIVE // the current sellable version for new signups/upgrades
+  DEPRECATED // superseded by a newer version; existing subscribers keep resolving to it
+}
+
+enum CreditBucket {
+  PLAN // granted every billing cycle, expires at cycle end, never accumulates
+  PURCHASED // bought via add-on, never expires, consumed only after PLAN is exhausted
+}
+
+enum CreditLedgerReason {
+  GRANT_CYCLE
+  PURCHASE
+  DEBIT
+  REFUND
+  ADJUSTMENT
+  EXPIRE
 }
 
 // ─── Financial Domain ─────────────────────────────────────────────────────────
@@ -309,6 +359,12 @@ model Workspace {
   subscription    Subscription?
   documents       Document[]
   documentFolders DocumentFolder[]
+
+  // Entitlements Sprint (2026-07)
+  entitlementOverrides EntitlementOverride[]
+  aiCreditLedger       AiCreditLedgerEntry[]
+  aiCreditBalances     AiCreditBalance[]
+  usage                WorkspaceUsage?
 
   proposalTemplates  ProposalTemplate[]
   proposalSections   ProposalSection[]
@@ -713,6 +769,13 @@ model ProposalMedia {
   url         String
   storagePath String?
   thumbnail   String?
+  // Entitlements Sprint (2026-07) — file.size was already available at
+  // upload time (mediaService.upload) but previously discarded; feeds
+  // WorkspaceUsage.storageUsedBytes instead of the old mediaCount×2MB
+  // estimate. Null for rows uploaded before this field existed — see
+  // scripts/backfill-storage-usage.ts for the documented undercount this
+  // implies for historical files.
+  sizeBytes   Int?
   order       Int       @default(0)
   createdAt   DateTime  @default(now())
 
@@ -1636,6 +1699,29 @@ model Subscription {
   cancelAtPeriodEnd  Boolean   @default(false)
   canceledAt         DateTime?
 
+  // Entitlements Sprint (2026-07) — the exact BillingPlan (key+version) row
+  // this workspace is grandfathered into. Plain scalar, no @relation — same
+  // convention as every other cross-context id in this schema (DOMAIN_GUIDE.md
+  // §5: @relation is opt-in per read need, not automatic for every FK-shaped
+  // field). Nullable during the migration window (backfilled by
+  // scripts/migrate-workspaces-to-plan-versions.ts); app-enforced "required"
+  // after that script completes — Mongo has no NOT NULL to add retroactively.
+  // Once set, plan.service.ts reads THIS row, never the newest ACTIVE version
+  // for the plan key, so a commercial price/limit change never silently
+  // changes what an existing subscriber pays for (grandfathering).
+  planVersionId String? @db.ObjectId
+
+  // Scheduled downgrade (blueprint: "downgrade agendado, aplicado na
+  // virada"). Set on downgrade request, applied and cleared at
+  // currentPeriodEnd; upgrade is immediate and never uses this field.
+  pendingPlanVersionId String? @db.ObjectId
+
+  // Shadow-mode override for the entitlement-enforcement rollout (Phase 3/4
+  // of the Entitlements Sprint). null = use the global BILLING_ENFORCEMENT_
+  // DEFAULT env var; true/false pins this one workspace regardless of the
+  // global default, for canarying before/after the global flip.
+  billingEnforcementOverride Boolean?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1695,41 +1781,187 @@ model BillingHistory {
 }
 
 // Sprint 09 — persisted, sellable plan definition: the canonical source for
-// pricing and display (Story 3 — "planos não podem ficar hardcoded"). The
-// enforcement limits still live in config/plans.ts (PLAN_LIMITS, the hot path);
-// this table is SEEDED from it (prisma/seed-billing-plans.ts) so the two never
-// diverge, while adding the pricing + Mercado Pago plan mapping the code config
-// never held. Keyed by the Plan enum so a Workspace.plan resolves directly to
-// its sellable definition.
+// pricing and display (Story 3 — "planos não podem ficar hardcoded").
+//
+// Entitlements Sprint (2026-07) — versioned in place (ADR candidate, see
+// VINCEL_MASTER_ARCHITECTURE_V2.md §9.2/§23.2): [key, version] replaces the
+// old `key @unique`. A commercial change (price, limit, feature set) is
+// ALWAYS a new version row with status ACTIVE, deprecating the prior ACTIVE
+// row for that key — never an UPDATE to a version that already has
+// subscribers pointing at it via Subscription.planVersionId (grandfathering).
+// This table is now the enforcement source of truth read by plan.service.ts
+// — config/plans.ts (PLAN_LIMITS/PLAN_PRICING) becomes seed input only
+// (scripts/seed-billing-plan-versions-v1.ts), not a runtime read path.
 model BillingPlan {
-  id          String  @id @default(auto()) @map("_id") @db.ObjectId
-  key         Plan    @unique
+  id      String            @id @default(auto()) @map("_id") @db.ObjectId
+  key     Plan
+  version Int               @default(1)
+  status  PlanVersionStatus @default(ACTIVE)
+
   name        String
   description String?
 
   priceMonthly Float
   priceAnnual  Float
 
-  // Mirrored from config/plans.ts for display only (-1 = unlimited). Never read
-  // by the enforcement path — see the model comment above.
-  limitProjects  Int
-  limitUsers     Int
-  limitAiMonthly Int
-  limitUploadsMb Int
+  // -1 = unlimited (convenção única do domínio — nunca null para "sem limite"
+  // aqui, ao contrário do blueprint original em Postgres). Seats inclui o
+  // owner. Projects conta só ativos (não-arquivados). Proposals conta por
+  // ciclo de cobrança (currentPeriodStart), criação inclusa, exclusão não
+  // devolve cota.
+  limitSeats             Int
+  limitActiveProjects    Int
+  limitProposalsPerCycle Int
+  limitAiCreditsPerCycle Int
 
+  // BigInt: 5GB (Professional) = 5.37e9 bytes, already past BSON Int32's
+  // ~2.1B ceiling — same reasoning as amountCents elsewhere in this schema.
+  // BigInt(-1) sentinel = unlimited (Enterprise default, overridable per
+  // workspace via EntitlementOverride for custom contracts).
+  limitStorageBytes BigInt
+
+  features FeatureKey[]
+
+  // Legacy display flag, superseded by `status` above — kept read-compatible
+  // during the migration window, not written by new code after Phase 2.
   active Boolean @default(true)
   order  Int     @default(0)
 
   // Mercado Pago preapproval_plan ids per cycle — populated once the plans are
   // created in the MP dashboard. No @unique (Prisma @unique on Mongo is never
   // sparse); uniqueness enforced by the sparse index in docs/indexes.md.
+  // IMPORTANT: a new plan VERSION needs its own MP preapproval plan (or the
+  // checkout's inline `amount` must be trusted instead) — these ids do NOT
+  // carry over automatically from the deprecated version they supersede.
   mpPreapprovalPlanIdMonthly String?
   mpPreapprovalPlanIdAnnual  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([key, version])
+  @@index([key, status])
   @@map("billing_plans")
+}
+
+// Enterprise custom deals (blueprint: "storage personalizado, acordos sob
+// medida") — wins over the plan version's stock value for a given key.
+// Admin/internal-only writer (entitlementOverrideService); no self-serve UI.
+// `key` is a free string by design — "max_seats" | "max_active_projects" |
+// "max_proposals_per_cycle" | "ai_credits_per_cycle" | "storage_limit_bytes"
+// | "feature:<FeatureKey>" — mirrors the free-string `provider`/`type`
+// convention on PaymentEvent above, so a new override kind never needs a
+// schema migration.
+model EntitlementOverride {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+
+  key          String
+  numericValue BigInt? // set when `key` is a numeric limit; BigInt(-1) = unlimited override
+  booleanValue Boolean? // set when `key` is a "feature:*" override
+
+  reason          String?
+  expiresAt       DateTime?
+  createdByUserId String?   @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@map("workspace_entitlement_overrides")
+}
+
+// Append-only ledger — the auditable source of truth for every AI credit
+// movement. NEVER read-then-write a mutable balance from this table directly
+// (see AiCreditBalance below for the fast/atomic path) — that is exactly the
+// race condition the blueprint's own review (A1) flagged in the original
+// "saldo column" design.
+model AiCreditLedgerEntry {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @db.ObjectId
+
+  bucket CreditBucket
+  reason CreditLedgerReason
+  amount Int // signed: + grant/purchase/refund, - debit/expire
+
+  // Denormalized snapshot for audit/support readability only — never
+  // authoritative. AiCreditBalance is the only value application logic
+  // trusts for "how much is left".
+  balanceAfter Int
+
+  // Same convention as Payment.idempotencyKey/PurchaseOrder — a retried AI
+  // operation (network blip, client retry) must never debit twice for the
+  // same attempt.
+  idempotencyKey String @unique
+
+  // Set only for reason=GRANT_CYCLE — "sub_<subscriptionId>:<periodStartISO>".
+  // Backs the partial unique index in scripts/create-billing-entitlement-
+  // indexes.ts (docs/indexes.md) that makes grantCycle() idempotent — safe
+  // to run the cron twice without double-granting.
+  cycleKey String?
+
+  relatedOperation String? // e.g. "ai.generate-proposal"
+  relatedEntityId  String? // e.g. the Proposal id — support/debug lookups only
+  metadata         String? // JSON string — same string-not-Json convention as generatedProposalJson elsewhere
+
+  createdAt DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, bucket])
+  @@map("ai_credit_ledger")
+}
+
+// Materialized balance per (workspace, bucket) — the fast, atomically
+// decremented read/write path. Every mutation goes through a CAS updateMany
+// (`balance: { gte: cost }` precondition), same shape as PurchaseOrder's
+// approve()/cancel() (ADR-017) — never a plain findFirst-then-update.
+model AiCreditBalance {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String       @db.ObjectId
+  bucket      CreditBucket
+
+  balance Int @default(0)
+  // CAS counter — never read by application logic, only raced over (same
+  // role as PurchaseOrder.version).
+  version Int @default(0)
+
+  // PLAN bucket only — credits expire at cycle end (do not accumulate).
+  // Always null for PURCHASED (never expires).
+  expiresAt DateTime?
+
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, bucket])
+  @@map("ai_credit_balances")
+}
+
+// Running storage-usage counter, updated in the SAME transaction as every
+// upload/delete that touches ProposalMedia.sizeBytes or DocumentVersion.size
+// — replaces the old rough estimate (mediaCount × 2MB) in
+// subscription.service.ts#canUploadFile. Nightly reconciliation
+// (storageUsageService.reconcileWorkspace, cron) re-derives the true SUM as
+// a backstop against drift, never as the primary read path (too slow to run
+// on every upload check).
+model WorkspaceUsage {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String @unique @db.ObjectId
+
+  storageUsedBytes BigInt @default(0)
+  // CAS counter for the conditional increment-on-upload (mirrors
+  // AiCreditBalance.version).
+  version Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_usage")
 }
 
 // ─── Location & Pricing ───────────────────────────────────────────────────────

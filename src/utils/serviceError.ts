@@ -58,6 +58,10 @@ const SERVICE_ERRORS: Record<string, () => NextResponse> = {
   [ErrorCode.BILLING_PLAN_NOT_SELLABLE]:     () => R.badRequest("This plan cannot be subscribed to online. Contact sales."),
   [ErrorCode.BILLING_PROVIDER_ERROR]:        () => R.internalError("Payment provider is temporarily unavailable. Please try again."),
   [ErrorCode.WEBHOOK_SIGNATURE_INVALID]:     () => R.unauthorized("Invalid webhook signature"),
+  [ErrorCode.BILLING_PLAN_VERSION_NOT_FOUND]: () => R.notFound("Plan version not found"),
+  [ErrorCode.ENTITLEMENT_OVERRIDE_NOT_FOUND]: () => R.notFound("Entitlement override not found"),
+  [ErrorCode.WORKSPACE_FROZEN]: () => R.forbidden("This workspace is frozen due to a billing issue. Reactivate your subscription to continue."),
+  [ErrorCode.BILLING_STORAGE_LIMIT_EXCEEDED]: () => R.forbidden("Storage limit reached. Upgrade your plan to upload more files."),
   // Financial
   [ErrorCode.SUPPLIER_CATEGORY_NOT_FOUND]:   () => R.notFound("Supplier category not found"),
   [ErrorCode.SUPPLIER_CATEGORY_NAME_TAKEN]:  () => R.conflict("A supplier category with this name already exists"),

@@ -108,6 +108,15 @@ export const env = {
   mpEnvironment:   optional("MERCADO_PAGO_ENVIRONMENT",   "sandbox"),
   billingEnabled:  !!process.env.MERCADO_PAGO_ACCESS_TOKEN,
 
+  // ── Entitlements Sprint (2026-07) — shadow-mode rollout ─────────────────
+  // Global default for limitService's blocking checks. false = every check
+  // still computes and logs (auditLog "limit_shadow_block") what WOULD have
+  // blocked, but returns allowed:true. Per-workspace override lives on
+  // Subscription.billingEnforcementOverride (wins over this default). See
+  // the sprint plan's shadow-mode soak procedure before ever flipping this
+  // to "true" in production.
+  billingEnforcementDefault: optional("BILLING_ENFORCEMENT_DEFAULT", "false") === "true",
+
   // ── Rate limiting (Upstash Redis — required in production; a single dev
   // instance falls back to in-memory on its own, see middlewares/rateLimiter.ts) ──
   upstashRedisUrl:           requiredInProdOptional("UPSTASH_REDIS_REST_URL"),
