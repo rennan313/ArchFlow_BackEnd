@@ -88,25 +88,36 @@ const PLAN_VERSIONS: PlanVersionSeed[] = [
 ]
 
 async function main() {
-  // 1. Deprecate every pre-existing row (old key-unique rows, missing
-  //    `version` entirely in Mongo — `{ not: 1 }` matches "missing" too,
-  //    same as Mongo's native $ne). updateMany deliberately, not findMany —
-  //    see the file-level comment on why.
-  const deprecated = await prisma.billingPlan.updateMany({
-    where: { version: { not: 1 } },
-    data: { status: "DEPRECATED" },
-  })
-  console.log(`Deprecated ${deprecated.count} pre-existing BillingPlan row(s) (including any STUDIO row — no v1 counterpart is created for it).`)
-
+  // 1. Upsert the v1 rows FIRST, collecting their ids. Deprecating
+  //    pre-existing rows by filtering "version is missing" doesn't work as
+  //    a typed Prisma filter — confirmed against production that
+  //    `prisma.billingPlan.updateMany({ where: { version: { not: 1 } } })`
+  //    matches zero legacy rows even though they genuinely lack the field
+  //    (Prisma's MongoDB query engine doesn't translate `not` against a
+  //    required field the way Mongo's native $ne/$exists would). Filtering
+  //    by "id NOT IN the v1 ids I just wrote" sidesteps that translation
+  //    quirk entirely — ids always exist on every row, old or new, so
+  //    there's no missing-field ambiguity to mistranslate.
+  const v1Ids: string[] = []
   for (const seed of PLAN_VERSIONS) {
     const { key, ...data } = seed
-    await prisma.billingPlan.upsert({
+    const row = await prisma.billingPlan.upsert({
       where: { key_version: { key, version: 1 } },
       create: { key, version: 1, ...data },
       update: data,
     })
+    v1Ids.push(row.id)
     console.log(`✓ BillingPlan seeded: ${key} v1 (${seed.status})`)
   }
+
+  // 2. Everything that isn't one of the v1 rows just confirmed above is a
+  //    pre-existing row (including any STUDIO row — no v1 counterpart is
+  //    ever created for it) — deprecate it.
+  const deprecated = await prisma.billingPlan.updateMany({
+    where: { id: { notIn: v1Ids } },
+    data: { status: "DEPRECATED" },
+  })
+  console.log(`Deprecated ${deprecated.count} pre-existing BillingPlan row(s).`)
 
   console.log(`\nDone — ${PLAN_VERSIONS.length} plan versions seeded (v1).`)
   console.log("NOTE: mpPreapprovalPlanIdMonthly/Annual are NOT set by this script.")
