@@ -1,4 +1,5 @@
 import { type NextRequest } from "next/server"
+import { randomUUID } from "node:crypto"
 import { requireProposalLimit } from "@/middlewares/limits"
 import { aiRateLimit } from "@/middlewares/rateLimiter"
 import { hasPermission } from "@/middlewares/rbac"
@@ -6,6 +7,7 @@ import { premiumNarrativeGenerationService } from "@/services/ai/premium-narrati
 import { proposalService } from "@/services/proposal.service"
 import { brandingService } from "@/services/branding.service"
 import { projectService } from "@/services/project.service"
+import { aiCreditService } from "@/services/billing/aiCredit.service"
 import { mediaRepository } from "@/repositories/media.repository"
 import { getYouTubeEmbedUrl, getYouTubeThumbnail, getVimeoEmbedUrl } from "@/validations/media"
 import { generatePremiumProposalSchema } from "@/validations/ai-proposal"
@@ -44,13 +46,27 @@ export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params
     const body  = await req.json()
     const input = generatePremiumProposalSchema.parse(body)
 
+    // Entitlements Sprint "close the debts" (2026-07) — see the matching,
+    // more detailed comment in ai/generate-proposal/route.ts. Same
+    // debit-before-call, refund-on-generation-failure shape; "narrativa" is
+    // its own cost tier (blueprint DP3: 2 credits vs. 5 for a full proposal).
+    const aiDebitKey = `ai-debit:generate-premium-narrative:${randomUUID()}`
+    const debit = await aiCreditService.debit({ workspaceId, operation: "narrativa", idempotencyKey: aiDebitKey })
+    if (!debit.allowed) return forbidden(debit.reason ?? "AI credits exhausted")
+
     // 1. Office branding context (also denormalized into the cover later)
     const branding = await brandingService.getBrandingContext(workspaceId)
 
     // 2. Generate the 12-page structured narrative via AI (single call).
     //    No library context — the premium flow is a fixed narrative, not the
     //    pick-from-catalog system the legacy generation uses as reference.
-    const result = await premiumNarrativeGenerationService.generate(input, branding ?? undefined)
+    let result
+    try {
+      result = await premiumNarrativeGenerationService.generate(input, branding ?? undefined)
+    } catch (genError) {
+      await aiCreditService.refund(workspaceId, debit.ledgerEntryIds, "generation_failed")
+      throw genError
+    }
 
     // 3. Persist proposal. generatedText carries the schemaVersion marker —
     //    this is what routes the Builder's initialize() into the premium

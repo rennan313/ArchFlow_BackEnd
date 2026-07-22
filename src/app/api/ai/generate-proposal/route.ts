@@ -1,4 +1,5 @@
 ﻿import { type NextRequest } from "next/server"
+import { randomUUID } from "node:crypto"
 import { requireProposalLimit } from "@/middlewares/limits"
 import { aiRateLimit } from "@/middlewares/rateLimiter"
 import { hasPermission } from "@/middlewares/rbac"
@@ -7,6 +8,7 @@ import { libraryContextService } from "@/services/ai/library-context.service"
 import { proposalService } from "@/services/proposal.service"
 import { brandingService } from "@/services/branding.service"
 import { projectService } from "@/services/project.service"
+import { aiCreditService } from "@/services/billing/aiCredit.service"
 import { mediaRepository } from "@/repositories/media.repository"
 import { getYouTubeEmbedUrl, getYouTubeThumbnail, getVimeoEmbedUrl } from "@/validations/media"
 import { generatePremiumProposalSchema } from "@/validations/ai-proposal"
@@ -47,6 +49,19 @@ export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params
     const body  = await req.json()
     const input = generatePremiumProposalSchema.parse(body)
 
+    // Entitlements Sprint "close the debts" (2026-07) — debited AFTER input
+    // validation (a malformed request never costs a credit) but BEFORE the
+    // real Anthropic call (fail fast, never spend real AI cost on a request
+    // that was going to be rejected anyway). idempotencyKey is fresh per
+    // attempt (no client-supplied retry key exists for this route today) —
+    // a network-level client retry is treated as a new attempt, same
+    // tradeoff every other AI route in this codebase already accepts.
+    // Refunded in the catch block below if generation fails after this
+    // succeeds.
+    const aiDebitKey = `ai-debit:generate-proposal:${randomUUID()}`
+    const debit = await aiCreditService.debit({ workspaceId, operation: "proposta_completa", idempotencyKey: aiDebitKey })
+    if (!debit.allowed) return forbidden(debit.reason ?? "AI credits exhausted")
+
     // 1. Fetch office branding context
     const branding = await brandingService.getBrandingContext(workspaceId)
 
@@ -55,7 +70,16 @@ export const POST = requireProposalLimit(async (req: NextRequest, _ctx: { params
     const library = await libraryContextService.build(workspaceId, input)
 
     // 3. Generate premium structured proposal via AI
-    const result = await generationService.generate(input, branding ?? undefined, library)
+    let result
+    try {
+      result = await generationService.generate(input, branding ?? undefined, library)
+    } catch (genError) {
+      // Refund immediately — the debit above already committed, and the
+      // outer catch below doesn't know which ledger entries to refund once
+      // control leaves this inner scope.
+      await aiCreditService.refund(workspaceId, debit.ledgerEntryIds, "generation_failed")
+      throw genError
+    }
 
     // 4. Persist proposal (resolves/creates the Client atomically — see
     //    proposalService.create)
