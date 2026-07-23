@@ -142,7 +142,13 @@ export const timeEntryRepository = {
   // isBillable) — never touches status/startedAt/endedAt/durationSeconds.
   // scopedUserId narrows to the caller's own entry unless the caller has
   // view:time-entries (service passes null in that case) — ADR-022.
-  update(id: string, workspaceId: string, scopedUserId: string | null, data: Prisma.TimeEntryUpdateInput) {
+  // `data` is typed as the updateMany-only mutation input (scalar FK fields
+  // like projectId, never a nested `{ connect }`) deliberately — Prisma
+  // rejects relation writes inside updateMany() with a
+  // PrismaClientValidationError, and TypeScript won't catch a caller passing
+  // the wrong (single-record) `Prisma.TimeEntryUpdateInput` shape here unless
+  // this parameter is pinned to the type updateMany actually accepts.
+  update(id: string, workspaceId: string, scopedUserId: string | null, data: Prisma.TimeEntryUncheckedUpdateManyInput) {
     return prisma.timeEntry.updateMany({
       where: { id, workspaceId, ...(scopedUserId && { userId: scopedUserId }) },
       data,
@@ -155,7 +161,7 @@ export const timeEntryRepository = {
   // scopedUserId is set) or that don't belong to the workspace are silently
   // excluded from the count, same shape as a Prisma updateMany over a
   // filtered where — the caller only learns "N of M applied" via the count.
-  bulkUpdate(ids: string[], workspaceId: string, scopedUserId: string | null, data: Prisma.TimeEntryUpdateInput) {
+  bulkUpdate(ids: string[], workspaceId: string, scopedUserId: string | null, data: Prisma.TimeEntryUncheckedUpdateManyInput) {
     return prisma.timeEntry.updateMany({
       where: { id: { in: ids }, workspaceId, ...(scopedUserId && { userId: scopedUserId }) },
       data,

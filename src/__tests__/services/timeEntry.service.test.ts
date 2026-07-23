@@ -79,6 +79,46 @@ describe("timeEntryService.update — scopedUserId (ADR-022)", () => {
       timeEntryService.update("te-x", "ws-1", "user-1", { description: "novo" } as never),
     ).rejects.toMatchObject({ code: ErrorCode.TIME_ENTRY_NOT_FOUND })
   })
+
+  // Regression — the repository writes through prisma.timeEntry.updateMany(),
+  // which only accepts scalar FK fields (projectId/categoryId/...), never a
+  // nested `{ connect: { id } }`. A previous version of this method built a
+  // `{ project: { connect } }`/`{ category: { connect } }` shape here, which
+  // passed TypeScript (structural typing doesn't flag extra properties on a
+  // non-literal) but made every edit that touched project/category throw a
+  // PrismaClientValidationError at runtime — surfaced to the user as an
+  // unconditional 500 on Save. Asserting the exact shape sent to the
+  // repository is what would have caught it (the repository is mocked here,
+  // so nothing exercises Prisma's own validation).
+  it("sends scalar projectId/categoryId to the repository, never a nested connect object", async () => {
+    vi.mocked(assertWorkspaceReferences).mockResolvedValue(undefined)
+    vi.mocked(projectRepository.findById).mockResolvedValue({ clientId: "client-1" } as never)
+    vi.mocked(timeEntryRepository.update).mockResolvedValue({ count: 1 } as never)
+    vi.mocked(timeEntryRepository.findById).mockResolvedValue(mockEntry as never)
+
+    await timeEntryService.update("te-1", "ws-1", null, { projectId: "proj-1", categoryId: "cat-1" } as never)
+
+    const data = vi.mocked(timeEntryRepository.update).mock.calls[0][3]
+    expect(data).toEqual({ projectId: "proj-1", clientId: "client-1", categoryId: "cat-1" })
+  })
+})
+
+describe("timeEntryService.bulkUpdate", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  // Same regression coverage as update() above — bulkUpdate() had the
+  // identical `{ project: { connect } }` bug, also writing through
+  // prisma.timeEntry.updateMany() via timeEntryRepository.bulkUpdate().
+  it("sends scalar projectId/categoryId to the repository, never a nested connect object", async () => {
+    vi.mocked(assertWorkspaceReferences).mockResolvedValue(undefined)
+    vi.mocked(projectRepository.findById).mockResolvedValue({ clientId: "client-1" } as never)
+    vi.mocked(timeEntryRepository.bulkUpdate).mockResolvedValue({ count: 2 } as never)
+
+    await timeEntryService.bulkUpdate(["te-1", "te-2"], "ws-1", null, { projectId: "proj-1", categoryId: "cat-1" } as never)
+
+    const data = vi.mocked(timeEntryRepository.bulkUpdate).mock.calls[0][3]
+    expect(data).toEqual({ projectId: "proj-1", clientId: "client-1", categoryId: "cat-1" })
+  })
 })
 
 describe("timeEntryService.archive — active-timer guard + ownership", () => {

@@ -47,11 +47,23 @@ export const timeEntryService = {
     // wins over whatever clientId the caller sent alongside it.
     const { clientId } = await resolveWorklogContext(workspaceId, input.projectId, input.clientId)
 
-    const data: Prisma.TimeEntryUpdateInput = {
-      ...(input.projectId  !== undefined && { project:  input.projectId  ? { connect: { id: input.projectId } }  : { disconnect: true } }),
-      ...(clientId !== undefined && { client:   clientId ? { connect: { id: clientId } } : { disconnect: true } }),
-      ...(input.taskId     !== undefined && { task:     input.taskId     ? { connect: { id: input.taskId } }     : { disconnect: true } }),
-      ...(input.categoryId !== undefined && { category: input.categoryId ? { connect: { id: input.categoryId } } : { disconnect: true } }),
+    // Scalar FK assignment, not `{ connect: { id } }` — the repository writes
+    // through prisma.timeEntry.updateMany(), and Prisma rejects nested
+    // relation writes (connect/disconnect) there: `data` for updateMany only
+    // accepts TimeEntryUpdateManyMutationInput/TimeEntryUncheckedUpdateManyInput,
+    // neither of which has a `project`/`client`/`task`/`category` key. Passing
+    // one throws PrismaClientValidationError at the Client layer (not a
+    // PrismaClientKnownRequestError, so handleServiceError's P2025 special
+    // case never caught it either) — a 500 on every edit that touched
+    // projectId/clientId/taskId/categoryId, which is exactly what this fixes.
+    // updateTimeEntrySchema's fields all have z.string().min(1) (see its
+    // comment on why "clear this field" isn't supported yet), so every
+    // defined value here is a real, non-empty id.
+    const data: Prisma.TimeEntryUncheckedUpdateManyInput = {
+      ...(input.projectId  !== undefined && { projectId: input.projectId }),
+      ...(clientId !== undefined && { clientId }),
+      ...(input.taskId     !== undefined && { taskId: input.taskId }),
+      ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
       ...(input.description !== undefined && { description: input.description }),
       ...(input.tags         !== undefined && { tags: input.tags }),
       ...(input.isBillable   !== undefined && { isBillable: input.isBillable }),
@@ -131,10 +143,12 @@ export const timeEntryService = {
     })
     const { clientId } = await resolveWorklogContext(workspaceId, input.projectId, undefined)
 
-    const data: Prisma.TimeEntryUpdateInput = {
-      ...(input.projectId  !== undefined && { project:  { connect: { id: input.projectId } } }),
-      ...(clientId   !== undefined && { client:   { connect: { id: clientId } } }),
-      ...(input.categoryId !== undefined && { category: { connect: { id: input.categoryId } } }),
+    // Same fix as update() above — scalar FK, not `{ connect }`, since this
+    // also writes through prisma.timeEntry.updateMany().
+    const data: Prisma.TimeEntryUncheckedUpdateManyInput = {
+      ...(input.projectId  !== undefined && { projectId: input.projectId }),
+      ...(clientId   !== undefined && { clientId }),
+      ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
       ...(input.isBillable !== undefined && { isBillable: input.isBillable }),
     }
 
